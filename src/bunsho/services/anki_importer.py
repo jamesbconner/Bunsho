@@ -59,6 +59,10 @@ class AnkiDeckImporter:
     def import_vocab(self, deck_path: Path) -> ImportedDeck:
         """Import every note as a ``Vocab`` in deck order.
 
+        Notes that differ in their raw ``Reading`` field but reduce to the same plain
+        reading (homographs) keep the clean id on first occurrence; later ones get a
+        ``#N`` suffix, where N counts the notes sharing that id so far (``#2``, ``#3``).
+
         Args:
             deck_path: Path to the ``.apkg`` file.
 
@@ -69,7 +73,7 @@ class AnkiDeckImporter:
             DeckImportError: The file is missing.
             DeckIntegrityError: The checksum differs from the pinned value.
             DeckFormatError: The archive or its notes are malformed.
-            DuplicateContentIdError: Two notes share ``expression`` and reading.
+            DuplicateContentIdError: Two notes share ``expression`` and raw reading.
         """
         if not deck_path.is_file():
             raise DeckImportError(f"deck file not found: {deck_path}")
@@ -88,12 +92,29 @@ class AnkiDeckImporter:
                 "re-download or re-export the deck"
             ) from exc
         vocab: list[Vocab] = []
-        seen: dict[str, str] = {}
+        raw_pairs: set[tuple[str, str]] = set()
+        base_counts: dict[str, int] = {}
+        used_ids: set[str] = set()
         for fields, tags in _read_notes(collection):
             item = _to_vocab(fields, tags)
-            if item.id in seen:
+            raw_pair = (item.expression, fields["Reading"].strip())
+            if raw_pair in raw_pairs:
                 raise DuplicateContentIdError(f"duplicate content id {item.id}")
-            seen[item.id] = item.expression
+            raw_pairs.add(raw_pair)
+            base_id = item.id
+            base_counts[base_id] = base_counts.get(base_id, 0) + 1
+            if base_counts[base_id] > 1:
+                resolved = f"{base_id}#{base_counts[base_id]}"
+                self._logger.warning(
+                    "vocab_id_collision id=%s resolved_as=%s expression=%s",
+                    base_id,
+                    resolved,
+                    item.expression,
+                )
+                item = item.model_copy(update={"id": resolved})
+            if item.id in used_ids:
+                raise DuplicateContentIdError(f"duplicate content id {item.id}")
+            used_ids.add(item.id)
             vocab.append(item)
         self._logger.info(
             "deck_import path=%s notes=%d sha256=%s", deck_path.name, len(vocab), digest

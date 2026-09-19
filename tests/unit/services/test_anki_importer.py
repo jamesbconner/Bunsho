@@ -200,3 +200,29 @@ def test_null_note_fields_raise_deck_format_error(tmp_path: Path) -> None:
     )
     with pytest.raises(DeckFormatError):
         _importer(_write_collection_deck(deck, data)).import_vocab(deck)
+
+
+def test_homograph_gets_suffixed_id(tmp_path: Path) -> None:
+    deck = tmp_path / "deck.apkg"
+    sha = build_apkg(deck, [note("度", "ど", meaning="extreme"), note("度", "度[ど]")])
+    imported = _importer(sha).import_vocab(deck)
+    assert [v.id for v in imported.vocab] == ["vocab:度:ど", "vocab:度:ど#2"]
+    assert [v.meaning for v in imported.vocab] == ["extreme", "meaning"]
+
+
+def test_three_homographs_get_incrementing_suffixes(tmp_path: Path) -> None:
+    deck = tmp_path / "deck.apkg"
+    sha = build_apkg(
+        deck, [note("度", "ど"), note("度", "度[ど]"), note("度", "<mark>度[ど]</mark>")]
+    )
+    ids = [v.id for v in _importer(sha).import_vocab(deck).vocab]
+    assert ids == ["vocab:度:ど", "vocab:度:ど#2", "vocab:度:ど#3"]
+
+
+def test_homograph_collision_is_logged(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    deck = tmp_path / "deck.apkg"
+    sha = build_apkg(deck, [note("度", "ど"), note("度", "度[ど]")])
+    importer = AnkiDeckImporter(sha, logging.getLogger("bunsho.test_importer"))
+    with caplog.at_level(logging.WARNING, logger="bunsho.test_importer"):
+        importer.import_vocab(deck)
+    assert "vocab_id_collision id=vocab:度:ど resolved_as=vocab:度:ど#2" in caplog.text
