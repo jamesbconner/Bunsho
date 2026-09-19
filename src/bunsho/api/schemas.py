@@ -8,7 +8,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from bunsho import __version__
-from bunsho.orchestration.build_tasks import BuildState, BuildTask
+from bunsho.orchestration.build_tasks import BuildEvent, BuildState, BuildTask
 from bunsho.services.config_check import CheckResult
 from bunsho.services.health import HealthReport
 
@@ -181,4 +181,57 @@ def build_status(task: BuildTask) -> BuildStatusResponse:
             else None
         ),
         error=task.error,
+    )
+
+
+class WsAuthMessage(BaseModel):
+    """First message a WebSocket client must send."""
+
+    type: Literal["auth"]
+    token: str = Field(min_length=1)
+
+
+class WsReady(BaseModel):
+    """Sent once after a successful WebSocket authentication."""
+
+    type: Literal["ready"] = "ready"
+
+
+class BuildEventModel(BaseModel):
+    """A build event as sent over the WebSocket."""
+
+    kind: Literal["progress", "state"]
+    task_id: str
+    state: BuildState
+    progress: BuildProgressModel | None
+    error: str | None
+
+
+class WsSnapshot(BaseModel):
+    """The latest known build, sent right after ``ready``."""
+
+    type: Literal["snapshot"] = "snapshot"
+    task: BuildStatusResponse
+
+
+class WsEvent(BaseModel):
+    """One build event."""
+
+    type: Literal["event"] = "event"
+    event: BuildEventModel
+
+
+def build_event(event: BuildEvent) -> BuildEventModel:
+    """Convert a ``BuildEvent`` to its WebSocket model."""
+    progress = event.progress
+    return BuildEventModel(
+        kind=event.kind,
+        task_id=event.task_id,
+        state=event.state,
+        progress=(
+            BuildProgressModel(stage=progress.stage, current=progress.current, total=progress.total)
+            if progress
+            else None
+        ),
+        error=event.error,
     )
