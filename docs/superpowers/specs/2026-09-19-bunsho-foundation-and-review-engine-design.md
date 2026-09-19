@@ -55,7 +55,11 @@ Three SQLite files, split by how replaceable they are:
 | `progress.db` | card state, review log, settings | the app on every review | **irreplaceable** |
 
 Stable content IDs decouple the two: `kana:hira:あ`, `kanji:漢`, `vocab:{expression}:{reading}`
-(handles the 128 duplicate expressions). Rebuilding `content.db` never orphans progress.
+(handles the 128 duplicate expressions), where `reading` is the plain kana reading. Two notes with
+the same expression and plain reading but different raw `Reading` markup (a homograph, e.g. the two
+N3 notes for 度 with reading `ど`) are disambiguated in deck order: the second gets `#2`, the third
+`#3` (`vocab:度:ど#2`). Two notes with identical raw markup are a true duplicate and fail the build.
+Rebuilding `content.db` never orphans progress (the deck is sha256-pinned, so suffixes are stable).
 
 Startup behavior: `progress.db` failure → **fail fast**. `content.db` missing → app starts in
 "content not built" state and the UI shows a first-run Build screen. jamdict is build-time only; missing at
