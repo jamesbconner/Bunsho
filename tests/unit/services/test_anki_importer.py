@@ -176,3 +176,27 @@ def test_empty_col_table_raises_deck_format_error(tmp_path: Path) -> None:
     data = _sqlite_bytes(("CREATE TABLE col (models TEXT, decks TEXT)", ()))
     with pytest.raises(DeckFormatError):
         _importer(_write_collection_deck(deck, data)).import_vocab(deck)
+
+
+def test_models_as_list_raises_deck_format_error(tmp_path: Path) -> None:
+    deck = tmp_path / "deck.apkg"
+    data = _sqlite_bytes(
+        ("CREATE TABLE col (models TEXT, decks TEXT)", ()),
+        ("INSERT INTO col VALUES (?, ?)", (json.dumps([{"flds": []}]), "{}")),
+    )
+    with pytest.raises(DeckFormatError):
+        _importer(_write_collection_deck(deck, data)).import_vocab(deck)
+
+
+def test_null_note_fields_raise_deck_format_error(tmp_path: Path) -> None:
+    deck = tmp_path / "deck.apkg"
+    fields = [{"name": name, "ord": ordinal} for ordinal, name in enumerate(DECK_FIELDS)]
+    models = json.dumps({"0": {"name": "m", "flds": fields}})
+    data = _sqlite_bytes(
+        ("CREATE TABLE col (models TEXT, decks TEXT)", ()),
+        ("INSERT INTO col VALUES (?, ?)", (models, "{}")),
+        ("CREATE TABLE notes (id INTEGER PRIMARY KEY, flds TEXT, tags TEXT)", ()),
+        ("INSERT INTO notes VALUES (1, NULL, ' jlpt_N5 ')", ()),
+    )
+    with pytest.raises(DeckFormatError):
+        _importer(_write_collection_deck(deck, data)).import_vocab(deck)

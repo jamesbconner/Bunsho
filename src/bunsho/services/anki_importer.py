@@ -135,7 +135,13 @@ def _read_notes(collection: bytes) -> list[tuple[dict[str, str], list[str]]]:
                     )
                 notes.append((dict(zip(names, values, strict=True)), tags.split()))
             return notes
-    except (sqlite3.DatabaseError, json.JSONDecodeError, KeyError, TypeError) as exc:
+    except (
+        sqlite3.DatabaseError,
+        json.JSONDecodeError,
+        KeyError,
+        TypeError,
+        AttributeError,
+    ) as exc:
         raise DeckFormatError(
             "deck collection is malformed (unreadable database, note types or notes "
             f"table): {exc}; re-export the deck from Anki"
