@@ -69,8 +69,14 @@ runtime → warning, continue. Alembic `upgrade head` runs at startup after a **
 ## Content model
 
 - **Kana:** hiragana + katakana incl. dakuten/handakuten and yōon. Static table; no jamdict needed.
-- **Kanji:** one row per kanji found in deck vocabulary: derived level, on/kun readings, meanings, stroke
-  count, radical, grade, frequency (KANJIDIC2 via jamdict).
+- **Kanji:** two groups, stored in this order. (1) *Leveled*: one row per kanji found in deck vocabulary,
+  with its derived level (2,109 in the pinned deck). (2) *Unleveled* (`level` is `None`): every kanji with a
+  KANJIDIC2 grade of 1–10 (jōyō + jinmeiyō) that is not in the deck, ordered by grade then frequency
+  (979 rows; only unified-ideograph code points, so CJK compatibility forms such as U+FA19 are excluded).
+  Rows carry on/kun readings, meanings, stroke count, radical, grade, frequency (KANJIDIC2 via jamdict).
+  `ContentRepository.list_kanji()` returns all 3,088 rows; use `level=X` or `unleveled=True` to filter.
+  Unleveled kanji are excluded from lessons by default (Plan 2 must filter them). `content.db` schema
+  version is `"2"` (nullable `kanji.level`).
 - **Vocab:** deck fields `Expression`, `English definition`, `Reading`, `Grammar` (actually POS),
   `Additional definitions`, `Example JP`, `Example EN`; tags for level, register
   (`honorific/polite/humble`), `usually_kana`.

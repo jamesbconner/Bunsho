@@ -30,7 +30,7 @@
 
 ## Scope note
 
-The spec said kanji outside the deck would be stored as "unleveled". Plan 1A stores **only kanji that appear in deck vocabulary**, each with a derived level (YAGNI). Expected real-deck results: 2,109 kanji (N5 480, N4 352, N3 544, N2 357, N1 376), 6,775 sentences, 208 kana.
+The spec said kanji outside the deck would be stored as "unleveled". Plan 1A as first written stored **only kanji that appear in deck vocabulary**, each with a derived level (YAGNI). *Superseded after the plan was executed:* at the user's request unleveled rows were added afterwards (KANJIDIC2 grade 1–10, unified ideographs only: +979 rows, 3,088 kanji in total, schema v2). The task text below describes the original 2,109-kanji behaviour. Expected real-deck results: 2,109 kanji (N5 480, N4 352, N3 544, N2 357, N1 376), 6,775 sentences, 208 kana.
 
 ## File Structure
 
