@@ -3,7 +3,6 @@ import logging
 import threading
 import time
 from collections.abc import Callable
-from pathlib import Path
 
 import pytest
 
@@ -15,55 +14,8 @@ from bunsho.orchestration.build_tasks import (
     BuildState,
     BuildTaskManager,
 )
-from bunsho.orchestration.content_build import BuildProgress, BuildReport, ContentBuildError
-from bunsho.services.content_repository import ContentWriter
-
-
-def _report(dry_run: bool) -> BuildReport:
-    return BuildReport(
-        dry_run=dry_run,
-        target=Path("content.db"),
-        deck_sha256="a" * 64,
-        kana_count=208,
-        kanji_count=3,
-        vocab_count=2,
-        sentence_count=0,
-        vocab_by_level={"N5": 2},
-        kanji_by_level={"N5": 3},
-        kanji_without_details=0,
-        duration_seconds=0.1,
-    )
-
-
-class _Stub:
-    """Fake orchestrator: emits progress, optionally blocks, fails, or writes content.db."""
-
-    def __init__(
-        self,
-        *,
-        items: int = 3,
-        gate: threading.Event | None = None,
-        error: Exception | None = None,
-    ) -> None:
-        self.items = items
-        self.gate = gate
-        self.error = error
-
-    def build(self, deck_path, target, *, dry_run=False, on_progress=None):  # type: ignore[no-untyped-def]
-        assert on_progress is not None
-        on_progress(BuildProgress("import_deck", 0, 1))
-        on_progress(BuildProgress("import_deck", 1, 1))
-        for index in range(1, self.items + 1):
-            on_progress(BuildProgress("enrich_kanji", index, self.items))
-        if self.gate is not None:
-            assert self.gate.wait(10), "test gate was never released"
-        if self.error is not None:
-            raise self.error
-        if not dry_run:
-            on_progress(BuildProgress("write", 0, 1))
-            ContentWriter().write(target, kana=[], kanji=[], vocab=[], meta={})
-            on_progress(BuildProgress("write", 1, 1))
-        return _report(dry_run)
+from bunsho.orchestration.content_build import BuildProgress, ContentBuildError
+from tests.base import StubOrchestrator as _Stub
 
 
 def _manager(  # type: ignore[no-untyped-def]

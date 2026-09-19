@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from bunsho import APP_NAME, __version__
 from bunsho.api import API_PREFIX
-from bunsho.api.routers import health
+from bunsho.api.routers import admin, auth, content, health
 from bunsho.api.services import ServiceOverrides, build_services
 from bunsho.config.service import ServiceConfig
 from bunsho.logging_setup import configure_logging
@@ -49,4 +49,7 @@ def create_app(config: ServiceConfig, *, overrides: ServiceOverrides | None = No
             allow_headers=["Authorization", "Content-Type"],
         )
     app.include_router(health.router, prefix=API_PREFIX)
+    app.include_router(auth.router, prefix=API_PREFIX)
+    app.include_router(admin.router, prefix=API_PREFIX)
+    app.include_router(content.router, prefix=API_PREFIX)
     return app
