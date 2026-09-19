@@ -88,3 +88,17 @@ def test_unavailable_database_is_an_error(available: bool, kd2: bool) -> None:
 def test_missing_db_file_is_an_error(tmp_path: Path) -> None:
     with pytest.raises(JamdictUnavailableError, match="not found"):
         JamdictService(tmp_path / "missing.db")
+
+
+def test_empty_db_file_is_an_error(tmp_path: Path) -> None:
+    empty = tmp_path / "empty.db"
+    empty.write_bytes(b"")
+    with pytest.raises(JamdictUnavailableError):
+        JamdictService(empty)
+
+
+def test_corrupt_db_file_is_an_error(tmp_path: Path) -> None:
+    corrupt = tmp_path / "corrupt.db"
+    corrupt.write_bytes(b"not a sqlite database")
+    with pytest.raises(JamdictUnavailableError):
+        JamdictService(corrupt)

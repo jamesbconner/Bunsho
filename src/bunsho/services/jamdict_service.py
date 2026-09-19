@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 from typing import Any
 
 from jamdict import Jamdict
 
 from bunsho.models.content import KanjiDetails
+
+_PROBE_KANJI = "日"
 
 
 class JamdictUnavailableError(RuntimeError):
@@ -22,12 +25,16 @@ class JamdictService:
 
         Args:
             db_file: Explicit database path; ``None`` uses the ``jamdict-data-fix`` package.
-            jam: A pre-built ``Jamdict``-like object (test seam).
+            jam: A pre-built ``Jamdict``-like object (test seam). It is only checked with
+                ``is_available()`` and ``has_kd2()``; no probe lookup is made.
 
         Raises:
-            JamdictUnavailableError: The file is missing or lacks KANJIDIC2 data. jamdict
-                itself fails silently in these cases, so availability is checked explicitly.
+            JamdictUnavailableError: The file is missing, jamdict reports the database as
+                unavailable or without KANJIDIC2, or (for a database opened here) a probe
+                lookup of one kanji fails or finds nothing. jamdict itself fails silently
+                in these cases, so availability is checked explicitly.
         """
+        probe = jam is None
         if jam is None:
             if db_file is None:
                 jam = Jamdict()
@@ -41,7 +48,31 @@ class JamdictService:
                 "jamdict database is not available or has no KANJIDIC2 data; "
                 "install jamdict-data-fix or set paths.jamdict_db"
             )
+        if probe:
+            self._probe(jam)
         self._jam = jam
+
+    @staticmethod
+    def _probe(jam: Any) -> None:
+        """Confirm a real database answers a kanji lookup.
+
+        The availability flags only reflect that a path is configured, so an empty or
+        corrupt file passes them; one lookup of a common kanji catches those cases.
+
+        Raises:
+            JamdictUnavailableError: The lookup raised a sqlite error or found nothing.
+        """
+        message = (
+            "jamdict database is unreadable or has no KANJIDIC2 data "
+            f"(probe lookup of {_PROBE_KANJI} failed); "
+            "reinstall jamdict-data-fix or set paths.jamdict_db"
+        )
+        try:
+            found = jam.get_char(_PROBE_KANJI)
+        except sqlite3.Error as exc:
+            raise JamdictUnavailableError(message) from exc
+        if found is None:
+            raise JamdictUnavailableError(message)
 
     def get_kanji(self, char: str) -> KanjiDetails | None:
         """Look up one kanji.
