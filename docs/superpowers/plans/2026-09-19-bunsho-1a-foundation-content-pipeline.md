@@ -399,6 +399,7 @@ def test_existing_jamdict_db_is_accepted(tmp_path: Path) -> None:
     db.write_bytes(b"")
     config = load_app_config(ConfigNormalizer({"paths": {"jamdict_db": str(db)}}))
     assert config.jamdict_db == db
+```
 
 - [ ] **Step 2: Run to verify they fail**
 
