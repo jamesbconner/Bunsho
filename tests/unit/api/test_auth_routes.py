@@ -1,3 +1,5 @@
+from concurrent.futures import ThreadPoolExecutor
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -70,3 +72,64 @@ def test_protected_routes_reject_missing_and_bad_tokens(
     refresh_token = _login(client).json()["refresh_token"]
     wrong_type = client.request(method, path, headers={"Authorization": f"Bearer {refresh_token}"})
     assert wrong_type.status_code == 401
+
+
+def test_concurrent_wrong_logins_cannot_outrun_the_throttle(client: TestClient) -> None:
+    with ThreadPoolExecutor(max_workers=20) as pool:
+        responses = list(pool.map(lambda _: _login(client, password="nope"), range(40)))
+    codes = [response.status_code for response in responses]
+    assert codes.count(401) == 5  # max_failures attempts get through, the rest are blocked
+    assert codes.count(429) == 35
+    assert _login(client).status_code == 429
+
+
+def test_successful_login_resets_the_counter(client: TestClient) -> None:
+    for _ in range(4):
+        assert _login(client, password="nope").status_code == 401
+    assert _login(client).status_code == 200
+    for _ in range(5):  # a fresh allowance, not a stale block
+        assert _login(client, password="nope").status_code == 401
+    assert _login(client, password="nope").status_code == 429
+
+
+def test_success_amid_a_failure_burst_leaves_no_stale_block(client: TestClient) -> None:
+    def attempt(index: int) -> int:
+        password = PASSWORD if index == 0 else "nope"
+        return _login(client, password=password).status_code
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        codes = list(pool.map(attempt, range(4)))  # fewer than max_failures in total
+    assert 200 in codes
+    assert 429 not in codes
+    for _ in range(5):
+        assert _login(client, password="nope").status_code in (401, 429)
+    assert _login(client).status_code == 429  # blocked only by the failures just made
+
+
+def test_validation_errors_do_not_echo_the_submitted_input(client: TestClient) -> None:
+    secret = "SuperSecretValue" * 80  # longer than the 1024 character limit
+    too_long = client.post(LOGIN, json={"username": "james", "password": secret})
+    assert too_long.status_code == 422
+    assert secret not in too_long.text
+    not_a_string = client.post(LOGIN, json={"username": "james", "password": 918273645})
+    assert not_a_string.status_code == 422
+    assert "918273645" not in not_a_string.text
+    for response in (too_long, not_a_string):
+        error = response.json()["detail"][0]
+        assert error["loc"] == ["body", "password"]
+        assert error["msg"]
+        assert error["type"]
+        assert set(error) == {"loc", "msg", "type"}
+
+
+def test_malformed_json_body_gets_a_clean_422(client: TestClient) -> None:
+    response = client.post(
+        LOGIN,
+        content='{"username": "james", "password": "hunter2-leak"',
+        headers={"Content-Type": "application/json"},
+    )
+    assert response.status_code == 422
+    assert "hunter2-leak" not in response.text
+    error = response.json()["detail"][0]
+    assert set(error) == {"loc", "msg", "type"}
+    assert error["type"] == "json_invalid"

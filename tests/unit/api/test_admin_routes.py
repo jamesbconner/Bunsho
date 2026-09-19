@@ -1,8 +1,11 @@
+import logging
 import threading
 import time
 
+import pytest
 from fastapi.testclient import TestClient
 
+from bunsho.config.service import ServiceConfig
 from tests.base import StubOrchestrator
 
 BUILD = "/api/v1/admin/content/build"
@@ -89,3 +92,29 @@ def test_unknown_build_and_no_builds_yet_are_404(
 ) -> None:
     assert stub_client.get(f"{BUILD}/nope", headers=auth_headers).status_code == 404
     assert stub_client.get(BUILD, headers=auth_headers).status_code == 404
+
+
+@pytest.mark.parametrize("damage", ["delete", "corrupt"])
+def test_unreadable_content_db_summarises_as_not_built(
+    stub_client: TestClient,
+    auth_headers: dict[str, str],
+    service_config: ServiceConfig,
+    caplog: pytest.LogCaptureFixture,
+    damage: str,
+) -> None:
+    started = stub_client.post(BUILD, json={}, headers=auth_headers).json()
+    assert _wait(stub_client, auth_headers, started["task_id"])["state"] == "succeeded"
+    summary_url = "/api/v1/content/summary"
+    assert stub_client.get(summary_url, headers=auth_headers).json()["built"] is True
+    db_path = service_config.app.content_db_path
+    if damage == "delete":
+        db_path.unlink()
+    else:
+        db_path.write_bytes(b"this is not a sqlite database" * 100)
+    with caplog.at_level(logging.WARNING, logger="bunsho"):
+        response = stub_client.get(summary_url, headers=auth_headers)
+    assert response.status_code == 200
+    assert response.json() == {"built": False, "kana": 0, "kanji": 0, "vocab": 0, "meta": {}}
+    assert str(db_path) not in response.text
+    assert "sqlite" not in response.text.lower()
+    assert any("content_summary_unreadable" in record.getMessage() for record in caplog.records)

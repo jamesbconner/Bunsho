@@ -38,9 +38,11 @@ async def login(body: LoginRequest, request: Request, services: ServicesDep) -> 
             "Too many failed logins; try again later",
             headers={"Retry-After": str(math.ceil(wait))},
         )
+    # Reserve the attempt before awaiting, so concurrent requests cannot all pass the
+    # check above while the slow argon2 verification runs. A success clears it again.
+    services.throttle.record_failure(client)
     valid = await asyncio.to_thread(services.auth.verify_credentials, body.username, body.password)
     if not valid:
-        services.throttle.record_failure(client)
         services.ctx.logger.warning("login_failed client=%s", client)
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED,
