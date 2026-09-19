@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
+from collections.abc import Callable
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -13,12 +16,24 @@ from bunsho.models.content import KanjiDetails
 _PROBE_KANJI = "日"
 
 
+def _identity(value: Any) -> Any:
+    return value
+
+
 class JamdictUnavailableError(RuntimeError):
     """The jamdict database is missing or has no KANJIDIC2 data."""
 
 
 class JamdictService:
-    """Read-only access to kanji facts. Not thread-safe; use from one thread at a time."""
+    """Read-only access to kanji facts.
+
+    Safe to call from any thread. jamdict keeps a cached sqlite connection that may only
+    be used on the thread that opened it, so when the service builds the ``Jamdict``
+    itself, each thread lazily opens its own read-only connection on first use (the
+    constructing thread reuses the instance used for the construction-time checks). A
+    ``jam`` object injected through the test seam is used as-is by every thread; its
+    thread-safety is the caller's responsibility.
+    """
 
     def __init__(self, db_file: Path | None = None, *, jam: Any | None = None) -> None:
         """Open the database.
@@ -35,14 +50,21 @@ class JamdictService:
                 in these cases, so availability is checked explicitly.
         """
         probe = jam is None
+        self._local = threading.local()
+        factory: Callable[[], Any]
         if jam is None:
             if db_file is None:
-                jam = Jamdict()
+                factory = Jamdict
             else:
                 if not db_file.is_file():
                     raise JamdictUnavailableError(f"jamdict database not found: {db_file}")
                 path = str(db_file)
-                jam = Jamdict(db_file=path, kd2_file=path, jmnedict_file=path, auto_config=False)
+                factory = partial(
+                    Jamdict, db_file=path, kd2_file=path, jmnedict_file=path, auto_config=False
+                )
+            jam = factory()
+        else:
+            factory = partial(_identity, jam)  # injected object is shared by all threads
         if not (jam.is_available() and jam.has_kd2()):
             raise JamdictUnavailableError(
                 "jamdict database is not available or has no KANJIDIC2 data; "
@@ -50,7 +72,21 @@ class JamdictService:
             )
         if probe:
             self._probe(jam)
-        self._jam = jam
+        self._factory = factory
+        self._local.jam = jam
+
+    def _jam_for_current_thread(self) -> Any:
+        """Return this thread's ``Jamdict``, creating it on first use.
+
+        Returns:
+            The injected ``jam`` when there is one, otherwise the calling thread's own
+            instance.
+        """
+        jam = getattr(self._local, "jam", None)
+        if jam is None:
+            jam = self._factory()
+            self._local.jam = jam
+        return jam
 
     @staticmethod
     def _probe(jam: Any) -> None:
@@ -83,7 +119,7 @@ class JamdictService:
         Returns:
             Details, or ``None`` when the dictionary has no such kanji.
         """
-        character = self._jam.get_char(char)
+        character = self._jam_for_current_thread().get_char(char)
         if character is None:
             return None
         readings = [r for group in character.rm_groups for r in group.readings]

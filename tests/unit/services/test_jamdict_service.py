@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -102,3 +103,67 @@ def test_corrupt_db_file_is_an_error(tmp_path: Path) -> None:
     corrupt.write_bytes(b"not a sqlite database")
     with pytest.raises(JamdictUnavailableError):
         JamdictService(corrupt)
+
+
+class _CountingJam(_FakeJam):
+    """Fake ``Jamdict`` class that records how many instances were constructed."""
+
+    instances: list["_CountingJam"] = []
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__({"日": _character(), "月": _character(literal="月")})
+        self.args, self.kwargs = args, kwargs
+        type(self).instances.append(self)
+
+
+@pytest.fixture
+def counting_jam(monkeypatch: pytest.MonkeyPatch) -> type[_CountingJam]:
+    _CountingJam.instances = []
+    monkeypatch.setattr("bunsho.services.jamdict_service.Jamdict", _CountingJam)
+    return _CountingJam
+
+
+def _lookup_on_new_thread(service: JamdictService, char: str) -> Any:
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(service.get_kanji, char).result()
+
+
+def test_each_thread_gets_its_own_jamdict_for_explicit_path(
+    tmp_path: Path, counting_jam: type[_CountingJam]
+) -> None:
+    db_file = tmp_path / "jam.db"
+    db_file.write_bytes(b"placeholder")
+    service = JamdictService(db_file)
+    assert len(counting_jam.instances) == 1  # constructed once, on this thread
+    assert counting_jam.instances[0].kwargs["db_file"] == str(db_file)
+
+    assert service.get_kanji("日") is not None
+    assert service.get_kanji("月") is not None
+    assert len(counting_jam.instances) == 1  # same thread: no new instance
+
+    assert _lookup_on_new_thread(service, "日") is not None
+    assert len(counting_jam.instances) == 2  # other thread: its own instance
+    assert counting_jam.instances[1].kwargs == counting_jam.instances[0].kwargs
+
+    assert service.get_kanji("日") is not None
+    assert len(counting_jam.instances) == 2
+
+
+def test_each_thread_gets_its_own_jamdict_for_default_database(
+    counting_jam: type[_CountingJam],
+) -> None:
+    service = JamdictService()
+    assert len(counting_jam.instances) == 1
+    assert service.get_kanji("日") is not None
+    assert len(counting_jam.instances) == 1
+    assert _lookup_on_new_thread(service, "日") is not None
+    assert len(counting_jam.instances) == 2
+    assert counting_jam.instances[1].args == counting_jam.instances[0].args == ()
+    assert counting_jam.instances[1].kwargs == counting_jam.instances[0].kwargs == {}
+
+
+def test_injected_jam_is_shared_by_all_threads(counting_jam: type[_CountingJam]) -> None:
+    service = JamdictService(jam=_FakeJam({"日": _character()}))
+    assert service.get_kanji("日") is not None
+    assert _lookup_on_new_thread(service, "日") is not None
+    assert counting_jam.instances == []

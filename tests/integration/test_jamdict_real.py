@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -40,3 +41,18 @@ def test_real_lookup_with_explicit_db_path() -> None:
     details = service.get_kanji("日")
     assert details is not None
     assert details.stroke_count == 4
+
+
+@pytest.mark.integration
+def test_real_lookup_from_worker_thread() -> None:
+    try:
+        service = JamdictService()
+    except JamdictUnavailableError as exc:
+        pytest.skip(f"jamdict-data-fix database unavailable: {exc}")
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        worker_details = pool.submit(service.get_kanji, "日").result()
+    assert worker_details is not None
+    assert worker_details.stroke_count == 4
+    main_details = service.get_kanji("日")
+    assert main_details is not None
+    assert main_details.stroke_count == 4
