@@ -29,6 +29,9 @@ def require_user(
 ) -> str:
     """Validate the bearer access token and return the username.
 
+    For HTTP routes only. WebSocket routes authenticate with a first-message token
+    (see the ws router), because ``HTTPBearer`` needs a ``Request``.
+
     Raises:
         HTTPException: 401 when the token is missing, invalid or expired.
     """

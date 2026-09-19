@@ -1,4 +1,7 @@
 import asyncio
+import logging
+
+import pytest
 
 from bunsho.config.settings import AppConfig
 from bunsho.context import Context
@@ -68,8 +71,52 @@ def test_missing_jamdict_is_degraded(app_config: AppConfig, quiet_logger) -> Non
     assert report.components["jamdict"].status == "degraded"
 
 
-def test_progress_db_failure_is_an_error(app_config: AppConfig, quiet_logger) -> None:  # type: ignore[no-untyped-def]
-    report = _check(_Db(OSError("disk gone")), _ctx(app_config, quiet_logger))
+def test_progress_db_failure_is_an_error_without_leaking_details(
+    app_config: AppConfig,
+    quiet_logger,  # type: ignore[no-untyped-def]
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    secret = f"disk gone at {app_config.data_dir}"
+    with caplog.at_level(logging.WARNING, logger=quiet_logger.name):
+        report = _check(_Db(OSError(secret)), _ctx(app_config, quiet_logger))
     assert report.status == "error"
-    assert report.components["progress_db"].status == "error"
-    assert "disk gone" in report.components["progress_db"].detail
+    component = report.components["progress_db"]
+    assert component.status == "error"
+    assert component.detail == "OSError"
+    assert secret not in component.detail
+    logged = [r.getMessage() for r in caplog.records]
+    assert any("progress_db" in m and secret in m for m in logged)
+
+
+def test_unreadable_content_db_is_degraded_without_leaking_details(
+    app_config: AppConfig,
+    quiet_logger,  # type: ignore[no-untyped-def]
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    app_config.data_dir.mkdir(parents=True)
+    app_config.content_db_path.write_bytes(b"definitely not sqlite" * 20)
+    ctx = _ctx(app_config, quiet_logger)
+    ctx.refresh_content_repo()
+    with caplog.at_level(logging.WARNING, logger=quiet_logger.name):
+        report = _check(_Db(), ctx)
+    component = report.components["content_db"]
+    assert component.status == "degraded"
+    assert component.detail == "DatabaseError"
+    assert str(app_config.content_db_path) not in component.detail
+    logged = [r.getMessage() for r in caplog.records]
+    assert any("content_db" in m and "not a database" in m for m in logged)
+
+
+def test_unexpected_content_db_error_is_degraded_not_raised(
+    app_config: AppConfig,
+    quiet_logger,  # type: ignore[no-untyped-def]
+) -> None:
+    class _Repo:
+        def verify_schema(self) -> None:
+            raise ValueError("odd")
+
+    ctx = _ctx(app_config, quiet_logger)
+    ctx.content_repo = _Repo()  # type: ignore[assignment]
+    component = _check(_Db(), ctx).components["content_db"]
+    assert component.status == "degraded"
+    assert component.detail == "ValueError"

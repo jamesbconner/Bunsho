@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sqlite3
 import time
 from dataclasses import dataclass
 from typing import Literal, Protocol
@@ -64,7 +63,11 @@ class HealthService:
             await self._progress_db.ping()
         except Exception as exc:
             elapsed = (time.perf_counter() - started) * 1000
-            return ComponentHealth("error", f"{type(exc).__name__}: {exc}", elapsed)
+            # The endpoint is unauthenticated: expose the class name only, log the rest.
+            self._ctx.logger.warning(
+                "health_check_failed component=progress_db error=%s: %s", type(exc).__name__, exc
+            )
+            return ComponentHealth("error", type(exc).__name__, elapsed)
         return ComponentHealth("ok", latency_ms=(time.perf_counter() - started) * 1000)
 
     def _check_content_db(self) -> ComponentHealth:
@@ -76,8 +79,11 @@ class HealthService:
             repo.verify_schema()
         except ContentSchemaError as exc:
             return ComponentHealth("degraded", str(exc))
-        except (sqlite3.Error, OSError) as exc:
-            return ComponentHealth("degraded", f"content.db unreadable ({exc}); rebuild it")
+        except Exception as exc:  # sqlite3.Error/OSError expected; anything else must not 500
+            self._ctx.logger.warning(
+                "health_check_failed component=content_db error=%s: %s", type(exc).__name__, exc
+            )
+            return ComponentHealth("degraded", type(exc).__name__)
         return ComponentHealth("ok", latency_ms=(time.perf_counter() - started) * 1000)
 
     def _check_jamdict(self) -> ComponentHealth:

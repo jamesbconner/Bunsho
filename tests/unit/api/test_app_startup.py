@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import DatabaseError
 
 from bunsho import __version__
 from bunsho.api.app import create_app
@@ -49,6 +50,5 @@ def test_a_corrupt_progress_db_aborts_startup(tmp_path: Path) -> None:
     config.app.data_dir.mkdir(parents=True)
     config.app.progress_db_path.write_bytes(b"definitely not sqlite" * 20)
 
-    # sqlalchemy DatabaseError from the migration
-    with pytest.raises(Exception), TestClient(create_app(config)):  # noqa: B017,PT011
+    with pytest.raises(DatabaseError), TestClient(create_app(config)):
         pass

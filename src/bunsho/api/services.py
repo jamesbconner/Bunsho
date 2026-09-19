@@ -30,9 +30,14 @@ class Services:
     health: HealthService
 
     async def aclose(self) -> None:
-        """Wait briefly for an active build, then close the database engine."""
-        await self.tasks.aclose()
-        await self.progress_db.dispose()
+        """Wait briefly for an active build, then close the database engine.
+
+        The engine is disposed even if waiting for the build fails or is cancelled.
+        """
+        try:
+            await self.tasks.aclose()
+        finally:
+            await self.progress_db.dispose()
 
 
 @dataclass(frozen=True, slots=True)
