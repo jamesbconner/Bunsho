@@ -10,7 +10,12 @@ from pathlib import Path
 import pytest
 from pwdlib import PasswordHash
 
-from bunsho.config.service import MIN_JWT_SECRET_LENGTH, AuthSettings
+from bunsho.config.service import (
+    MIN_JWT_SECRET_LENGTH,
+    AuthSettings,
+    ServerSettings,
+    ServiceConfig,
+)
 from bunsho.config.settings import DEFAULT_DECK_FILENAME, DEFAULT_DECK_SHA256, AppConfig
 from bunsho.models.content import (
     JlptLevel,
@@ -122,3 +127,31 @@ def quiet_logger() -> logging.Logger:
     logger = logging.getLogger("bunsho.tests")
     logger.setLevel(logging.CRITICAL)
     return logger
+
+
+def make_service_config(
+    tmp_path: Path, *, cors_origins: tuple[str, ...] = (), **auth_overrides: object
+) -> ServiceConfig:
+    """A ``ServiceConfig`` rooted in ``tmp_path`` for user ``james``.
+
+    Extra keyword arguments override ``make_auth_settings`` fields.
+    """
+    app = AppConfig(
+        data_dir=tmp_path / "data",
+        resources_dir=tmp_path / "resources",
+        deck_filename=DEFAULT_DECK_FILENAME,
+        deck_sha256=DEFAULT_DECK_SHA256,
+        jamdict_db=None,
+        log_level="INFO",
+    )
+    return ServiceConfig(
+        app=app,
+        server=ServerSettings(host="127.0.0.1", port=8192, cors_origins=cors_origins),
+        auth=make_auth_settings(**auth_overrides),
+    )
+
+
+@pytest.fixture
+def service_config(tmp_path: Path) -> ServiceConfig:
+    """A default ``ServiceConfig`` rooted in a temporary directory."""
+    return make_service_config(tmp_path)
