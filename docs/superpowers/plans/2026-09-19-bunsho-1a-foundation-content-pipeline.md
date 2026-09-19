@@ -25,12 +25,12 @@
 - New behavior needs tests; shared fixtures live in `tests/base.py`.
 - The deck is pinned: `resources/JLPT_N5_to_N1_Japanese_Vocabulary.apkg`, sha256 `fe5cf438a8f0f6690af00b2c2a9c61da9390feb5bd6d663ea8e6b225b17c3b4a`, GPL-3.0.
 - Commit messages use conventional commits; append the session's `Co-Authored-By` trailer. Stage explicit paths, never `git add -A`.
-- Deck facts the code relies on: 7,734 notes; exactly one `jlpt_N1`..`jlpt_N5` tag per note; fields `Expression`, `English definition`, `Reading`, `Grammar`, `Additional definitions`, `Example JP`, `Example EN`; only `<mark>` HTML; furigana as `漢字[かんじ]` with a space (or string start) before each base; 959 notes have an empty `Example JP`.
+- Deck facts the code relies on: 7,734 notes; exactly one `jlpt_N1`..`jlpt_N5` tag per note; fields `Expression`, `English definition`, `Reading`, `Grammar`, `Additional definitions`, `Example JP`, `Example EN`; only `<mark>` HTML; furigana as `漢字[かんじ]` with a space (or string start) before each base; 959 notes have an empty `Example JP`. `(expression, raw Reading)` is unique across all notes, but `(expression, plain reading)` is NOT: exactly one homograph pair exists (two N3 notes for 度, Reading `ど` and `度[ど]`), which the importer disambiguates as `vocab:度:ど` and `vocab:度:ど#2` (controller ruling R12, added after Task 11 hit it on the real deck).
 - jamdict facts the code relies on (verified against `jamdict 0.1a11.post2`, `jamdict-data-fix 1.5.1a2`): `Jamdict(db_file=p, kd2_file=p, jmnedict_file=p, auto_config=False)`; `get_char(literal)` returns `Character | None`; `character.meanings(english_only=True)`; readings via `character.rm_groups[*].readings[*]` with `r_type` `ja_on` / `ja_kun`; `stroke_count`, `grade`, `freq`, `jlpt` (old 1-4 scale, ignored); `radicals` items with `rad_type == "classical"`; a missing DB file does **not** raise, so availability must be checked with `is_available()` and `has_kd2()`; roughly 10 ms per lookup.
 
 ## Scope note
 
-The spec said kanji outside the deck would be stored as "unleveled". Plan 1A stores **only kanji that appear in deck vocabulary**, each with a derived level (YAGNI). Expected real-deck results: 2,109 kanji (N5 480, N4 352, N3 544, N2 357, N1 376), 6,775 sentences, 208 kana.
+The spec said kanji outside the deck would be stored as "unleveled". Plan 1A as first written stored **only kanji that appear in deck vocabulary**, each with a derived level (YAGNI). *Superseded after the plan was executed:* at the user's request unleveled rows were added afterwards (KANJIDIC2 grade 1–10, unified ideographs only: +979 rows, 3,088 kanji in total, schema v2). The task text below describes the original 2,109-kanji behaviour. Expected real-deck results: 2,109 kanji (N5 480, N4 352, N3 544, N2 357, N1 376), 6,775 sentences, 208 kana.
 
 ## File Structure
 
@@ -399,6 +399,7 @@ def test_existing_jamdict_db_is_accepted(tmp_path: Path) -> None:
     db.write_bytes(b"")
     config = load_app_config(ConfigNormalizer({"paths": {"jamdict_db": str(db)}}))
     assert config.jamdict_db == db
+```
 
 - [ ] **Step 2: Run to verify they fail**
 

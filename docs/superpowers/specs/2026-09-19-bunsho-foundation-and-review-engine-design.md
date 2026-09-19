@@ -55,7 +55,11 @@ Three SQLite files, split by how replaceable they are:
 | `progress.db` | card state, review log, settings | the app on every review | **irreplaceable** |
 
 Stable content IDs decouple the two: `kana:hira:あ`, `kanji:漢`, `vocab:{expression}:{reading}`
-(handles the 128 duplicate expressions). Rebuilding `content.db` never orphans progress.
+(handles the 128 duplicate expressions), where `reading` is the plain kana reading. Two notes with
+the same expression and plain reading but different raw `Reading` markup (a homograph, e.g. the two
+N3 notes for 度 with reading `ど`) are disambiguated in deck order: the second gets `#2`, the third
+`#3` (`vocab:度:ど#2`). Two notes with identical raw markup are a true duplicate and fail the build.
+Rebuilding `content.db` never orphans progress (the deck is sha256-pinned, so suffixes are stable).
 
 Startup behavior: `progress.db` failure → **fail fast**. `content.db` missing → app starts in
 "content not built" state and the UI shows a first-run Build screen. jamdict is build-time only; missing at
@@ -65,8 +69,14 @@ runtime → warning, continue. Alembic `upgrade head` runs at startup after a **
 ## Content model
 
 - **Kana:** hiragana + katakana incl. dakuten/handakuten and yōon. Static table; no jamdict needed.
-- **Kanji:** one row per kanji found in deck vocabulary: derived level, on/kun readings, meanings, stroke
-  count, radical, grade, frequency (KANJIDIC2 via jamdict).
+- **Kanji:** two groups, stored in this order. (1) *Leveled*: one row per kanji found in deck vocabulary,
+  with its derived level (2,109 in the pinned deck). (2) *Unleveled* (`level` is `None`): every kanji with a
+  KANJIDIC2 grade of 1–10 (jōyō + jinmeiyō) that is not in the deck, ordered by grade then frequency
+  (979 rows; only unified-ideograph code points, so CJK compatibility forms such as U+FA19 are excluded).
+  Rows carry on/kun readings, meanings, stroke count, radical, grade, frequency (KANJIDIC2 via jamdict).
+  `ContentRepository.list_kanji()` returns all 3,088 rows; use `level=X` or `unleveled=True` to filter.
+  Unleveled kanji are excluded from lessons by default (Plan 2 must filter them). `content.db` schema
+  version is `"2"` (nullable `kanji.level`).
 - **Vocab:** deck fields `Expression`, `English definition`, `Reading`, `Grammar` (actually POS),
   `Additional definitions`, `Example JP`, `Example EN`; tags for level, register
   (`honorific/polite/humble`), `usually_kana`.
