@@ -208,3 +208,29 @@ def test_without_a_catalog_no_unleveled_rows_are_produced(tmp_path: Path) -> Non
     assert report.kanji_count == 4
     assert ContentRepository(tmp_path / "c.db").meta()["unleveled_kanji"] == "0"
     assert ContentRepository(tmp_path / "c.db").list_kanji(unleveled=True) == []
+
+
+class _FailingWriter:
+    def write(self, target, *, kana, kanji, vocab, meta):  # type: ignore[no-untyped-def]
+        raise RuntimeError("disk full")
+
+
+def test_writer_failure_is_logged_and_propagates(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    logger = logging.getLogger("bunsho.test_build_failure")
+    events: list[BuildProgress] = []
+    orchestrator = ContentBuildOrchestrator(
+        importer=_FakeImporter(VOCAB),  # type: ignore[arg-type]
+        kana_provider=KanaSource(),
+        kanji_source=FakeKanjiSource(),  # type: ignore[arg-type]
+        writer=_FailingWriter(),  # type: ignore[arg-type]
+        logger=logger,
+    )
+    with (
+        caplog.at_level(logging.ERROR, logger=logger.name),
+        pytest.raises(RuntimeError, match="disk full"),
+    ):
+        orchestrator.build(tmp_path / "deck.apkg", tmp_path / "c.db", on_progress=events.append)
+    assert "content_build_failed stage=write" in caplog.text
+    assert events[-1] == BuildProgress("write", 0, 1)

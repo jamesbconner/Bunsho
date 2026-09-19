@@ -1,3 +1,4 @@
+import os
 import sqlite3
 from pathlib import Path
 
@@ -123,6 +124,7 @@ def test_replace_failure_cleans_up_and_keeps_existing_database(
         raise PermissionError("target is open elsewhere")
 
     monkeypatch.setattr("bunsho.services.content_repository.os.replace", _deny)
+    monkeypatch.setattr("bunsho.services.content_repository.time.sleep", lambda _s: None)
     with pytest.raises(PermissionError, match="open elsewhere"):
         ContentWriter().write(target, kana=[], kanji=[], vocab=[], meta={})
     assert ContentRepository(target).counts() == ContentCounts(kana=208, kanji=2, vocab=2)
@@ -197,3 +199,40 @@ def test_database_stamped_with_the_old_schema_version_is_rejected(tmp_path: Path
     ContentWriter().write(target, kana=[], kanji=[], vocab=[], meta={"schema_version": "1"})
     with pytest.raises(ContentSchemaError, match="rebuild"):
         ContentRepository(target).verify_schema()
+
+
+def test_replace_is_retried_on_permission_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_replace = os.replace
+    calls: list[int] = []
+    slept: list[float] = []
+
+    def flaky(src: object, dst: object) -> None:
+        calls.append(1)
+        if len(calls) < 3:
+            raise PermissionError("target is open elsewhere")
+        real_replace(src, dst)  # type: ignore[arg-type]
+
+    monkeypatch.setattr("bunsho.services.content_repository.os.replace", flaky)
+    monkeypatch.setattr("bunsho.services.content_repository.time.sleep", slept.append)
+    target = tmp_path / "content.db"
+    _write(target)
+    assert len(calls) == 3
+    assert slept == pytest.approx([0.1, 0.2])
+    assert ContentRepository(target).counts().vocab == 2
+    assert [p.name for p in tmp_path.iterdir()] == ["content.db"]
+
+
+def test_other_os_errors_are_not_retried(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[int] = []
+
+    def broken(src: object, dst: object) -> None:
+        calls.append(1)
+        raise OSError("disk on fire")
+
+    monkeypatch.setattr("bunsho.services.content_repository.os.replace", broken)
+    monkeypatch.setattr("bunsho.services.content_repository.time.sleep", lambda _s: None)
+    with pytest.raises(OSError, match="on fire"):
+        _write(tmp_path / "content.db")
+    assert len(calls) == 1
