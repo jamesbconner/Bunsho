@@ -20,7 +20,7 @@ from bunsho.services.kana_source import KanaSource
 from tests.base import make_kanji_details, make_vocab
 
 
-def _kanji(char: str, level: JlptLevel) -> Kanji:
+def _kanji(char: str, level: JlptLevel | None) -> Kanji:
     details = make_kanji_details()
     return Kanji.model_validate(
         {"id": kanji_id(char), "char": char, "level": level, **details.model_dump()}
@@ -136,3 +136,64 @@ def test_temp_file_name_is_unique_per_call(tmp_path: Path) -> None:
     _write(target)
     assert sorted(p.name for p in tmp_path.iterdir()) == ["content.db", "content.db.tmp"]
     assert legacy.read_bytes() == b"legacy leftover"
+
+
+def _write_with_unleveled(target: Path) -> None:
+    ContentWriter().write(
+        target,
+        kana=[],
+        kanji=[
+            _kanji("日", JlptLevel.N5),
+            _kanji("曜", JlptLevel.N4),
+            _kanji("犬", None),
+            _kanji("猫", None),
+        ],
+        vocab=[],
+        meta={"schema_version": CONTENT_SCHEMA_VERSION},
+    )
+
+
+def test_unleveled_kanji_are_stored_and_read_back(tmp_path: Path) -> None:
+    target = tmp_path / "content.db"
+    _write_with_unleveled(target)
+    repo = ContentRepository(target)
+    assert repo.counts().kanji == 4
+    dog = repo.get_kanji("kanji:犬")
+    assert dog is not None
+    assert dog.level is None
+    assert [k.char for k in repo.list_kanji(unleveled=True)] == ["犬", "猫"]
+    assert all(k.level is None for k in repo.list_kanji(unleveled=True))
+
+
+def test_level_filter_excludes_unleveled(tmp_path: Path) -> None:
+    target = tmp_path / "content.db"
+    _write_with_unleveled(target)
+    repo = ContentRepository(target)
+    assert [k.char for k in repo.list_kanji(JlptLevel.N5)] == ["日"]
+    assert [k.char for k in repo.list_kanji(JlptLevel.N1)] == []
+
+
+def test_list_kanji_returns_leveled_then_unleveled_in_insertion_order(tmp_path: Path) -> None:
+    target = tmp_path / "content.db"
+    _write_with_unleveled(target)
+    kanji = ContentRepository(target).list_kanji()
+    assert [k.char for k in kanji] == ["日", "曜", "犬", "猫"]
+    assert [k.level for k in kanji] == [JlptLevel.N5, JlptLevel.N4, None, None]
+
+
+def test_list_kanji_rejects_level_together_with_unleveled(tmp_path: Path) -> None:
+    target = tmp_path / "content.db"
+    _write_with_unleveled(target)
+    with pytest.raises(ValueError, match="unleveled"):
+        ContentRepository(target).list_kanji(JlptLevel.N5, unleveled=True)
+
+
+def test_schema_version_is_two() -> None:
+    assert CONTENT_SCHEMA_VERSION == "2"
+
+
+def test_database_stamped_with_the_old_schema_version_is_rejected(tmp_path: Path) -> None:
+    target = tmp_path / "content.db"
+    ContentWriter().write(target, kana=[], kanji=[], vocab=[], meta={"schema_version": "1"})
+    with pytest.raises(ContentSchemaError, match="rebuild"):
+        ContentRepository(target).verify_schema()

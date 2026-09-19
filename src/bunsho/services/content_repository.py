@@ -15,14 +15,18 @@ from bunsho.models.content import JlptLevel, Kana, KanaScript, Kanji, Vocab
 _SCHEMA = """
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE kana (id TEXT PRIMARY KEY, script TEXT NOT NULL, data TEXT NOT NULL);
-CREATE TABLE kanji (id TEXT PRIMARY KEY, level INTEGER NOT NULL, data TEXT NOT NULL);
+CREATE TABLE kanji (id TEXT PRIMARY KEY, level INTEGER, data TEXT NOT NULL);
 CREATE TABLE vocab (id TEXT PRIMARY KEY, level INTEGER NOT NULL, data TEXT NOT NULL);
 CREATE INDEX idx_kanji_level ON kanji (level);
 CREATE INDEX idx_vocab_level ON vocab (level);
 """
 
-CONTENT_SCHEMA_VERSION = "1"
-"""Version stamped into ``meta`` by the build and checked by ``verify_schema``."""
+CONTENT_SCHEMA_VERSION = "2"
+"""Version stamped into ``meta`` by the build and checked by ``verify_schema``.
+
+Version 2 made ``kanji.level`` nullable (unleveled kanji); version 1 databases must be
+rebuilt.
+"""
 
 
 class ContentSchemaError(RuntimeError):
@@ -80,7 +84,10 @@ class ContentWriter:
                     )
                     con.executemany(
                         "INSERT INTO kanji (id, level, data) VALUES (?, ?, ?)",
-                        [(k.id, int(k.level), k.model_dump_json()) for k in kanji],
+                        [
+                            (k.id, None if k.level is None else int(k.level), k.model_dump_json())
+                            for k in kanji
+                        ],
                     )
                     con.executemany(
                         "INSERT INTO vocab (id, level, data) VALUES (?, ?, ?)",
@@ -168,10 +175,29 @@ class ContentRepository:
                 ).fetchall()
         return [Kana.model_validate_json(row[0]) for row in rows]
 
-    def list_kanji(self, level: JlptLevel | None = None) -> list[Kanji]:
-        """List kanji in study order, optionally for one level."""
+    def list_kanji(self, level: JlptLevel | None = None, *, unleveled: bool = False) -> list[Kanji]:
+        """List kanji in study (insertion) order.
+
+        With no arguments every row is returned: leveled kanji first, then unleveled ones.
+
+        Args:
+            level: Return only kanji of this JLPT level.
+            unleveled: Return only kanji without a level (not used by the deck).
+
+        Returns:
+            The matching kanji.
+
+        Raises:
+            ValueError: If both ``level`` and ``unleveled`` are given.
+        """
+        if level is not None and unleveled:
+            raise ValueError("pass either level or unleveled=True, not both")
         with self._connect() as con:
-            if level is None:
+            if unleveled:
+                rows = con.execute(
+                    "SELECT data FROM kanji WHERE level IS NULL ORDER BY rowid"
+                ).fetchall()
+            elif level is None:
                 rows = con.execute("SELECT data FROM kanji ORDER BY rowid").fetchall()
             else:
                 rows = con.execute(

@@ -95,11 +95,11 @@ class KanjiDetails(_Frozen):
 
 
 class Kanji(KanjiDetails):
-    """A kanji with its derived JLPT level."""
+    """A kanji with its derived JLPT level (``None`` when the deck does not use it)."""
 
     id: str
     char: str
-    level: JlptLevel
+    level: JlptLevel | None
 
 
 class Vocab(_Frozen):

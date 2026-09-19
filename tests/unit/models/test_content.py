@@ -4,6 +4,7 @@ from pydantic import ValidationError
 from bunsho.models.content import (
     JlptLevel,
     KanaScript,
+    Kanji,
     RubySegment,
     Sentence,
     kana_id,
@@ -60,3 +61,16 @@ def test_models_are_frozen() -> None:
     vocab = make_vocab()
     with pytest.raises(ValidationError):
         vocab.expression = "x"  # type: ignore[misc]
+
+
+def test_unleveled_kanji_validates_and_round_trips() -> None:
+    kanji = Kanji(id=kanji_id("犬"), char="犬", level=None, grade=1)
+    assert kanji.level is None
+    restored = Kanji.model_validate_json(kanji.model_dump_json())
+    assert restored == kanji
+    assert restored.level is None
+
+
+def test_kanji_level_is_still_required() -> None:
+    with pytest.raises(ValidationError):
+        Kanji.model_validate({"id": kanji_id("犬"), "char": "犬"})

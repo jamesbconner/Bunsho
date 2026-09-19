@@ -150,7 +150,7 @@ class ContentBuildOrchestrator:
             vocab_count=len(deck.vocab),
             sentence_count=sentence_count,
             vocab_by_level=_by_level([item.level for item in deck.vocab]),
-            kanji_by_level=_by_level([item.level for item in kanji]),
+            kanji_by_level=_by_level([k.level for k in kanji if k.level is not None]),
             kanji_without_details=without_details,
             duration_seconds=time.perf_counter() - started,
         )
@@ -177,7 +177,7 @@ class ContentBuildOrchestrator:
             self._logger.warning("kanji_without_details count=%d", without_details)
         built.sort(
             key=lambda k: (
-                -int(k.level),
+                -int(k.level or 0),
                 k.frequency if k.frequency is not None else _NO_FREQUENCY,
                 k.char,
             )
