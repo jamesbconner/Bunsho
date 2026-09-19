@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import os
 import sqlite3
 import threading
 from collections.abc import Callable
+from contextlib import closing
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -12,8 +14,18 @@ from typing import Any
 from jamdict import Jamdict
 
 from bunsho.models.content import KanjiDetails
+from bunsho.text import is_kanji
 
 _PROBE_KANJI = "日"
+
+GRADED_KANJI_MIN = 1
+GRADED_KANJI_MAX = 10
+"""KANJIDIC2 grades that count as "graded" (inclusive bounds).
+
+1-6 are the kyōiku kanji taught in elementary school, 8 the remaining jōyō kanji taught
+in secondary school, 9 and 10 the jinmeiyō kanji allowed in names (10 being variants of
+jōyō kanji). Grade 7 is unused.
+"""
 
 
 def _identity(value: Any) -> Any:
@@ -27,12 +39,13 @@ class JamdictUnavailableError(RuntimeError):
 class JamdictService:
     """Read-only access to kanji facts.
 
-    Safe to call from any thread. jamdict keeps a cached sqlite connection that may only
-    be used on the thread that opened it, so when the service builds the ``Jamdict``
-    itself, each thread lazily opens its own read-only connection on first use (the
-    constructing thread reuses the instance used for the construction-time checks). A
-    ``jam`` object injected through the test seam is used as-is by every thread; its
-    thread-safety is the caller's responsibility.
+    Implements both ``KanjiInfoSource`` (``get_kanji``) and ``KanjiCatalog``
+    (``graded_kanji``). Safe to call from any thread. jamdict keeps a cached sqlite
+    connection that may only be used on the thread that opened it, so when the service
+    builds the ``Jamdict`` itself, each thread lazily opens its own read-only connection
+    on first use (the constructing thread reuses the instance used for the
+    construction-time checks). A ``jam`` object injected through the test seam is used
+    as-is by every thread; its thread-safety is the caller's responsibility.
     """
 
     def __init__(self, db_file: Path | None = None, *, jam: Any | None = None) -> None:
@@ -74,6 +87,10 @@ class JamdictService:
             self._probe(jam)
         self._factory = factory
         self._local.jam = jam
+        db_path = getattr(jam, "db_file", None)
+        self._db_path: Path | None = (
+            Path(db_path) if isinstance(db_path, str | os.PathLike) else None
+        )
 
     def _jam_for_current_thread(self) -> Any:
         """Return this thread's ``Jamdict``, creating it on first use.
@@ -135,3 +152,38 @@ class JamdictService:
             frequency=character.freq,
             radical=radical,
         )
+
+    def graded_kanji(self) -> list[str]:
+        """List every kanji the dictionary assigns a grade of 1-10.
+
+        Uses a short-lived read-only sqlite connection to the database file, opened on the
+        calling thread, so it is safe from any thread and independent of the per-thread
+        ``Jamdict`` instances. Compatibility ideographs (U+F900-U+FAFF) are excluded; their
+        standard forms are already in the dictionary.
+
+        Returns:
+            Kanji literals in ascending code point order, without duplicates.
+
+        Raises:
+            JamdictUnavailableError: The service has no database path (injected ``jam``
+                without a ``db_file``) or the database could not be queried.
+        """
+        if self._db_path is None:
+            raise JamdictUnavailableError(
+                "the graded kanji catalog needs a database path: the jamdict object has no "
+                "usable db_file; pass db_file= or use the jamdict-data-fix package"
+            )
+        uri = f"{self._db_path.resolve().as_uri()}?mode=ro"
+        try:
+            with closing(sqlite3.connect(uri, uri=True)) as con:
+                rows = con.execute(
+                    "SELECT literal FROM Character "
+                    "WHERE CAST(grade AS INTEGER) BETWEEN ? AND ? ORDER BY literal",
+                    (GRADED_KANJI_MIN, GRADED_KANJI_MAX),
+                ).fetchall()
+        except sqlite3.Error as exc:
+            raise JamdictUnavailableError(
+                f"could not read graded kanji from {self._db_path}; "
+                "reinstall jamdict-data-fix or set paths.jamdict_db"
+            ) from exc
+        return sorted({row[0] for row in rows if is_kanji(row[0])})

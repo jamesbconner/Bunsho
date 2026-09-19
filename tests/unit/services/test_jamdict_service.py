@@ -1,4 +1,6 @@
+import sqlite3
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -113,6 +115,7 @@ class _CountingJam(_FakeJam):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__({"日": _character(), "月": _character(literal="月")})
         self.args, self.kwargs = args, kwargs
+        self.db_file = kwargs.get("db_file")
         type(self).instances.append(self)
 
 
@@ -167,3 +170,105 @@ def test_injected_jam_is_shared_by_all_threads(counting_jam: type[_CountingJam])
     assert service.get_kanji("日") is not None
     assert _lookup_on_new_thread(service, "日") is not None
     assert counting_jam.instances == []
+
+
+_GRADED_ROWS: list[tuple[str, str | None]] = [
+    ("犬", "1"),
+    ("猫", "8"),
+    ("龘", "9"),
+    ("鼠", "10"),
+    ("一", "11"),  # above the graded range
+    ("二", None),  # no grade
+    ("三", "n/a"),  # non-numeric grade
+    ("\ufa19", "10"),  # CJK compatibility ideograph: excluded
+    ("あ", "1"),  # not a kanji: excluded
+    ("日", "1"),
+]
+
+
+def _make_character_db(path: Path, rows: list[tuple[str, str | None]] = _GRADED_ROWS) -> Path:
+    with closing(sqlite3.connect(path)) as con, con:
+        con.execute(
+            "CREATE TABLE Character (ID INTEGER PRIMARY KEY, literal TEXT NOT NULL, "
+            "stroke_count INTEGER, grade TEXT, freq TEXT, jlpt TEXT)"
+        )
+        con.executemany("INSERT INTO Character (literal, grade) VALUES (?, ?)", rows)
+    return path
+
+
+def _service_with_db_file(db_file: Path | str | None) -> JamdictService:
+    jam = _FakeJam({})
+    jam.db_file = db_file  # type: ignore[attr-defined]
+    return JamdictService(jam=jam)
+
+
+def test_graded_kanji_returns_grades_one_to_ten_sorted_without_compatibility_forms(
+    tmp_path: Path,
+) -> None:
+    service = _service_with_db_file(_make_character_db(tmp_path / "jam.db"))
+    result = service.graded_kanji()
+    assert result == sorted(["犬", "猫", "龘", "鼠", "日"])
+    assert result == sorted(result)
+    assert "\ufa19" not in result
+    assert "あ" not in result
+
+
+def test_graded_kanji_accepts_a_path_object_or_string(tmp_path: Path) -> None:
+    db_file = _make_character_db(tmp_path / "jam.db")
+    assert (
+        _service_with_db_file(str(db_file)).graded_kanji()
+        == _service_with_db_file(db_file).graded_kanji()
+    )
+
+
+def test_graded_kanji_uses_the_explicit_database_path(
+    tmp_path: Path, counting_jam: type[_CountingJam]
+) -> None:
+    db_file = _make_character_db(tmp_path / "jam.db")
+    service = JamdictService(db_file)
+    assert "犬" in service.graded_kanji()
+    assert len(counting_jam.instances) == 1  # no extra Jamdict instance is needed
+
+
+def test_graded_kanji_works_from_a_worker_thread(tmp_path: Path) -> None:
+    service = _service_with_db_file(_make_character_db(tmp_path / "jam.db"))
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        assert pool.submit(service.graded_kanji).result() == service.graded_kanji()
+
+
+@pytest.mark.parametrize("db_file", [None, 42])
+def test_graded_kanji_needs_a_database_path(db_file: object) -> None:
+    jam = _FakeJam({})
+    if db_file is not None:
+        jam.db_file = db_file  # type: ignore[attr-defined]
+    with pytest.raises(JamdictUnavailableError, match="database path"):
+        JamdictService(jam=jam).graded_kanji()
+
+
+def test_graded_kanji_with_a_corrupt_database_is_an_error(tmp_path: Path) -> None:
+    corrupt = tmp_path / "corrupt.db"
+    corrupt.write_bytes(b"not a sqlite database")
+    with pytest.raises(JamdictUnavailableError, match="graded kanji"):
+        _service_with_db_file(corrupt).graded_kanji()
+
+
+def test_graded_kanji_with_a_missing_database_is_an_error(tmp_path: Path) -> None:
+    with pytest.raises(JamdictUnavailableError, match="graded kanji"):
+        _service_with_db_file(tmp_path / "missing.db").graded_kanji()
+
+
+def test_graded_kanji_with_a_database_lacking_the_character_table_is_an_error(
+    tmp_path: Path,
+) -> None:
+    empty = tmp_path / "empty.db"
+    sqlite3.connect(empty).close()
+    with pytest.raises(JamdictUnavailableError, match="graded kanji"):
+        _service_with_db_file(empty).graded_kanji()
+
+
+def test_graded_kanji_does_not_modify_the_database(tmp_path: Path) -> None:
+    db_file = _make_character_db(tmp_path / "jam.db")
+    before = db_file.read_bytes()
+    _service_with_db_file(db_file).graded_kanji()
+    assert db_file.read_bytes() == before
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["jam.db"]  # no journal left behind

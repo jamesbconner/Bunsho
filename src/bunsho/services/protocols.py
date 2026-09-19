@@ -33,6 +33,18 @@ class KanjiInfoSource(Protocol):
         ...
 
 
+class KanjiCatalog(Protocol):
+    """Enumerates the kanji a dictionary assigns a school or usage grade to."""
+
+    def graded_kanji(self) -> list[str]:
+        """Return kanji literals with a dictionary grade of 1-10.
+
+        Only unified-ideograph code points are included (see ``bunsho.text.is_kanji``), in
+        ascending code point order and without duplicates.
+        """
+        ...
+
+
 class ContentWriting(Protocol):
     """Persists a complete content build."""
 

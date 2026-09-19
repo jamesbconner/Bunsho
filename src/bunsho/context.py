@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from bunsho.config.settings import AppConfig
 from bunsho.services.content_repository import ContentRepository
-from bunsho.services.protocols import KanjiInfoSource
+from bunsho.services.protocols import KanjiCatalog, KanjiInfoSource
 
 
 @dataclass(slots=True)
@@ -21,6 +21,7 @@ class Context:
     logger: logging.Logger
     dry_run: bool = False
     kanji_source: KanjiInfoSource | None = None
+    kanji_catalog: KanjiCatalog | None = None
     content_repo: ContentRepository | None = None
 
     def refresh_content_repo(self) -> ContentRepository | None:

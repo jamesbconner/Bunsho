@@ -68,6 +68,17 @@ class FakeKanjiSource:
         return self.details.get(char)
 
 
+class FakeKanjiCatalog:
+    """In-memory kanji catalog for unit tests (duck-types ``KanjiCatalog``)."""
+
+    def __init__(self, literals: list[str] | None = None) -> None:
+        self.literals = literals or []
+
+    def graded_kanji(self) -> list[str]:
+        """Return the canned literals."""
+        return list(self.literals)
+
+
 @pytest.fixture
 def app_config(tmp_path: Path) -> AppConfig:
     """An ``AppConfig`` rooted in a temporary directory."""

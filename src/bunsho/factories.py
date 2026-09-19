@@ -11,7 +11,7 @@ from bunsho.services.anki_importer import AnkiDeckImporter
 from bunsho.services.content_repository import ContentWriter
 from bunsho.services.jamdict_service import JamdictService, JamdictUnavailableError
 from bunsho.services.kana_source import KanaSource
-from bunsho.services.protocols import KanjiInfoSource
+from bunsho.services.protocols import KanjiCatalog, KanjiInfoSource
 
 
 def create_context(
@@ -19,7 +19,8 @@ def create_context(
 ) -> Context:
     """Build a ``Context``, tolerating optional services that fail to start.
 
-    A jamdict failure is logged as a warning and leaves ``kanji_source`` as ``None``;
+    A jamdict failure is logged as a warning and leaves ``kanji_source`` and
+    ``kanji_catalog`` as ``None``; otherwise both are the same ``JamdictService``.
     ``content_repo`` is set only when ``content.db`` already exists.
 
     Args:
@@ -32,8 +33,11 @@ def create_context(
     """
     log = logger or logging.getLogger("bunsho")
     kanji_source: KanjiInfoSource | None = None
+    kanji_catalog: KanjiCatalog | None = None
     try:
-        kanji_source = JamdictService(config.jamdict_db)
+        jamdict = JamdictService(config.jamdict_db)
+        kanji_source = jamdict
+        kanji_catalog = jamdict
     except JamdictUnavailableError as exc:
         log.warning("service_init_failed service=jamdict error=%s", exc)
     ctx = Context(
@@ -41,6 +45,7 @@ def create_context(
         logger=log,
         dry_run=dry_run,
         kanji_source=kanji_source,
+        kanji_catalog=kanji_catalog,
         content_repo=None,
     )
     ctx.refresh_content_repo()
@@ -64,4 +69,5 @@ def create_content_build_orchestrator(ctx: Context) -> ContentBuildOrchestrator:
         kanji_source=ctx.kanji_source,
         writer=ContentWriter(),
         logger=ctx.logger,
+        kanji_catalog=ctx.kanji_catalog,
     )
