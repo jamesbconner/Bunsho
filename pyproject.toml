@@ -1,0 +1,73 @@
+[project]
+name = "bunsho"
+version = "0.1.0"
+description = "Bunshō (文章): a Japanese learning tool with kana, JLPT kanji and vocabulary, and spaced-repetition flashcards."
+readme = "README.md"
+authors = [{ name = "James", email = "jamesbconner@users.noreply.github.com" }]
+requires-python = ">=3.13"
+dependencies = [
+    "jamdict>=0.1a11.post2",
+    "jamdict-data-fix>=1.5.1a2",
+    "pydantic>=2.13.5",
+    "python-dotenv>=1.2.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "bandit>=1.9.4",
+    "mypy>=2.3.1",
+    "pre-commit>=4.6.2",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.16.8",
+    "twine>=7.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/bunsho"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "D", "S", "C4", "PT"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D", "S101", "S105", "S106"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+files = ["src"]
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["jamdict", "jamdict.*", "jamdict_data", "jamdict_data.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra --strict-markers"
+markers = ["integration: needs the real deck and the jamdict-data-fix database"]
+
+[tool.coverage.run]
+source = ["src/bunsho"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "\\.\\.\\."]
+
+[tool.bandit]
+exclude_dirs = ["tests"]
