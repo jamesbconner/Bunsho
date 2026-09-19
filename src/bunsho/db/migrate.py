@@ -74,8 +74,9 @@ def run_migrations(
         What happened, including the backup path when one was made.
 
     Raises:
-        sqlalchemy.exc.DatabaseError: The file exists but is not a valid SQLite database.
-        alembic.util.exc.CommandError: A migration failed; the backup (if any) is kept.
+        sqlalchemy.exc.DatabaseError: The file is not a valid SQLite database, or a
+            migration failed part-way (any backup taken beforehand is kept and its
+            path is logged).
     """
     log = logger or logging.getLogger(__name__)
     clock = now or (lambda: datetime.now(UTC))
@@ -90,7 +91,15 @@ def run_migrations(
         log.info("progress_db_up_to_date revision=%s path=%s", head, db_path)
         return MigrationResult(current, head, False, None)
     backup = _backup(db_path, backup_dir, current, clock()) if existed else None
-    command.upgrade(cfg, "head")
+    if backup is not None:
+        log.info("progress_db_backup_created path=%s from=%s", backup, current or "unversioned")
+    try:
+        command.upgrade(cfg, "head")
+    except Exception:
+        log.exception(
+            "progress_db_migration_failed from=%s backup=%s path=%s", current, backup, db_path
+        )
+        raise
     log.info(
         "progress_db_migrated from=%s to=%s backup=%s path=%s",
         current,

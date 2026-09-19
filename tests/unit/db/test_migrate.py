@@ -1,3 +1,4 @@
+import logging
 import sqlite3
 from contextlib import closing
 from datetime import UTC, datetime
@@ -52,6 +53,35 @@ def test_existing_unversioned_database_is_backed_up_then_upgraded(tmp_path: Path
         assert con.execute("SELECT v FROM legacy").fetchall() == [("keep me",)]
     assert "card_state" not in _tables(expected)  # backup predates the upgrade
     assert {"legacy", "card_state"} <= _tables(db)
+
+
+def test_backup_is_logged_on_a_successful_upgrade(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    db = tmp_path / "progress.db"
+    with closing(sqlite3.connect(db)) as con, con:
+        con.execute("CREATE TABLE legacy (v TEXT)")
+    logger = logging.getLogger("bunsho.test_migrate")
+    with caplog.at_level(logging.INFO, logger=logger.name):
+        result = run_migrations(db, backup_dir=tmp_path / "backups", now=lambda: NOW, logger=logger)
+    assert f"progress_db_backup_created path={result.backup_path} from=unversioned" in caplog.text
+
+
+def test_failed_migration_keeps_and_logs_the_backup(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    db = tmp_path / "progress.db"
+    with closing(sqlite3.connect(db)) as con, con:
+        con.execute("CREATE TABLE card_state (x TEXT)")
+    logger = logging.getLogger("bunsho.test_migrate")
+    with caplog.at_level(logging.INFO, logger=logger.name), pytest.raises(DatabaseError):
+        run_migrations(db, backup_dir=tmp_path / "backups", now=lambda: NOW, logger=logger)
+    backup = tmp_path / "backups" / "progress-20260102T030405Z-from-unversioned.db"
+    assert "card_state" in _tables(backup)
+    with closing(sqlite3.connect(backup)) as con:
+        assert [row[1] for row in con.execute("PRAGMA table_info(card_state)")] == ["x"]
+    assert "progress_db_backup_created" in caplog.text
+    assert "progress_db_migration_failed" in caplog.text
 
 
 def test_corrupt_database_fails_fast_without_a_backup(tmp_path: Path) -> None:
