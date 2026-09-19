@@ -1,4 +1,6 @@
+import json
 import logging
+import sqlite3
 import zipfile
 from pathlib import Path
 
@@ -117,3 +119,60 @@ def test_same_expression_different_reading_is_allowed(tmp_path: Path) -> None:
     deck = tmp_path / "deck.apkg"
     sha = build_apkg(deck, [note("日", "ひ"), note("日", "にち")])
     assert len(_importer(sha).import_vocab(deck).vocab) == 2
+
+
+def _write_collection_deck(path: Path, data: bytes) -> str:
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("collection.anki21", data)
+    return sha256_of(path)
+
+
+def _sqlite_bytes(*statements: tuple[str, tuple[str, ...]]) -> bytes:
+    con = sqlite3.connect(":memory:")
+    for sql, params in statements:
+        con.execute(sql, params)
+    data = con.serialize()
+    con.close()
+    return data
+
+
+def test_invalid_zip_raises_deck_format_error(tmp_path: Path) -> None:
+    deck = tmp_path / "deck.apkg"
+    deck.write_bytes(b"not a zip")
+    with pytest.raises(DeckFormatError, match="zip") as excinfo:
+        _importer(sha256_of(deck)).import_vocab(deck)
+    assert excinfo.value.__cause__ is not None
+
+
+def test_invalid_sqlite_raises_deck_format_error(tmp_path: Path) -> None:
+    deck = tmp_path / "deck.apkg"
+    sha = _write_collection_deck(deck, b"not sqlite")
+    with pytest.raises(DeckFormatError):
+        _importer(sha).import_vocab(deck)
+
+
+def test_non_json_models_raises_deck_format_error(tmp_path: Path) -> None:
+    deck = tmp_path / "deck.apkg"
+    data = _sqlite_bytes(
+        ("CREATE TABLE col (models TEXT, decks TEXT)", ()),
+        ("INSERT INTO col VALUES (?, ?)", ("not json", "{}")),
+    )
+    with pytest.raises(DeckFormatError):
+        _importer(_write_collection_deck(deck, data)).import_vocab(deck)
+
+
+def test_model_without_fields_raises_deck_format_error(tmp_path: Path) -> None:
+    deck = tmp_path / "deck.apkg"
+    data = _sqlite_bytes(
+        ("CREATE TABLE col (models TEXT, decks TEXT)", ()),
+        ("INSERT INTO col VALUES (?, ?)", (json.dumps({"0": {"name": "m"}}), "{}")),
+    )
+    with pytest.raises(DeckFormatError):
+        _importer(_write_collection_deck(deck, data)).import_vocab(deck)
+
+
+def test_empty_col_table_raises_deck_format_error(tmp_path: Path) -> None:
+    deck = tmp_path / "deck.apkg"
+    data = _sqlite_bytes(("CREATE TABLE col (models TEXT, decks TEXT)", ()))
+    with pytest.raises(DeckFormatError):
+        _importer(_write_collection_deck(deck, data)).import_vocab(deck)

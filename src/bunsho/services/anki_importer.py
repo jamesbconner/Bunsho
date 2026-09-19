@@ -7,7 +7,6 @@ import json
 import logging
 import sqlite3
 import zipfile
-from collections.abc import Iterator
 from contextlib import closing
 from pathlib import Path
 
@@ -80,11 +79,17 @@ class AnkiDeckImporter:
                 f"deck sha256 mismatch for {deck_path.name}: expected {self._expected_sha256}, "
                 f"got {digest}. If you replaced the deck on purpose, update paths.deck_sha256."
             )
-        with zipfile.ZipFile(deck_path) as archive:
-            collection = _read_collection(archive)
+        try:
+            with zipfile.ZipFile(deck_path) as archive:
+                collection = _read_collection(archive)
+        except zipfile.BadZipFile as exc:
+            raise DeckFormatError(
+                f"{deck_path.name} is not a valid .apkg (zip) archive; "
+                "re-download or re-export the deck"
+            ) from exc
         vocab: list[Vocab] = []
         seen: dict[str, str] = {}
-        for fields, tags in _iter_notes(collection):
+        for fields, tags in _read_notes(collection):
             item = _to_vocab(fields, tags)
             if item.id in seen:
                 raise DuplicateContentIdError(f"duplicate content id {item.id}")
@@ -108,25 +113,33 @@ def _read_collection(archive: zipfile.ZipFile) -> bytes:
     )
 
 
-def _iter_notes(collection: bytes) -> Iterator[tuple[dict[str, str], list[str]]]:
-    with closing(sqlite3.connect(":memory:")) as con:
-        con.deserialize(collection)
-        row = con.execute("SELECT models FROM col").fetchone()
-        models = json.loads(row[0])
-        if len(models) != 1:
-            raise DeckFormatError(f"expected one note type, found {len(models)}")
-        model = next(iter(models.values()))
-        names = [f["name"] for f in sorted(model["flds"], key=lambda f: f["ord"])]
-        missing = [name for name in REQUIRED_FIELDS if name not in names]
-        if missing:
-            raise DeckFormatError(f"deck is missing required field(s): {', '.join(missing)}")
-        for flds, tags in con.execute("SELECT flds, tags FROM notes ORDER BY id"):
-            values = flds.split(_FIELD_SEPARATOR)
-            if len(values) != len(names):
-                raise DeckFormatError(
-                    f"note has {len(values)} fields, expected {len(names)}: {flds[:40]!r}"
-                )
-            yield dict(zip(names, values, strict=True)), tags.split()
+def _read_notes(collection: bytes) -> list[tuple[dict[str, str], list[str]]]:
+    try:
+        with closing(sqlite3.connect(":memory:")) as con:
+            con.deserialize(collection)
+            row = con.execute("SELECT models FROM col").fetchone()
+            models = json.loads(row[0])
+            if len(models) != 1:
+                raise DeckFormatError(f"expected one note type, found {len(models)}")
+            model = next(iter(models.values()))
+            names = [f["name"] for f in sorted(model["flds"], key=lambda f: f["ord"])]
+            missing = [name for name in REQUIRED_FIELDS if name not in names]
+            if missing:
+                raise DeckFormatError(f"deck is missing required field(s): {', '.join(missing)}")
+            notes: list[tuple[dict[str, str], list[str]]] = []
+            for flds, tags in con.execute("SELECT flds, tags FROM notes ORDER BY id"):
+                values = flds.split(_FIELD_SEPARATOR)
+                if len(values) != len(names):
+                    raise DeckFormatError(
+                        f"note has {len(values)} fields, expected {len(names)}: {flds[:40]!r}"
+                    )
+                notes.append((dict(zip(names, values, strict=True)), tags.split()))
+            return notes
+    except (sqlite3.DatabaseError, json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise DeckFormatError(
+            "deck collection is malformed (unreadable database, note types or notes "
+            f"table): {exc}; re-export the deck from Anki"
+        ) from exc
 
 
 def _to_vocab(fields: dict[str, str], tags: list[str]) -> Vocab:
