@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
+from functools import cache
 from pathlib import Path
 
 import pytest
+from pwdlib import PasswordHash
 
+from bunsho.config.service import MIN_JWT_SECRET_LENGTH, AuthSettings
 from bunsho.config.settings import DEFAULT_DECK_FILENAME, DEFAULT_DECK_SHA256, AppConfig
 from bunsho.models.content import (
     JlptLevel,
@@ -16,6 +20,26 @@ from bunsho.models.content import (
     Vocab,
     vocab_id,
 )
+
+PASSWORD = "correct horse battery staple"
+JWT_SECRET = "s" * (MIN_JWT_SECRET_LENGTH + 8)
+
+
+@cache
+def _password_hash() -> str:
+    return PasswordHash.recommended().hash(PASSWORD)
+
+
+def make_auth_settings(**overrides: object) -> AuthSettings:
+    """Build ``AuthSettings`` for user ``james`` with a cached argon2 hash of ``PASSWORD``."""
+    base = AuthSettings(
+        username="james",
+        password_hash=_password_hash(),
+        jwt_secret=JWT_SECRET,
+        access_ttl_minutes=15,
+        refresh_ttl_days=30,
+    )
+    return replace(base, **overrides)  # type: ignore[arg-type]
 
 
 def make_vocab(
