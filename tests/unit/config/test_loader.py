@@ -1,6 +1,9 @@
 from pathlib import Path
 
+import pytest
+
 from bunsho.config.loader import load_config
+from bunsho.config.normalizer import ConfigError
 
 
 def test_precedence_file_then_dotenv_then_environ(tmp_path: Path) -> None:
@@ -21,3 +24,14 @@ def test_precedence_file_then_dotenv_then_environ(tmp_path: Path) -> None:
 def test_defaults_to_process_environment(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.setenv("BUNSHO_PATHS__DATA_DIR", "from-os")
     assert load_config().get_string("paths", "data_dir") == "from-os"
+
+
+def test_missing_and_malformed_files_raise_config_error(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match="not found"):
+        load_config(config_file=tmp_path / "missing.toml", environ={})
+    bad = tmp_path / "bad.toml"
+    bad.write_text("[unclosed\n")
+    with pytest.raises(ConfigError, match="not valid TOML"):
+        load_config(config_file=bad, environ={})
+    with pytest.raises(ConfigError, match="not found"):
+        load_config(env_file=tmp_path / "missing.env", environ={})

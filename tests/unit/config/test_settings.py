@@ -52,3 +52,10 @@ def test_existing_jamdict_db_is_accepted(tmp_path: Path) -> None:
     db.write_bytes(b"")
     config = load_app_config(ConfigNormalizer({"paths": {"jamdict_db": str(db)}}))
     assert config.jamdict_db == db
+
+
+def test_data_dir_must_not_be_a_file(tmp_path: Path) -> None:
+    blocker = tmp_path / "data"
+    blocker.write_text("not a directory")
+    errors = validate_config(ConfigNormalizer({"paths": {"data_dir": str(blocker)}}))
+    assert any("data_dir" in e for e in errors)
