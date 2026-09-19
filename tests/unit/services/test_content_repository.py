@@ -9,7 +9,13 @@ from bunsho.models.content import (
     Kanji,
     kanji_id,
 )
-from bunsho.services.content_repository import ContentCounts, ContentRepository, ContentWriter
+from bunsho.services.content_repository import (
+    CONTENT_SCHEMA_VERSION,
+    ContentCounts,
+    ContentRepository,
+    ContentSchemaError,
+    ContentWriter,
+)
 from bunsho.services.kana_source import KanaSource
 from tests.base import make_kanji_details, make_vocab
 
@@ -76,3 +82,57 @@ def test_failed_build_keeps_existing_database(tmp_path: Path) -> None:
 def test_repository_requires_existing_file(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError, match="content database"):
         ContentRepository(tmp_path / "nope.db")
+
+
+def test_list_vocab_unfiltered_returns_all_in_insertion_order(tmp_path: Path) -> None:
+    target = tmp_path / "content.db"
+    _write(target)
+    vocab = ContentRepository(target).list_vocab()
+    assert [v.expression for v in vocab] == ["日本", "日曜日"]
+
+
+def test_verify_schema_accepts_current_version(tmp_path: Path) -> None:
+    target = tmp_path / "content.db"
+    ContentWriter().write(
+        target,
+        kana=[],
+        kanji=[],
+        vocab=[],
+        meta={"schema_version": CONTENT_SCHEMA_VERSION},
+    )
+    ContentRepository(target).verify_schema()
+
+
+@pytest.mark.parametrize("meta", [{}, {"schema_version": "0"}, {"deck_sha256": "abc"}])
+def test_verify_schema_rejects_missing_or_different_version(
+    tmp_path: Path, meta: dict[str, str]
+) -> None:
+    target = tmp_path / "content.db"
+    ContentWriter().write(target, kana=[], kanji=[], vocab=[], meta=meta)
+    with pytest.raises(ContentSchemaError, match="rebuild"):
+        ContentRepository(target).verify_schema()
+
+
+def test_replace_failure_cleans_up_and_keeps_existing_database(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "content.db"
+    _write(target)
+
+    def _deny(src: object, dst: object) -> None:
+        raise PermissionError("target is open elsewhere")
+
+    monkeypatch.setattr("bunsho.services.content_repository.os.replace", _deny)
+    with pytest.raises(PermissionError, match="open elsewhere"):
+        ContentWriter().write(target, kana=[], kanji=[], vocab=[], meta={})
+    assert ContentRepository(target).counts() == ContentCounts(kana=208, kanji=2, vocab=2)
+    assert [p.name for p in tmp_path.iterdir()] == ["content.db"]
+
+
+def test_temp_file_name_is_unique_per_call(tmp_path: Path) -> None:
+    target = tmp_path / "content.db"
+    legacy = tmp_path / "content.db.tmp"
+    legacy.write_bytes(b"legacy leftover")
+    _write(target)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["content.db", "content.db.tmp"]
+    assert legacy.read_bytes() == b"legacy leftover"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import uuid
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import closing, contextmanager
 from dataclasses import dataclass
@@ -20,6 +21,13 @@ CREATE INDEX idx_kanji_level ON kanji (level);
 CREATE INDEX idx_vocab_level ON vocab (level);
 """
 
+CONTENT_SCHEMA_VERSION = "1"
+"""Version stamped into ``meta`` by the build and checked by ``verify_schema``."""
+
+
+class ContentSchemaError(RuntimeError):
+    """``content.db`` was written with a different (or unknown) schema version."""
+
 
 class ContentWriter:
     """Writes a complete content database atomically."""
@@ -35,8 +43,15 @@ class ContentWriter:
     ) -> None:
         """Build ``target`` from scratch.
 
-        The data is written to ``<target>.tmp`` and moved over ``target`` only after every
-        insert succeeded. On failure the temp file is removed and ``target`` is untouched.
+        The data is written to a uniquely named ``<target>.<random>.tmp`` file next to
+        ``target`` and moved over it only after every insert succeeded. On failure
+        (including a failed move) the temp file is removed and any existing ``target`` is
+        untouched. Because every call has its own temp file, concurrent builds cannot
+        clobber each other's temp data; the last ``os.replace`` wins, so callers should
+        still serialize builds.
+
+        On Windows ``os.replace`` raises ``PermissionError`` while another connection has
+        ``target`` open; callers must handle or retry that.
 
         Args:
             target: Destination ``content.db`` path (parent directories are created).
@@ -47,10 +62,11 @@ class ContentWriter:
 
         Raises:
             sqlite3.Error: If any insert fails (for example a duplicate ID).
+            OSError: If moving the finished database over ``target`` fails (for example
+                ``PermissionError`` on Windows while ``target`` is open elsewhere).
         """
         target.parent.mkdir(parents=True, exist_ok=True)
-        tmp = target.with_name(f"{target.name}.tmp")
-        tmp.unlink(missing_ok=True)
+        tmp = target.with_name(f"{target.name}.{uuid.uuid4().hex}.tmp")
         try:
             with closing(sqlite3.connect(tmp)) as con:
                 con.executescript(_SCHEMA)
@@ -73,7 +89,11 @@ class ContentWriter:
         except BaseException:
             tmp.unlink(missing_ok=True)
             raise
-        os.replace(tmp, target)
+        try:
+            os.replace(tmp, target)
+        except OSError:
+            tmp.unlink(missing_ok=True)
+            raise
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,6 +142,20 @@ class ContentRepository:
         """Return build metadata."""
         with self._connect() as con:
             return dict(con.execute("SELECT key, value FROM meta").fetchall())
+
+    def verify_schema(self) -> None:
+        """Check that the database was built with the current schema version.
+
+        Raises:
+            ContentSchemaError: ``meta`` has no ``schema_version`` or it differs from
+                ``CONTENT_SCHEMA_VERSION``; the content must be rebuilt.
+        """
+        found = self.meta().get("schema_version")
+        if found != CONTENT_SCHEMA_VERSION:
+            raise ContentSchemaError(
+                f"content database schema_version={found!r} does not match the expected "
+                f"{CONTENT_SCHEMA_VERSION!r}; rebuild the content database"
+            )
 
     def list_kana(self, script: KanaScript | None = None) -> list[Kana]:
         """List kana in insertion order, optionally for one script."""

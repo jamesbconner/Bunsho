@@ -11,10 +11,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from bunsho.models.content import JlptLevel, Kanji, KanjiDetails, kanji_id
+from bunsho.services.content_repository import CONTENT_SCHEMA_VERSION
 from bunsho.services.kanji_levels import derive_kanji_levels
 from bunsho.services.protocols import ContentWriting, DeckImporter, KanaProvider, KanjiInfoSource
 
-SCHEMA_VERSION = "1"
 _NO_FREQUENCY = 10**9
 
 
@@ -123,7 +123,7 @@ class ContentBuildOrchestrator:
             )
         else:
             meta = {
-                "schema_version": SCHEMA_VERSION,
+                "schema_version": CONTENT_SCHEMA_VERSION,
                 "built_at": datetime.now(UTC).isoformat(),
                 "deck_sha256": deck.sha256,
                 "deck_filename": deck_path.name,

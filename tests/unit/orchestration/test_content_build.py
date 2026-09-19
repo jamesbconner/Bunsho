@@ -64,6 +64,7 @@ def test_build_writes_content_and_reports(tmp_path: Path) -> None:
     assert [k.char for k in repo.list_kanji()] == ["日", "本", "無", "曜"]
     assert repo.meta()["deck_sha256"] == "a" * 64
     assert repo.meta()["vocab"] == "3"
+    repo.verify_schema()  # the orchestrator stamps the repository's schema version
     assert repo.get_kanji("kanji:無") is not None  # stored even without details
 
 
