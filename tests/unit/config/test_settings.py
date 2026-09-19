@@ -40,7 +40,9 @@ def test_all_validation_errors_are_reported_together(tmp_path: Path) -> None:
     assert str(info.value).count("\n  - ") == 4
 
 
-@pytest.mark.parametrize("name", ["", ".", "..", "a/b.apkg", "a\\b.apkg"])
+@pytest.mark.parametrize(
+    "name", ["", ".", "..", "a/b.apkg", "a\\b.apkg", "C:evil.apkg", "/abs.apkg"]
+)
 def test_deck_filename_must_be_bare(name: str) -> None:
     assert validate_config(ConfigNormalizer({"paths": {"deck_filename": name}}))
 

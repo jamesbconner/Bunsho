@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from bunsho.config.normalizer import ConfigError, ConfigNormalizer
 
@@ -64,7 +64,13 @@ def validate_config(cfg: ConfigNormalizer) -> list[str]:
     if not _SHA256.fullmatch(sha):
         errors.append("[paths] deck_sha256 must be 64 lowercase hex characters")
     name = cfg.get_string("paths", "deck_filename", DEFAULT_DECK_FILENAME)
-    if not name or name in {".", ".."} or Path(name).name != name:
+    # Check both path flavours so the result does not depend on the host OS.
+    if (
+        not name
+        or name in {".", ".."}
+        or PureWindowsPath(name).name != name
+        or PurePosixPath(name).name != name
+    ):
         errors.append("[paths] deck_filename must be a bare file name without directories")
     jamdict = cfg.get_string("paths", "jamdict_db")
     if jamdict and not Path(jamdict).is_file():
