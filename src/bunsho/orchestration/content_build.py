@@ -92,7 +92,9 @@ class ContentBuildOrchestrator:
             deck_path: The pinned vocabulary ``.apkg``.
             target: Where ``content.db`` should be written.
             dry_run: Validate and plan only; write nothing.
-            on_progress: Optional callback invoked after each step.
+            on_progress: Optional callback invoked after each step. It must not raise: an
+                exception from the callback propagates and aborts the build, so callers
+                (for example a WebSocket sender) must guard it.
 
         Returns:
             A report of what was (or would be) written.

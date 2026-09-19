@@ -22,3 +22,14 @@ class Context:
     dry_run: bool = False
     kanji_source: KanjiInfoSource | None = None
     content_repo: ContentRepository | None = None
+
+    def refresh_content_repo(self) -> ContentRepository | None:
+        """Re-point ``content_repo`` at ``content.db``, e.g. after a build.
+
+        Returns:
+            A new repository when ``config.content_db_path`` exists, otherwise ``None``;
+            the same value is stored on ``self.content_repo``.
+        """
+        path = self.config.content_db_path
+        self.content_repo = ContentRepository(path) if path.is_file() else None
+        return self.content_repo

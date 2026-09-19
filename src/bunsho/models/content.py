@@ -141,5 +141,10 @@ def kanji_id(char: str) -> str:
 
 
 def vocab_id(expression: str, reading: str) -> str:
-    """Stable ID for a vocab item; ``reading`` is the plain kana reading."""
+    """Stable ID for a vocab item; ``reading`` is the plain kana reading.
+
+    IDs are opaque strings. Homograph notes carry a ``#N`` suffix applied by the importer,
+    so callers should obtain ids from ``ContentRepository`` rather than rebuilding them
+    with this function.
+    """
     return f"vocab:{expression}:{reading}"

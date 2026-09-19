@@ -44,3 +44,23 @@ def test_orchestrator_is_built_from_context(
     ctx = create_context(app_config, logger=quiet_logger)
     ctx.kanji_source = FakeKanjiSource()
     assert isinstance(create_content_build_orchestrator(ctx), ContentBuildOrchestrator)
+
+
+def test_refresh_content_repo_follows_the_database_file(
+    app_config: AppConfig, quiet_logger: logging.Logger
+) -> None:
+    ctx = create_context(app_config, logger=quiet_logger)
+    assert ctx.content_repo is None
+    assert ctx.refresh_content_repo() is None
+
+    ContentWriter().write(
+        app_config.content_db_path, kana=[], kanji=[], vocab=[make_vocab()], meta={}
+    )
+    repo = ctx.refresh_content_repo()
+    assert repo is not None
+    assert ctx.content_repo is repo
+    assert repo.counts().vocab == 1
+
+    app_config.content_db_path.unlink()
+    assert ctx.refresh_content_repo() is None
+    assert ctx.content_repo is None
