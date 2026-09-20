@@ -1,0 +1,28 @@
+# Bunshō: one service, one worker. Never add replicas or --workers (login throttle and build
+# manager are in-process).
+#
+# Secrets live in an env file (default ./.env). Hashes contain "$": single-quote the value in
+# the env file (BUNSHO_AUTH__PASSWORD_HASH='$argon2id$...'); compose leaves it untouched.
+services:
+  bunsho:
+    build: .
+    image: bunsho:local
+    ports:
+      - "${BUNSHO_HOST_PORT:-8192}:8192"
+    env_file:
+      - ${BUNSHO_ENV_FILE:-.env}
+    volumes:
+      - bunsho-data:/data
+      - ./resources:/app/resources:ro
+    restart: unless-stopped
+    stop_grace_period: 35s
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  bunsho-data:
