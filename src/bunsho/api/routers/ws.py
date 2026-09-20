@@ -134,7 +134,12 @@ async def _stream(websocket: WebSocket, services: ServicesDep) -> None:
     finally:
         tasks.unsubscribe(queue)
         for worker in workers:
-            worker.cancel()  # a cancelled task needs no await; the pending one is never awaited
+            worker.cancel()
+        # Let the cancellations land so no worker outlives the handler, and retrieve every
+        # outcome (a failure the handler did not surface included) without raising. Runs after
+        # ``unsubscribe``; if the handler itself is being cancelled this await may re-raise
+        # ``CancelledError``, which is deliberately not swallowed.
+        await asyncio.gather(*workers, return_exceptions=True)
 
 
 @router.websocket("/ws/tasks")

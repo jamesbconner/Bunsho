@@ -1,5 +1,8 @@
+import asyncio
+import gc
 import logging
 import time
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -7,6 +10,7 @@ from fastapi.testclient import TestClient
 from starlette.testclient import WebSocketTestSession
 from starlette.websockets import WebSocketDisconnect
 
+from bunsho.api.routers import ws as ws_module
 from tests.base import PASSWORD
 
 WS = "/api/v1/ws/tasks"
@@ -220,3 +224,124 @@ def test_a_client_that_vanishes_while_streaming_is_not_an_error(
             assert time.monotonic() < deadline, "subscription was not released"
             time.sleep(0.005)
     assert "ws_stream_failed" not in caplog.text
+
+
+class _FakeSocket:
+    """Just enough of a ``WebSocket`` for ``_stream``: records sends, disconnects on demand."""
+
+    def __init__(self) -> None:
+        self.sent: list[dict[str, Any]] = []
+        self._released = asyncio.Event()
+
+    async def send_json(self, data: dict[str, Any]) -> None:
+        self.sent.append(data)
+
+    async def receive(self) -> dict[str, str]:
+        await self._released.wait()
+        return {"type": "websocket.disconnect"}
+
+    def disconnect(self) -> None:
+        self._released.set()
+
+
+class _FakeTasks:
+    """The slice of ``BuildTaskManager`` that ``_stream`` uses."""
+
+    def __init__(self) -> None:
+        self.queue: asyncio.Queue[Any] = asyncio.Queue()
+        self.unsubscribed = 0
+
+    def subscribe(self) -> asyncio.Queue[Any]:
+        return self.queue
+
+    def latest(self) -> None:
+        return None
+
+    def unsubscribe(self, queue: asyncio.Queue[Any]) -> None:
+        assert queue is self.queue
+        self.unsubscribed += 1
+
+
+def _record_workers(monkeypatch: pytest.MonkeyPatch, *, fail: bool = False) -> list[asyncio.Task]:  # type: ignore[type-arg]
+    """Wrap ``_forward`` and ``_drain`` to record their tasks; optionally make both fail."""
+    recorded: list[asyncio.Task] = []  # type: ignore[type-arg]
+
+    def wrap(original: Any) -> Any:
+        async def worker(*args: Any) -> None:
+            task = asyncio.current_task()
+            assert task is not None
+            recorded.append(task)
+            if fail:
+                raise RuntimeError("worker failed")
+            await original(*args)
+
+        return worker
+
+    monkeypatch.setattr(ws_module, "_forward", wrap(ws_module._forward))
+    monkeypatch.setattr(ws_module, "_drain", wrap(ws_module._drain))
+    return recorded
+
+
+def test_a_disconnect_leaves_no_worker_task_running(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorded = _record_workers(monkeypatch)
+    fake_ws, tasks = _FakeSocket(), _FakeTasks()
+    services = SimpleNamespace(tasks=tasks)
+
+    async def disconnect_once_streaming() -> None:
+        while len(recorded) < 2:
+            await asyncio.sleep(0)
+        assert not any(t.done() for t in recorded)
+        fake_ws.disconnect()
+
+    async def scenario() -> None:
+        disconnector = asyncio.create_task(disconnect_once_streaming())
+        # Awaited directly, not as a task, so the check below runs with no extra loop turn.
+        await asyncio.wait_for(ws_module._stream(fake_ws, services), 5)  # type: ignore[arg-type]
+        assert all(t.done() for t in recorded)  # settled, not merely asked to cancel
+        await disconnector
+
+    asyncio.run(scenario())
+    assert [m["type"] for m in fake_ws.sent] == ["ready"]
+    assert len(recorded) == 2
+    assert tasks.unsubscribed == 1
+
+
+def test_a_cancelled_handler_still_unsubscribes_and_settles_its_workers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recorded = _record_workers(monkeypatch)
+    fake_ws, tasks = _FakeSocket(), _FakeTasks()
+    services = SimpleNamespace(tasks=tasks)
+
+    async def scenario() -> None:
+        stream = asyncio.create_task(ws_module._stream(fake_ws, services))  # type: ignore[arg-type]
+        while len(recorded) < 2:
+            await asyncio.sleep(0)
+        stream.cancel()  # what server shutdown does to a live handler
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(stream, 5)
+        assert all(t.done() for t in recorded)
+
+    asyncio.run(scenario())
+    assert tasks.unsubscribed == 1
+
+
+def test_two_workers_failing_together_leave_no_unretrieved_exception(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    recorded = _record_workers(monkeypatch, fail=True)
+    fake_ws, tasks = _FakeSocket(), _FakeTasks()
+    services = SimpleNamespace(tasks=tasks)
+    caplog.set_level(logging.DEBUG, logger="asyncio")
+
+    async def scenario() -> None:
+        await asyncio.wait_for(ws_module._stream(fake_ws, services), 5)  # type: ignore[arg-type]
+        assert len(recorded) == 2
+        assert all(t.done() for t in recorded)
+        recorded.clear()  # asyncio reports an unretrieved exception when the task is collected
+        gc.collect()
+
+    asyncio.run(scenario())
+    gc.collect()
+    assert "never retrieved" not in caplog.text
+    assert tasks.unsubscribed == 1
