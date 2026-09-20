@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Protocol
 
 from bunsho.models.content import ImportedDeck, Kana, Kanji, KanjiDetails, Vocab
-from bunsho.models.review import CardSchedule, Grade
+from bunsho.models.review import CardKey, CardSchedule, CatalogEntry, Grade, ItemType, SchedState
 
 
 class DeckImporter(Protocol):
@@ -80,4 +80,25 @@ class Scheduler(Protocol):
 
     def preview(self, current: CardSchedule, now: datetime) -> dict[Grade, CardSchedule]:
         """Return the state each of the four grades would produce (never fuzzed)."""
+        ...
+
+
+class NewCardPolicy(Protocol):
+    """Chooses which never-seen cards of one item type to introduce next."""
+
+    def select(
+        self,
+        item_type: ItemType,
+        catalog: Sequence[CatalogEntry],
+        states: Mapping[CardKey, SchedState],
+        limit: int | None,
+    ) -> list[CardKey]:
+        """Return up to ``limit`` unintroduced cards, in the order they should appear.
+
+        Args:
+            item_type: The item type the catalogue belongs to.
+            catalog: The type's entries (any order; the policy sorts them).
+            states: State of every card that has been reviewed (its keys are "introduced").
+            limit: Maximum number of cards, or ``None`` for no limit.
+        """
         ...

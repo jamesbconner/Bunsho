@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from bunsho.models.content import JlptLevel, Kana, KanaScript, Kanji, Vocab
+from bunsho.models.review import ItemType
 
 _SCHEMA = """
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -286,3 +287,33 @@ class ContentRepository:
         with self._connect() as con:
             row = con.execute("SELECT data FROM vocab WHERE id = ?", (item_id,)).fetchone()
         return Vocab.model_validate_json(row[0]) if row else None
+
+    def get_kana(self, item_id: str) -> Kana | None:
+        """Return the kana with this stable ID, if any."""
+        with self._connect() as con:
+            row = con.execute("SELECT data FROM kana WHERE id = ?", (item_id,)).fetchone()
+        return Kana.model_validate_json(row[0]) if row else None
+
+    def catalog(self, item_type: ItemType) -> list[tuple[str, JlptLevel | None]]:
+        """List item ids and levels in study order without parsing the item payloads.
+
+        Kanji without a level (not used by the deck) are excluded: they are not offered as
+        lessons. Kana have no level. Ids are opaque; use them only as given.
+
+        Args:
+            item_type: Which content table to list.
+
+        Returns:
+            ``(item_id, level)`` pairs in ``content.db`` order.
+        """
+        with self._connect() as con:
+            match item_type:
+                case ItemType.KANA:
+                    rows = con.execute("SELECT id, NULL FROM kana ORDER BY rowid").fetchall()
+                case ItemType.KANJI:
+                    rows = con.execute(
+                        "SELECT id, level FROM kanji WHERE level IS NOT NULL ORDER BY rowid"
+                    ).fetchall()
+                case ItemType.VOCAB:
+                    rows = con.execute("SELECT id, level FROM vocab ORDER BY rowid").fetchall()
+        return [(row[0], None if row[1] is None else JlptLevel(row[1])) for row in rows]

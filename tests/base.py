@@ -6,7 +6,7 @@ import asyncio
 import logging
 import threading
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import replace
 from functools import cache
 from pathlib import Path
@@ -27,14 +27,24 @@ from bunsho.db.engine import ProgressDatabase
 from bunsho.db.migrate import run_migrations
 from bunsho.models.content import (
     JlptLevel,
+    Kana,
+    KanaKind,
+    KanaScript,
+    Kanji,
     KanjiDetails,
     RubySegment,
     Sentence,
     Vocab,
+    kana_id,
+    kanji_id,
     vocab_id,
 )
 from bunsho.orchestration.content_build import BuildProgress, BuildReport
-from bunsho.services.content_repository import ContentWriter
+from bunsho.services.content_repository import (
+    CONTENT_SCHEMA_VERSION,
+    ContentRepository,
+    ContentWriter,
+)
 
 PASSWORD = "correct horse battery staple"
 JWT_SECRET = "s" * (MIN_JWT_SECRET_LENGTH + 8)
@@ -77,6 +87,55 @@ def make_vocab(
         level=level,
         sentence=sentence,
     )
+
+
+def make_kana(
+    char: str = "あ", romaji: str = "a", script: KanaScript = KanaScript.HIRAGANA
+) -> Kana:
+    """Build a ``Kana`` with sensible defaults for tests."""
+    return Kana(
+        id=kana_id(script, char),
+        script=script,
+        char=char,
+        romaji=romaji,
+        kind=KanaKind.BASIC,
+        group="a",
+    )
+
+
+def make_kanji(char: str = "日", level: JlptLevel | None = JlptLevel.N5) -> Kanji:
+    """Build a ``Kanji`` (``level=None`` makes it an unleveled one)."""
+    return Kanji(
+        id=kanji_id(char),
+        char=char,
+        level=level,
+        meanings=("day",),
+        on_readings=("ニチ",),
+        kun_readings=("ひ",),
+        stroke_count=4,
+        grade=1,
+        frequency=1,
+        radical=72,
+    )
+
+
+def write_content(
+    path: Path,
+    *,
+    kana: Iterable[Kana] = (),
+    kanji: Iterable[Kanji] = (),
+    vocab: Iterable[Vocab] = (),
+    schema_version: str = CONTENT_SCHEMA_VERSION,
+) -> ContentRepository:
+    """Write a small ``content.db`` at ``path`` and open it."""
+    ContentWriter().write(
+        path,
+        kana=list(kana),
+        kanji=list(kanji),
+        vocab=list(vocab),
+        meta={"schema_version": schema_version},
+    )
+    return ContentRepository(path)
 
 
 def make_kanji_details(**overrides: object) -> KanjiDetails:
