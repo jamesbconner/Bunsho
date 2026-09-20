@@ -1,6 +1,6 @@
-import asyncio
 import logging
 import os
+import shutil
 import sqlite3
 import threading
 from contextlib import closing
@@ -17,8 +17,8 @@ from sqlalchemy.engine import URL
 from sqlalchemy.exc import DatabaseError
 
 from bunsho.db import migrate
-from bunsho.db.migrate import MigrationResult, run_migrations
-from bunsho.db.models import AppSetting, Base
+from bunsho.db.migrate import MigrationResult, _backup, run_migrations
+from bunsho.db.models import Base
 
 NOW = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
 
@@ -233,23 +233,30 @@ def test_an_unwritable_database_fails_before_a_backup_is_taken(
 
 
 def test_backup_of_a_wal_database_contains_uncheckpointed_writes(tmp_path: Path) -> None:
-    """The pre-migration backup uses the SQLite backup API, so WAL content is not lost."""
-    from bunsho.db.engine import ProgressDatabase
-    from bunsho.db.migrate import _backup
+    """The pre-migration backup uses the SQLite backup API, so WAL content is not lost.
 
+    A connection stays open (with auto-checkpointing off) so the marker row lives only in the
+    ``-wal`` file while ``_backup`` runs; closing the last connection would checkpoint it away.
+    """
     db_path = tmp_path / "progress.db"
     run_migrations(db_path, backup_dir=tmp_path / "backups")
+    query = "SELECT value FROM app_setting WHERE key = 'wal-marker'"
 
-    async def write() -> None:
-        database = ProgressDatabase(db_path)
-        try:
-            async with database.sessions() as session, session.begin():
-                session.add(AppSetting(key="wal-marker", value="kept"))
-        finally:
-            await database.dispose()
+    with closing(sqlite3.connect(db_path)) as writer:
+        assert writer.execute("PRAGMA journal_mode=WAL").fetchone() == ("wal",)
+        writer.execute("PRAGMA wal_autocheckpoint=0")
+        writer.execute("INSERT INTO app_setting (key, value) VALUES ('wal-marker', 'kept')")
+        writer.commit()
+        wal_file = db_path.with_name(db_path.name + "-wal")
+        assert wal_file.stat().st_size > 0
 
-    asyncio.run(write())
-    backup = _backup(db_path, tmp_path / "backups", "0001", datetime.now(UTC))
+        # A naive copy of the main file alone misses the write: the test is not vacuous.
+        naive = tmp_path / "naive.db"
+        shutil.copyfile(db_path, naive)
+        with closing(sqlite3.connect(naive)) as con:
+            assert con.execute(query).fetchall() == []
+
+        backup = _backup(db_path, tmp_path / "backups", "0001", datetime.now(UTC))
+
     with closing(sqlite3.connect(backup)) as con:
-        rows = con.execute("SELECT value FROM app_setting WHERE key = 'wal-marker'").fetchall()
-    assert rows == [("kept",)]
+        assert con.execute(query).fetchall() == [("kept",)]
