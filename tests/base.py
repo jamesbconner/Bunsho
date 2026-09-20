@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import threading
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from functools import cache
 from pathlib import Path
@@ -21,6 +23,8 @@ from bunsho.config.service import (
     ServiceConfig,
 )
 from bunsho.config.settings import DEFAULT_DECK_FILENAME, DEFAULT_DECK_SHA256, AppConfig
+from bunsho.db.engine import ProgressDatabase
+from bunsho.db.migrate import run_migrations
 from bunsho.models.content import (
     JlptLevel,
     KanjiDetails,
@@ -225,3 +229,26 @@ def close_and_wait_for_unsubscribe(client: TestClient, ws: WebSocketTestSession)
     while client.app.state.services.tasks.subscriber_count != 0:  # type: ignore[attr-defined]
         assert time.monotonic() < deadline, "subscription was not released"
         time.sleep(0.005)
+
+
+def make_progress_database(tmp_path: Path) -> ProgressDatabase:
+    """Migrate a fresh ``progress.db`` under ``tmp_path`` and open it."""
+    path = tmp_path / "progress.db"
+    run_migrations(path, backup_dir=tmp_path / "backups")
+    return ProgressDatabase(path)
+
+
+def run_with_database[T](tmp_path: Path, scenario: Callable[[ProgressDatabase], Awaitable[T]]) -> T:
+    """Run ``scenario`` against a fresh migrated ``progress.db`` and dispose the engine.
+
+    The suite has no pytest-asyncio; async tests are plain functions that call this.
+    """
+    database = make_progress_database(tmp_path)
+
+    async def main() -> T:
+        try:
+            return await scenario(database)
+        finally:
+            await database.dispose()
+
+    return asyncio.run(main())

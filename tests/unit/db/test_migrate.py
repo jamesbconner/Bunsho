@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import sqlite3
@@ -17,7 +18,7 @@ from sqlalchemy.exc import DatabaseError
 
 from bunsho.db import migrate
 from bunsho.db.migrate import MigrationResult, run_migrations
-from bunsho.db.models import Base
+from bunsho.db.models import AppSetting, Base
 
 NOW = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
 
@@ -229,3 +230,26 @@ def test_an_unwritable_database_fails_before_a_backup_is_taken(
     with pytest.raises(PermissionError, match="not writable"):
         run_migrations(db, backup_dir=tmp_path / "backups", logger=quiet_logger)
     assert not (tmp_path / "backups").exists()
+
+
+def test_backup_of_a_wal_database_contains_uncheckpointed_writes(tmp_path: Path) -> None:
+    """The pre-migration backup uses the SQLite backup API, so WAL content is not lost."""
+    from bunsho.db.engine import ProgressDatabase
+    from bunsho.db.migrate import _backup
+
+    db_path = tmp_path / "progress.db"
+    run_migrations(db_path, backup_dir=tmp_path / "backups")
+
+    async def write() -> None:
+        database = ProgressDatabase(db_path)
+        try:
+            async with database.sessions() as session, session.begin():
+                session.add(AppSetting(key="wal-marker", value="kept"))
+        finally:
+            await database.dispose()
+
+    asyncio.run(write())
+    backup = _backup(db_path, tmp_path / "backups", "0001", datetime.now(UTC))
+    with closing(sqlite3.connect(backup)) as con:
+        rows = con.execute("SELECT value FROM app_setting WHERE key = 'wal-marker'").fetchall()
+    assert rows == [("kept",)]
