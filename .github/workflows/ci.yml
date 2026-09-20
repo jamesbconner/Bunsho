@@ -52,7 +52,7 @@ jobs:
         run: uv run mypy src/
 
       - name: Bandit security scan
-        run: uv run bandit -r src/ -l
+        run: uv run bandit -c pyproject.toml -r src/ -l
 
   test:
     runs-on: ${{ matrix.os }}
