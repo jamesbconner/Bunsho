@@ -28,7 +28,9 @@ def study_day_window(now: datetime, rollover_hour: int, tz: tzinfo) -> tuple[dat
     if now.tzinfo is None:
         raise ValueError("now must be timezone-aware (a naive datetime has no timezone)")
     local = now.astimezone(tz)
-    start = local.replace(hour=rollover_hour, minute=0, second=0, microsecond=0)
+    # fold=0: an ambiguous rollover hour (DST fall-back) starts on its first occurrence, whatever
+    # fold ``now`` carries, so every instant in a study day agrees on where the day began.
+    start = local.replace(hour=rollover_hour, minute=0, second=0, microsecond=0, fold=0)
     if local < start:
         start -= timedelta(days=1)
     end = start + timedelta(days=1)  # wall-clock arithmetic: keeps the rollover hour across DST

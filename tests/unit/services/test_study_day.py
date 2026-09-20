@@ -50,21 +50,34 @@ def test_the_fall_back_day_is_25_hours_long() -> None:
     assert end - start == timedelta(hours=25)
 
 
-def test_consecutive_windows_tile_without_gaps() -> None:
-    moment = utc(2026, 3, 6, 12)
+@pytest.mark.parametrize("rollover_hour", [0, 1, 2, 3, 4])
+@pytest.mark.parametrize("first_moment", [utc(2026, 3, 6, 12), utc(2026, 10, 30, 12)])
+def test_consecutive_windows_tile_without_gaps(rollover_hour: int, first_moment: datetime) -> None:
+    moment = first_moment
     windows = []
     for _ in range(5):
-        start, end = study_day_window(moment, 4, NEW_YORK)
+        start, end = study_day_window(moment, rollover_hour, NEW_YORK)
+        assert start <= moment < end
         windows.append((start, end))
         moment = end
     for (_, previous_end), (next_start, _) in zip(windows, windows[1:], strict=False):
         assert previous_end == next_start
 
 
+def test_an_ambiguous_rollover_hour_starts_on_its_first_occurrence() -> None:
+    # Clocks go back at 02:00 EDT (06:00 UTC) on 2026-11-01, so 01:00-02:00 happens twice.
+    # Whichever occurrence the instant falls in, the day starts at the first 01:00 (EDT).
+    windows = {study_day_window(utc(2026, 11, 1, hour, 30), 1, NEW_YORK) for hour in (5, 6, 7)}
+    assert windows == {(utc(2026, 11, 1, 5), utc(2026, 11, 2, 6))}
+    ((start, end),) = windows
+    assert end - start == timedelta(hours=25)
+
+
 def test_study_date_uses_the_rollover_hour() -> None:
     assert study_date(utc(2026, 9, 20, 3, 59), 4, UTC) == date(2026, 9, 19)
     assert study_date(utc(2026, 9, 20, 4, 0), 4, UTC) == date(2026, 9, 20)
     assert study_date(utc(2026, 9, 20, 12), 4, NEW_YORK) == date(2026, 9, 20)
+    assert study_date(utc(2026, 9, 20, 7, 59), 4, NEW_YORK) == date(2026, 9, 19)  # 03:59 EDT
 
 
 def test_a_naive_instant_is_rejected() -> None:
