@@ -6,6 +6,9 @@ import asyncio
 import logging
 from dataclasses import dataclass
 
+from alembic.util.exc import CommandError
+from sqlalchemy.exc import DatabaseError
+
 from bunsho.config.service import ServiceConfig
 from bunsho.context import Context
 from bunsho.db.engine import ProgressDatabase
@@ -13,8 +16,13 @@ from bunsho.db.migrate import run_migrations
 from bunsho.factories import create_content_build_orchestrator, create_context
 from bunsho.orchestration.build_tasks import BuildTaskManager, OrchestratorFactory
 from bunsho.services.auth import AuthService
+from bunsho.services.content_repository import remove_stale_temp_files
 from bunsho.services.health import HealthService
 from bunsho.services.login_throttle import LoginThrottle
+
+
+class StartupError(RuntimeError):
+    """The service cannot start; the message says what to check."""
 
 
 @dataclass(slots=True)
@@ -60,16 +68,33 @@ async def build_services(
         The service container.
 
     Raises:
-        Exception: A migration or the ``progress.db`` ping failed (fail fast).
+        StartupError: ``progress.db`` could not be opened or migrated (corrupt, unknown
+            revision, not writable, or another process held the migration lock too long).
+        Exception: The ``progress.db`` ping or context creation failed (fail fast).
     """
     logger = logging.getLogger("bunsho")
     app_config = config.app
-    await asyncio.to_thread(
-        run_migrations,
-        app_config.progress_db_path,
-        backup_dir=app_config.data_dir / "backups",
-        logger=logger,
-    )
+    backup_dir = app_config.data_dir / "backups"
+    try:
+        await asyncio.to_thread(
+            run_migrations, app_config.progress_db_path, backup_dir=backup_dir, logger=logger
+        )
+    except (DatabaseError, CommandError, OSError) as exc:  # OSError includes filelock.Timeout
+        logger.error(
+            "progress_db_startup_failed path=%s backups=%s error=%s: %s",
+            app_config.progress_db_path,
+            backup_dir,
+            type(exc).__name__,
+            exc,
+        )
+        raise StartupError(
+            f"progress.db could not be opened or migrated ({type(exc).__name__}). "
+            f"Database: {app_config.progress_db_path}. Backups: {backup_dir}. "
+            "Check that the data folder is writable by the service user and that the file is "
+            "a Bunshō progress database. To restore, stop the service and copy a backup over "
+            "progress.db."
+        ) from exc
+    await asyncio.to_thread(remove_stale_temp_files, app_config.content_db_path, logger)
     progress_db = ProgressDatabase(app_config.progress_db_path)
     try:
         await progress_db.ping()

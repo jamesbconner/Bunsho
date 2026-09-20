@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import sqlite3
 from collections.abc import Callable
 from contextlib import closing
@@ -14,10 +15,14 @@ from alembic import command
 from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
+from filelock import FileLock
 from sqlalchemy import create_engine
 from sqlalchemy.engine import URL
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
+
+MIGRATION_LOCK_TIMEOUT_SECONDS = 120.0
+"""How long a starting process waits for another one that is migrating ``progress.db``."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +72,17 @@ def _backup(db_path: Path, backup_dir: Path, revision: str | None, stamp: dateti
     return target
 
 
+def _require_writable(db_path: Path) -> None:
+    """Raise ``PermissionError`` when ``progress.db`` (or its folder) cannot be written.
+
+    Checked before the backup so a read-only volume does not produce a pointless backup
+    followed by an opaque driver error.
+    """
+    for target in (db_path, db_path.parent):
+        if target.exists() and not os.access(target, os.W_OK):
+            raise PermissionError(f"progress.db location is not writable: {target}")
+
+
 def run_migrations(
     db_path: Path,
     *,
@@ -95,6 +111,9 @@ def run_migrations(
         alembic.util.exc.CommandError: The database is at a revision this version does not
             know (for example after rolling back to an older image); the backup is kept
             and the database is left untouched.
+        filelock.Timeout: Another process held the migration lock for more than
+            ``MIGRATION_LOCK_TIMEOUT_SECONDS``.
+        PermissionError: ``progress.db`` or its folder is not writable.
     """
     log = logger or logging.getLogger(__name__)
     clock = now or (lambda: datetime.now(UTC))
@@ -103,26 +122,30 @@ def run_migrations(
     if head is None:
         raise RuntimeError("no progress.db migrations found")
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    existed = db_path.is_file()
-    current = _current_revision(db_path) if existed else None
-    if existed and current == head:
-        log.info("progress_db_up_to_date revision=%s path=%s", head, db_path)
-        return MigrationResult(current, head, False, None)
-    backup = _backup(db_path, backup_dir, current, clock()) if existed else None
-    if backup is not None:
-        log.info("progress_db_backup_created path=%s from=%s", backup, current or "unversioned")
-    try:
-        command.upgrade(cfg, "head")
-    except Exception:
-        log.exception(
-            "progress_db_migration_failed from=%s backup=%s path=%s", current, backup, db_path
+    lock = FileLock(str(db_path.with_name(f"{db_path.name}.migrate.lock")))
+    with lock.acquire(timeout=MIGRATION_LOCK_TIMEOUT_SECONDS):
+        existed = db_path.is_file()
+        current = _current_revision(db_path) if existed else None
+        if existed and current == head:
+            log.info("progress_db_up_to_date revision=%s path=%s", head, db_path)
+            return MigrationResult(current, head, False, None)
+        if existed:
+            _require_writable(db_path)
+        backup = _backup(db_path, backup_dir, current, clock()) if existed else None
+        if backup is not None:
+            log.info("progress_db_backup_created path=%s from=%s", backup, current or "unversioned")
+        try:
+            command.upgrade(cfg, "head")
+        except Exception:
+            log.exception(
+                "progress_db_migration_failed from=%s backup=%s path=%s", current, backup, db_path
+            )
+            raise
+        log.info(
+            "progress_db_migrated from=%s to=%s backup=%s path=%s",
+            current,
+            head,
+            backup,
+            db_path,
         )
-        raise
-    log.info(
-        "progress_db_migrated from=%s to=%s backup=%s path=%s",
-        current,
-        head,
-        backup,
-        db_path,
-    )
-    return MigrationResult(current, head, True, backup)
+        return MigrationResult(current, head, True, backup)

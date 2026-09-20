@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import logging
 import os
+import re
 import sqlite3
 import time
 import uuid
@@ -32,6 +34,40 @@ rebuilt.
 
 class ContentSchemaError(RuntimeError):
     """``content.db`` was written with a different (or unknown) schema version."""
+
+
+_TEMP_SUFFIX = re.compile(r"\.[0-9a-f]{32}\.tmp$")
+
+
+def remove_stale_temp_files(target: Path, logger: logging.Logger | None = None) -> int:
+    """Delete ``<target>.<uuid hex>.tmp`` files left by a build that was killed mid-write.
+
+    Call only while no build can be running (at startup). Files that do not match the
+    exact temp-name pattern of ``ContentWriter`` are never touched.
+
+    Args:
+        target: The final ``content.db`` path; its folder is scanned.
+        logger: Logger for ``key=value`` messages.
+
+    Returns:
+        How many files were removed.
+    """
+    log = logger or logging.getLogger(__name__)
+    if not target.parent.is_dir():
+        return 0
+    removed = 0
+    for path in target.parent.iterdir():
+        if not path.name.startswith(f"{target.name}.") or not _TEMP_SUFFIX.search(path.name):
+            continue
+        try:
+            path.unlink()
+        except OSError as exc:
+            log.warning("content_tmp_remove_failed path=%s error=%s", path, type(exc).__name__)
+        else:
+            removed += 1
+    if removed:
+        log.info("content_tmp_removed count=%d dir=%s", removed, target.parent)
+    return removed
 
 
 _REPLACE_ATTEMPTS = 5

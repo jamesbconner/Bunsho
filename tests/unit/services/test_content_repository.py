@@ -1,5 +1,7 @@
+import logging
 import os
 import sqlite3
+import uuid
 from pathlib import Path
 
 import pytest
@@ -16,6 +18,7 @@ from bunsho.services.content_repository import (
     ContentRepository,
     ContentSchemaError,
     ContentWriter,
+    remove_stale_temp_files,
 )
 from bunsho.services.kana_source import KanaSource
 from tests.base import make_kanji_details, make_vocab
@@ -236,3 +239,47 @@ def test_other_os_errors_are_not_retried(tmp_path: Path, monkeypatch: pytest.Mon
     with pytest.raises(OSError, match="on fire"):
         _write(tmp_path / "content.db")
     assert len(calls) == 1
+
+
+def test_stale_temp_files_are_removed_and_other_files_kept(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    target = tmp_path / "content.db"
+    target.write_bytes(b"live")
+    stale = [tmp_path / f"content.db.{uuid.uuid4().hex}.tmp" for _ in range(2)]
+    for path in stale:
+        path.write_bytes(b"x" * 10)
+    keep = [
+        tmp_path / "content.db.notes.tmp",  # not a build temp file
+        tmp_path / "other.db.0123456789abcdef0123456789abcdef.tmp",  # another database
+        tmp_path / "progress.db",
+    ]
+    for path in keep:
+        path.write_bytes(b"keep")
+    with caplog.at_level(logging.INFO, logger="bunsho"):
+        removed = remove_stale_temp_files(target, logging.getLogger("bunsho"))
+    assert removed == 2
+    assert not any(path.exists() for path in stale)
+    assert all(path.exists() for path in [target, *keep])
+    assert "content_tmp_removed count=2" in caplog.text
+
+
+def test_sweeping_a_missing_folder_is_a_no_op(tmp_path: Path) -> None:
+    assert remove_stale_temp_files(tmp_path / "nope" / "content.db") == 0
+
+
+def test_a_temp_file_that_cannot_be_removed_is_logged_and_skipped(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "content.db"
+    stuck = tmp_path / f"content.db.{'b' * 32}.tmp"
+    stuck.write_bytes(b"x")
+
+    def refuse(self: Path, missing_ok: bool = False) -> None:
+        raise PermissionError("locked")
+
+    monkeypatch.setattr(Path, "unlink", refuse)
+    with caplog.at_level(logging.WARNING, logger="bunsho"):
+        removed = remove_stale_temp_files(target, logging.getLogger("bunsho"))
+    assert removed == 0
+    assert f"content_tmp_remove_failed path={stuck} error=PermissionError" in caplog.text

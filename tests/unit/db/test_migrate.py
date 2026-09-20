@@ -1,9 +1,12 @@
 import logging
+import os
 import sqlite3
+import threading
 from contextlib import closing
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
+import filelock
 import pytest
 from alembic.autogenerate import compare_metadata
 from alembic.runtime.migration import MigrationContext
@@ -12,7 +15,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import URL
 from sqlalchemy.exc import DatabaseError
 
-from bunsho.db.migrate import run_migrations
+from bunsho.db import migrate
+from bunsho.db.migrate import MigrationResult, run_migrations
 from bunsho.db.models import Base
 
 NOW = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
@@ -169,3 +173,59 @@ def test_migration_matches_the_models(tmp_path: Path) -> None:
     finally:
         engine.dispose()
     assert differences == []
+
+
+def test_concurrent_migrations_of_a_new_database_both_succeed(
+    tmp_path: Path, quiet_logger: logging.Logger
+) -> None:
+    db = tmp_path / "progress.db"
+    backups = tmp_path / "backups"
+    barrier = threading.Barrier(2)
+    results: list[MigrationResult] = []
+    errors: list[BaseException] = []
+
+    def worker() -> None:
+        barrier.wait()
+        try:
+            results.append(run_migrations(db, backup_dir=backups, logger=quiet_logger))
+        except BaseException as exc:  # noqa: BLE001 - collected and asserted below
+            errors.append(exc)
+
+    threads = [threading.Thread(target=worker) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=60)
+    assert errors == []
+    assert sorted(result.upgraded for result in results) == [False, True]
+
+
+def test_a_held_migration_lock_times_out_with_a_clear_error(
+    tmp_path: Path, quiet_logger: logging.Logger, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db = tmp_path / "progress.db"
+    monkeypatch.setattr(migrate, "MIGRATION_LOCK_TIMEOUT_SECONDS", 0.2)
+    with (
+        filelock.FileLock(str(tmp_path / "progress.db.migrate.lock")),
+        pytest.raises(filelock.Timeout),
+    ):
+        run_migrations(db, backup_dir=tmp_path / "backups", logger=quiet_logger)
+    assert not db.exists()
+
+
+def test_an_unwritable_database_fails_before_a_backup_is_taken(
+    tmp_path: Path, quiet_logger: logging.Logger, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db = tmp_path / "progress.db"
+    with closing(sqlite3.connect(db)) as con:  # a valid but unversioned file: needs migrating
+        con.execute("CREATE TABLE legacy (x INTEGER)")
+    real_access = os.access
+
+    def deny_database(path: object, mode: int) -> bool:
+        # Only the database and its folder are unwritable; alembic reads its own script dir.
+        return False if Path(str(path)) in (db, db.parent) else real_access(path, mode)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(migrate.os, "access", deny_database)
+    with pytest.raises(PermissionError, match="not writable"):
+        run_migrations(db, backup_dir=tmp_path / "backups", logger=quiet_logger)
+    assert not (tmp_path / "backups").exists()
