@@ -44,6 +44,18 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/bunsho"]
 
+# An explicit include list, not an exclude list: a file added to the repository later (another
+# deck, fixtures, data) stays out of the MIT-labelled sdist unless someone names it here.
+# resources/ holds the GPL-3.0 vocabulary deck and must never ship in this artifact.
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/pyproject.toml",
+    "/README.md",
+    "/LICENSE",
+    "/CHANGELOG.md",
+]
+
 [tool.ruff]
 line-length = 100
 target-version = "py313"

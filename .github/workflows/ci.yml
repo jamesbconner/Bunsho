@@ -106,6 +106,15 @@ jobs:
       - name: Build wheel and sdist
         run: uv build
 
+      # The vocabulary deck is GPL-3.0 and the package is MIT: it must never ship in the sdist.
+      - name: The sdist has no deck or resources
+        run: |
+          if tar tzf dist/*.tar.gz | grep -Ei '\.apkg$|^[^/]+/resources(/|$)'; then
+            echo "::error::The sdist contains a GPL-3.0 deck (.apkg) or a resources/ entry. Fix [tool.hatch.build.targets.sdist] in pyproject.toml."
+            exit 1
+          fi
+          echo "sdist contains no .apkg file and no resources/ entry"
+
       - name: Check distribution metadata
         run: uv run twine check dist/*
 
