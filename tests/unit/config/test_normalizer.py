@@ -50,3 +50,8 @@ def test_merge_env_overrides_and_ignores_unrelated() -> None:
     assert merged.get_string("paths", "data_dir") == "env"
     assert cfg.get_string("paths", "data_dir") == "file"  # original untouched
     assert not merged.has_option("bad", "")
+
+
+def test_top_level_scalar_is_a_config_error() -> None:
+    with pytest.raises(ConfigError, match="must be a table"):
+        ConfigNormalizer({"x": 1})  # type: ignore[dict-item]

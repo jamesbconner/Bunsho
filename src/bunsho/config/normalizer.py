@@ -25,6 +25,8 @@ class ConfigNormalizer:
         """
         self._data: dict[str, dict[str, Any]] = {}
         for section, values in (raw or {}).items():
+            if not isinstance(values, Mapping):
+                raise ConfigError(f"top-level key {section!r} must be a table, not {values!r}")
             bucket = self._data.setdefault(section.lower(), {})
             for key, value in values.items():
                 bucket[key.lower()] = value

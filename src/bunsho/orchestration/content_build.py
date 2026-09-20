@@ -180,7 +180,13 @@ class ContentBuildOrchestrator:
                 "vocab": str(len(deck.vocab)),
             }
             notify(BuildProgress("write", 0, 1))
-            self._writer.write(target, kana=kana, kanji=kanji, vocab=deck.vocab, meta=meta)
+            try:
+                self._writer.write(target, kana=kana, kanji=kanji, vocab=deck.vocab, meta=meta)
+            except Exception:
+                self._logger.error(
+                    "content_build_failed stage=write target=%s", target, exc_info=True
+                )
+                raise
             notify(BuildProgress("write", 1, 1))
             self._logger.info(
                 "content_build dry_run=false target=%s kana=%d kanji=%d "

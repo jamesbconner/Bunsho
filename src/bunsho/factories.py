@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 
 from bunsho.config.settings import AppConfig
 from bunsho.context import Context
@@ -38,7 +39,7 @@ def create_context(
         jamdict = JamdictService(config.jamdict_db)
         kanji_source = jamdict
         kanji_catalog = jamdict
-    except JamdictUnavailableError as exc:
+    except (JamdictUnavailableError, OSError, sqlite3.Error) as exc:
         log.warning("service_init_failed service=jamdict error=%s", exc)
     ctx = Context(
         config=config,

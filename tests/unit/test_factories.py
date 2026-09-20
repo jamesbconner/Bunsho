@@ -1,5 +1,6 @@
 import dataclasses
 import logging
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -126,3 +127,21 @@ def test_orchestrator_from_context_without_a_catalog_stores_only_deck_kanji(
     )
 
     assert (report.kanji_count, report.unleveled_kanji_count) == (0, 0)
+
+
+@pytest.mark.parametrize("error", [OSError("unreadable"), sqlite3.DatabaseError("corrupt")])
+def test_jamdict_os_and_sqlite_errors_degrade_gracefully(
+    app_config: AppConfig,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    error: Exception,
+) -> None:
+    def broken(_db_file: object) -> None:
+        raise error
+
+    monkeypatch.setattr("bunsho.factories.JamdictService", broken)
+    with caplog.at_level(logging.WARNING, logger=LOGGER_NAME):
+        ctx = create_context(app_config, logger=logging.getLogger(LOGGER_NAME))
+    assert ctx.kanji_source is None
+    assert ctx.kanji_catalog is None
+    assert "service_init_failed service=jamdict" in caplog.text
