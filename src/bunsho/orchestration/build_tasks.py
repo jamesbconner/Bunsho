@@ -119,6 +119,11 @@ class BuildTaskManager:
         """Stop delivering events to ``queue``."""
         self._subscribers.discard(queue)
 
+    @property
+    def subscriber_count(self) -> int:
+        """Number of queues currently subscribed (a live WebSocket holds exactly one)."""
+        return len(self._subscribers)
+
     def start(self, *, dry_run: bool) -> BuildTask:
         """Start a build in the background.
 

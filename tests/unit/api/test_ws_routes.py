@@ -7,11 +7,10 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from starlette.testclient import WebSocketTestSession
 from starlette.websockets import WebSocketDisconnect
 
 from bunsho.api.routers import ws as ws_module
-from tests.base import PASSWORD
+from tests.base import PASSWORD, close_and_wait_for_unsubscribe
 
 WS = "/api/v1/ws/tasks"
 BUILD = "/api/v1/admin/content/build"
@@ -24,20 +23,7 @@ def _login(client: TestClient) -> dict:  # type: ignore[type-arg]
 
 
 def _subscriber_count(client: TestClient) -> int:
-    return len(client.app.state.services.tasks._subscribers)  # type: ignore[attr-defined]
-
-
-def _close_and_wait_for_unsubscribe(client: TestClient, ws: WebSocketTestSession) -> None:
-    """Close the client side and wait until the server handler has released its subscription.
-
-    Leaving the ``with`` block cancels the server task right after sending the disconnect;
-    letting the handler finish first keeps that test-harness race out of the assertions.
-    """
-    ws.close()
-    deadline = time.monotonic() + 5
-    while _subscriber_count(client) != 0:
-        assert time.monotonic() < deadline, "subscription was not released"
-        time.sleep(0.005)
+    return client.app.state.services.tasks.subscriber_count  # type: ignore[no-any-return,attr-defined]
 
 
 def _send_and_receive(client: TestClient, first_message: object | None, *, binary: bool) -> None:
@@ -124,7 +110,7 @@ def test_disconnecting_after_ready_unsubscribes(stub_client: TestClient) -> None
         ws.send_json({"type": "auth", "token": tokens["access_token"]})
         assert ws.receive_json() == {"type": "ready"}
         assert _subscriber_count(stub_client) == 1
-        _close_and_wait_for_unsubscribe(stub_client, ws)
+        close_and_wait_for_unsubscribe(stub_client, ws)
     assert _subscriber_count(stub_client) == 0
 
 
@@ -138,7 +124,7 @@ def test_client_messages_after_auth_are_ignored(stub_client: TestClient) -> None
         ws.send_bytes(b"\xff\xfe")
         task_id = stub_client.post(BUILD, json={}, headers=headers).json()["task_id"]
         first = ws.receive_json()
-        _close_and_wait_for_unsubscribe(stub_client, ws)
+        close_and_wait_for_unsubscribe(stub_client, ws)
     assert first["type"] == "event"
     assert first["event"]["task_id"] == task_id
 
@@ -159,7 +145,7 @@ def test_events_are_streamed_for_a_build_started_after_connecting(stub_client: T
             event = message["event"]
             if event["kind"] == "state" and event["state"] != "running":
                 break
-        _close_and_wait_for_unsubscribe(stub_client, ws)
+        close_and_wait_for_unsubscribe(stub_client, ws)
     assert all(m["type"] == "event" and m["event"]["task_id"] == task_id for m in messages)
     assert (messages[0]["event"]["kind"], messages[0]["event"]["state"]) == ("state", "running")
     assert messages[-1]["event"]["state"] == "succeeded"
@@ -180,7 +166,7 @@ def test_a_late_client_gets_a_snapshot_of_the_latest_build(stub_client: TestClie
         ws.send_json({"type": "auth", "token": tokens["access_token"]})
         assert ws.receive_json() == {"type": "ready"}
         snapshot = ws.receive_json()
-        _close_and_wait_for_unsubscribe(stub_client, ws)
+        close_and_wait_for_unsubscribe(stub_client, ws)
     assert snapshot["type"] == "snapshot"
     assert snapshot["task"]["task_id"] == task_id
     assert snapshot["task"]["state"] == "succeeded"

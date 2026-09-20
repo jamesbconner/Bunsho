@@ -19,7 +19,12 @@ from bunsho.services.anki_importer import AnkiDeckImporter
 from bunsho.services.content_repository import ContentWriter
 from bunsho.services.kana_source import KanaSource
 from tests.apkg_builder import build_apkg, note
-from tests.base import PASSWORD, FakeKanjiSource, make_service_config
+from tests.base import (
+    PASSWORD,
+    FakeKanjiSource,
+    close_and_wait_for_unsubscribe,
+    make_service_config,
+)
 
 
 def _config_with_a_synthetic_deck(tmp_path: Path) -> ServiceConfig:
@@ -104,6 +109,7 @@ def test_login_build_stream_and_restart(tmp_path: Path) -> None:
                 == 202
             )
             event = _await_terminal_event(ws)
+            close_and_wait_for_unsubscribe(client, ws)
         assert event["state"] == "succeeded"
 
         summary = client.get("/api/v1/content/summary", headers=headers).json()

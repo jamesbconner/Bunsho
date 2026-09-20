@@ -163,8 +163,11 @@ def test_history_is_trimmed_and_unsubscribed_queues_get_nothing(
 ) -> None:
     async def scenario() -> None:
         _ctx, manager = _manager(app_config, quiet_logger, _Stub(), max_history=2)
+        assert manager.subscriber_count == 0
         queue = manager.subscribe()
+        assert manager.subscriber_count == 1
         manager.unsubscribe(queue)
+        assert manager.subscriber_count == 0
         tasks = []
         for _ in range(3):
             tasks.append(manager.start(dry_run=True))

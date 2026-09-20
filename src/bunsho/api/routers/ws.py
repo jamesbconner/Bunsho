@@ -132,14 +132,18 @@ async def _stream(websocket: WebSocket, services: ServicesDep) -> None:
     except (WebSocketDisconnect, RuntimeError):
         pass  # the client went away (RuntimeError: a send after the socket closed)
     finally:
-        tasks.unsubscribe(queue)
         for worker in workers:
             worker.cancel()
-        # Let the cancellations land so no worker outlives the handler, and retrieve every
-        # outcome (a failure the handler did not surface included) without raising. Runs after
-        # ``unsubscribe``; if the handler itself is being cancelled this await may re-raise
-        # ``CancelledError``, which is deliberately not swallowed.
-        await asyncio.gather(*workers, return_exceptions=True)
+        try:
+            # Let the cancellations land so no worker outlives the handler, and retrieve every
+            # outcome (a failure the handler did not surface included) without raising. If the
+            # handler itself is being cancelled this await may re-raise ``CancelledError``,
+            # which is deliberately not swallowed.
+            await asyncio.gather(*workers, return_exceptions=True)
+        finally:
+            # Last on purpose: once the subscription is gone the handler has no work left, so
+            # "unsubscribed" means "done" (test clients wait for it before tearing down).
+            tasks.unsubscribe(queue)
 
 
 @router.websocket("/ws/tasks")

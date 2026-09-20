@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from dataclasses import replace
 from functools import cache
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 from pwdlib import PasswordHash
+from starlette.testclient import WebSocketTestSession
 
 from bunsho.config.service import (
     MIN_JWT_SECRET_LENGTH,
@@ -207,3 +210,18 @@ class StubOrchestrator:
             ContentWriter().write(target, kana=[], kanji=[], vocab=[], meta={})
             on_progress(BuildProgress("write", 1, 1))
         return make_build_report(dry_run)
+
+
+def close_and_wait_for_unsubscribe(client: TestClient, ws: WebSocketTestSession) -> None:
+    """Close the client side of a task stream and wait until the server handler is done.
+
+    Leaving a ``websocket_connect`` block cancels the server task right after the disconnect
+    is sent; letting the handler finish first keeps that test-harness race (a spurious
+    ``CancelledError`` from ``__exit__``) out of the tests. The handler unsubscribes last,
+    so a subscriber count of zero means it has finished.
+    """
+    ws.close()
+    deadline = time.monotonic() + 5
+    while client.app.state.services.tasks.subscriber_count != 0:  # type: ignore[attr-defined]
+        assert time.monotonic() < deadline, "subscription was not released"
+        time.sleep(0.005)
