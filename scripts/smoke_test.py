@@ -1,15 +1,17 @@
 """Smoke-test the Bunshō container end to end (build, start, log in, build content, restart).
 
 Usage: ``uv run python scripts/smoke_test.py``. Needs Docker with Compose v2 and the real deck in
-``resources/``. Exits non-zero on the first failed expectation, prints the container logs, and
-always tears the stack down (set ``BUNSHO_SMOKE_KEEP=1`` to leave it running for debugging).
+``resources/``. Exits 1 on any failure (after printing the container logs), 2 when Docker is not
+installed, 130 on Ctrl+C, and always tears the stack down and removes its temp folder (set
+``BUNSHO_SMOKE_KEEP=1`` to leave both in place for debugging).
 
 Environment: ``BUNSHO_SMOKE_PORT`` (host port, default 18192), ``BUNSHO_SMOKE_KEEP`` (``1`` keeps
 the stack and its temp env folder).
 
 The script generates its own credentials and env file in a temp folder outside the repository, so
-it never touches a developer's ``.env`` or the real ``bunsho_bunsho-data`` volume (the compose
-project is ``bunsho-smoke``).
+it never touches a developer's ``.env`` or the real ``bunsho_bunsho-data`` volume. Containers,
+network and volume are isolated by the ``bunsho-smoke`` compose project name; only the image tag
+``bunsho:local`` is shared, so the smoke build reuses and retags a developer's own local build.
 """
 
 from __future__ import annotations
@@ -36,6 +38,9 @@ PORT = int(os.environ.get("BUNSHO_SMOKE_PORT", "18192"))
 BASE = f"http://127.0.0.1:{PORT}/api/v1"
 USERNAME = "smoke"
 EXPECTED_COUNTS = {"vocab": 7734, "kanji": 3088, "kana": 208}
+COMPOSE_UP_TIMEOUT_SECONDS = 900
+COMPOSE_TIMEOUT_SECONDS = 120
+LOG_TAIL_LINES = 200
 HEALTHY_TIMEOUT_SECONDS = 180
 DOCKER_HEALTHY_TIMEOUT_SECONDS = 90
 BUILD_TIMEOUT_SECONDS = 600
@@ -56,8 +61,13 @@ def log(message: str) -> None:
     sys.stderr.write(f"[smoke] {message}\n")
 
 
-def compose(env_file: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    """Run ``docker compose`` for the smoke project."""
+def compose(
+    env_file: Path,
+    *args: str,
+    check: bool = True,
+    timeout: float = COMPOSE_TIMEOUT_SECONDS,
+) -> subprocess.CompletedProcess[str]:
+    """Run ``docker compose`` for the smoke project (``TimeoutExpired`` after ``timeout`` s)."""
     env = {**os.environ, "BUNSHO_ENV_FILE": str(env_file), "BUNSHO_HOST_PORT": str(PORT)}
     return subprocess.run(
         ["docker", "compose", "-p", PROJECT, "-f", str(ROOT / "compose.yaml"), *args],
@@ -68,6 +78,7 @@ def compose(env_file: Path, *args: str, check: bool = True) -> subprocess.Comple
         errors="replace",
         capture_output=True,
         check=check,
+        timeout=timeout,
     )
 
 
@@ -246,29 +257,66 @@ def write_env_file(folder: Path, password: str) -> Path:
     return env_file
 
 
-def main() -> int:
-    """Build the image, run the scenario and tear the stack down."""
-    keep = os.environ.get("BUNSHO_SMOKE_KEEP") == "1"
-    folder = Path(tempfile.mkdtemp(prefix="bunsho-smoke-"))
-    password = secrets.token_urlsafe(16)
-    env_file = write_env_file(folder, password)
+def dump_logs(env_file: Path) -> None:
+    """Print the container logs; never raises (this runs while another failure is in flight)."""
     try:
+        logs = compose(env_file, "logs", "--tail", str(LOG_TAIL_LINES), check=False).stdout
+    except (OSError, subprocess.SubprocessError) as exc:
+        logs = f"(could not read the container logs: {type(exc).__name__}: {exc})"
+    log(logs)
+
+
+def tear_down(env_file: Path) -> None:
+    """Remove the smoke stack and its volume; never raises."""
+    try:
+        compose(env_file, "down", "-v", "--remove-orphans", check=False)
+    except (OSError, subprocess.SubprocessError) as exc:
+        log(f"WARNING: tear-down failed, remove the stack by hand: {type(exc).__name__}: {exc}")
+        log(f"docker compose -p {PROJECT} down -v")
+
+
+def run_stack(folder: Path, keep: bool) -> int:
+    """Create the credentials, start the stack, run the scenario and tear the stack down.
+
+    Returns:
+        The process exit code: 0 on success, 1 on any failure, 130 when interrupted.
+    """
+    env_file: Path | None = None
+    try:
+        password = secrets.token_urlsafe(16)
+        env_file = write_env_file(folder, password)
         log("building the image and starting the stack")
-        compose(env_file, "up", "-d", "--build")
+        compose(env_file, "up", "-d", "--build", timeout=COMPOSE_UP_TIMEOUT_SECONDS)
         run(env_file, password)
-    except (SmokeFailure, subprocess.CalledProcessError, *_TRANSIENT, KeyError) as exc:
-        log(f"FAIL: {type(exc).__name__}: {exc}")
+        return 0
+    except (Exception, KeyboardInterrupt) as exc:  # any failure must still print logs
+        interrupted = isinstance(exc, KeyboardInterrupt)
+        log("INTERRUPTED" if interrupted else f"FAIL: {type(exc).__name__}: {exc}")
         if isinstance(exc, subprocess.CalledProcessError):
             log(exc.stderr or "")
-        log(compose(env_file, "logs", "--tail", "80", check=False).stdout)
-        return 1
+        if env_file is not None:
+            dump_logs(env_file)
+        return 130 if interrupted else 1
     finally:
-        if keep:
-            log(f"BUNSHO_SMOKE_KEEP=1: stack left running, env file in {folder}")
-        else:
-            compose(env_file, "down", "-v", "--remove-orphans", check=False)
+        if env_file is not None:
+            if keep:
+                log(f"BUNSHO_SMOKE_KEEP=1: stack left running, env file in {folder}")
+            else:
+                tear_down(env_file)
+
+
+def main() -> int:
+    """Check the prerequisites, run the scenario and always remove the temp folder."""
+    if shutil.which("docker") is None:
+        log("FAIL: the docker executable was not found on PATH; install Docker with Compose v2")
+        return 2
+    keep = os.environ.get("BUNSHO_SMOKE_KEEP") == "1"
+    folder = Path(tempfile.mkdtemp(prefix="bunsho-smoke-"))
+    try:
+        return run_stack(folder, keep)
+    finally:
+        if not keep:
             shutil.rmtree(folder, ignore_errors=True)
-    return 0
 
 
 if __name__ == "__main__":
