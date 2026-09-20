@@ -44,9 +44,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   on first grade, `GET /reviews/next`, `POST /reviews/answer` (stale answers get 409),
   `GET /stats/summary` and `GET`/`PUT /settings`. New cards follow one of three user-selectable
   policies (strict N5-to-N1 order, mastery unlock, pinned levels) within per-type daily limits and
-  a study-day rollover hour.
+  a study-day rollover hour. New runtime dependencies: `fsrs` (scheduling) and `tzdata` (makes the
+  study-day timezone work on Windows and in slim images).
 - `GET /content/summary` reports unleveled kanji (`unleveled_kanji`) and per-level counts for
   kanji and vocabulary.
+- Unhandled errors return `{"detail": "internal error"}` (status 500) and are logged; the exception
+  text is never sent to the client.
 - OpenAPI: explicit operation ids, documented 401/404/409/429/503 responses, and the WebSocket
   message schemas in `components`, so a typed client can be generated.
 

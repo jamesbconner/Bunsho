@@ -58,7 +58,8 @@ Delivered by Plan 1C (see `CHANGELOG.md` and the README's "Running with Docker")
 API and app:
 - [x] OpenAPI quality, needed before generating TypeScript types: explicit operation ids, documented 401/404/409/429/503
       responses, WebSocket message schemas in `components` (Plan 2A)
-- [ ] CORS: allow methods beyond GET/POST when the frontend needs them — done for `PUT` (Plan 2A); the Vite dev origin is documented as an opt-in setting
+- [ ] CORS: methods beyond GET/POST are done for `PUT` (Plan 2A); the Vite dev origin is an opt-in setting (documented,
+      `BUNSHO_SERVER__CORS_ORIGINS`); open it in development only once the frontend exists (Plan 2B)
 - [x] Typed `unleveled_kanji` in the content summary (today it is only in `meta` as a string) (Plan 2A)
 - [ ] Logout / revocation for the stateless refresh tokens
 - [ ] Cap on unauthenticated WebSocket connections
@@ -91,7 +92,6 @@ Image and platform:
 - [ ] Dependabot: add the `npm` entry for `/frontend` (stubbed in the `.github/dependabot.yml` header comment)
 - [ ] Extend the smoke test: `index.html` is served, a review round-trip; revisit `EXPECTED_COUNTS` if the content
       schema changes
-- [ ] CORS: open it for the Vite dev origin (development only)
 - [ ] Re-derive `WS_MAX_MESSAGE_BYTES` if review batches use the WebSocket
 - [ ] Single source of truth for the uv pin (0.12.17 is in `ci.yml`, `release.yml` and the `Dockerfile`), for example
       an `ARG UV_VERSION` shared through a build-arg
@@ -100,6 +100,14 @@ Image and platform:
       two Dockerfile image references
 - [ ] A corrupt `progress.db` makes the container restart loop print a full traceback on every attempt; log only the
       `StartupError` message
+- [ ] Orphaned due cards (item removed from content) inflate `counts.due` and, if 50 or more sort first, hide valid due
+      cards (`_ORPHAN_SCAN` in `orchestration/review_session.py`): filter in SQL or page past them
+- [ ] `ReviewSessionOrchestrator._plan` recomputes on every `next` and `answer` (25k-row `card_states` read, three
+      catalogue queries, sorting on the event loop): measure on the real deck and cache if it shows
+- [ ] Tests for a non-UTC study-day timezone through the orchestrator and stats service (only `study_day` itself is
+      DST-tested; every orchestrator and stats test uses UTC)
+- [ ] Type `LevelProgress.level` and the `*_by_level` keys with `LevelLabel` so the generated TypeScript gets a union
+- [ ] Put an upper bound on the `fsrs` dependency (for example `<7`) and decouple tests from FSRS default learning steps
 - [ ] Sibling burying (hold a new item's other directions until a later day)
 - [ ] `review_log` retention/export before the file grows unwieldy
 - [ ] A Prometheus-style or structured metric for review latency (only if the box gets monitoring)
