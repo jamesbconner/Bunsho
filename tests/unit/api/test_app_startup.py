@@ -45,6 +45,16 @@ def test_cors_is_only_enabled_for_configured_origins(tmp_path: Path) -> None:
         assert "access-control-allow-origin" not in other.headers
 
 
+def test_cors_preflight_allows_put_so_a_browser_can_save_settings(tmp_path: Path) -> None:
+    origin = "http://localhost:5173"
+    config = make_service_config(tmp_path, cors_origins=(origin,))
+    preflight = {"Origin": origin, "Access-Control-Request-Method": "PUT"}
+    with TestClient(create_app(config)) as client:
+        response = client.options("/api/v1/settings", headers=preflight)
+    assert response.status_code == 200
+    assert "PUT" in response.headers["access-control-allow-methods"]
+
+
 def test_cors_exposes_retry_after_so_browsers_can_read_the_login_throttle(tmp_path: Path) -> None:
     origin = "http://localhost:5173"
     config = make_service_config(tmp_path, cors_origins=(origin,))

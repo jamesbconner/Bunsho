@@ -15,12 +15,23 @@ from bunsho.context import Context
 from bunsho.db.engine import ProgressDatabase
 from bunsho.db.instance_lock import InstanceLock, InstanceLockedError
 from bunsho.db.migrate import run_migrations
-from bunsho.factories import create_content_build_orchestrator, create_context
+from bunsho.db.progress_repository import ProgressRepository
+from bunsho.factories import (
+    create_content_build_orchestrator,
+    create_context,
+    create_new_card_policy,
+    create_scheduler_from_settings,
+)
 from bunsho.orchestration.build_tasks import BuildTaskManager, OrchestratorFactory
+from bunsho.orchestration.review_session import ReviewSessionOrchestrator
 from bunsho.services.auth import AuthService
+from bunsho.services.content_access import ContentGate
 from bunsho.services.content_repository import ContentSchemaError, remove_stale_temp_files
 from bunsho.services.health import HealthService
 from bunsho.services.login_throttle import LoginThrottle
+from bunsho.services.review_settings import ReviewSettingsService
+from bunsho.services.review_stats import ReviewStatsService
+from bunsho.services.study_day import resolve_timezone
 
 
 class StartupError(RuntimeError):
@@ -39,6 +50,9 @@ class Services:
     tasks: BuildTaskManager
     health: HealthService
     instance_lock: InstanceLock
+    review_settings: ReviewSettingsService
+    reviews: ReviewSessionOrchestrator
+    stats: ReviewStatsService
 
     async def aclose(self) -> None:
         """Wait briefly for an active build, close the engine, release the instance lock.
@@ -75,8 +89,10 @@ async def build_services(
         The service container.
 
     Raises:
-        StartupError: ``progress.db`` could not be opened or migrated (corrupt, unknown
-            revision, not writable, or another process held the migration lock too long).
+        StartupError: Another instance holds the data folder's instance lock, the lock file
+            cannot be created, or ``progress.db`` could not be opened or migrated (corrupt,
+            unknown revision, not writable, or another process held the migration lock too
+            long).
         Exception: The ``progress.db`` ping or context creation failed (fail fast).
     """
     logger = logging.getLogger("bunsho")
@@ -123,6 +139,10 @@ async def build_services(
             factory = (overrides.orchestrator_factory if overrides else None) or (
                 create_content_build_orchestrator
             )
+            progress = ProgressRepository(progress_db)
+            review_settings = ReviewSettingsService(progress, logger)
+            gate = ContentGate(ctx)
+            tz = resolve_timezone(logger=logger)
             return Services(
                 config=config,
                 ctx=ctx,
@@ -132,6 +152,19 @@ async def build_services(
                 tasks=BuildTaskManager(ctx, factory),
                 health=HealthService(progress_db, ctx),
                 instance_lock=lock,
+                review_settings=review_settings,
+                reviews=ReviewSessionOrchestrator(
+                    gate=gate,
+                    progress=progress,
+                    settings=review_settings,
+                    scheduler_factory=create_scheduler_from_settings,
+                    policy_factory=create_new_card_policy,
+                    tz=tz,
+                    logger=logger,
+                ),
+                stats=ReviewStatsService(
+                    gate=gate, progress=progress, settings=review_settings, tz=tz
+                ),
             )
         except BaseException:
             await progress_db.dispose()

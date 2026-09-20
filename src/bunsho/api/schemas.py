@@ -5,9 +5,10 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field
 
 from bunsho import __version__
+from bunsho.models.review import CardDirection, Grade
 from bunsho.orchestration.build_tasks import BuildEvent, BuildState, BuildTask
 from bunsho.services.config_check import CheckResult
 from bunsho.services.health import HealthReport
@@ -235,3 +236,24 @@ def build_event(event: BuildEvent) -> BuildEventModel:
         ),
         error=event.error,
     )
+
+
+class ErrorResponse(BaseModel):
+    """Body of every error response except 422: a human-readable message."""
+
+    detail: str
+
+
+class AnswerRequest(BaseModel):
+    """Body of ``POST /reviews/answer``."""
+
+    item_id: str = Field(min_length=1, max_length=255)
+    direction: CardDirection
+    grade: Grade
+    expected_last_review: AwareDatetime | None = Field(
+        description=(
+            "The card's `expected_last_review` from `GET /reviews/next`, unchanged (null for "
+            "a new card). A mismatch means the card changed since it was fetched: 409."
+        )
+    )
+    duration_ms: int | None = Field(default=None, ge=0, le=3_600_000)
