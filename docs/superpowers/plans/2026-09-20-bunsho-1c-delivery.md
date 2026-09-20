@@ -20,7 +20,7 @@
 - Port **8192**; **never 8000**. The container binds `0.0.0.0` (env), the code default stays `127.0.0.1`.
 - **A single worker only.** The login throttle and the build manager are in-process. Never add `--workers`, `--reload` or a second replica. The image entrypoint is the `bunsho` launcher, never `uvicorn ...` directly (uvicorn's own default would re-enable proxy headers).
 - Container hardening: non-root user (uid 10001), read-only root filesystem when it works, `no-new-privileges`, all capabilities dropped, `HEALTHCHECK` on `GET /api/v1/health` (a `degraded` first-run answer is HTTP 200 and counts as healthy; only HTTP 503 is unhealthy).
-- `progress.db` is irreplaceable: nothing in this plan may weaken the backup-before-migrate rule or make a migration failure silent. Graceful shutdown budget: `BuildTaskManager.aclose` waits 30 s, uvicorn gets `timeout_graceful_shutdown = 35`, compose `stop_grace_period: 35s`.
+- `progress.db` is irreplaceable: nothing in this plan may weaken the backup-before-migrate rule or make a migration failure silent. Graceful shutdown budget: `BuildTaskManager.aclose` waits 30 s, uvicorn gets `timeout_graceful_shutdown = 35`, compose `stop_grace_period: 60s` (the build runs in a thread that cannot be cancelled, so the process exits only when a running build finishes; measured ~38 s for the real deck, so 35 s ends in SIGKILL exit 137, which is data-safe because content.db is swapped atomically, but unclean).
 - Proxy headers are ignored unless `server.trusted_proxies` names the proxy addresses; `*` is rejected (it would let any client choose its throttle bucket).
 - Tests: shared builders/fixtures live in `tests/base.py`; the suite must behave identically on ubuntu, windows and macos; no `pytest-asyncio`. Tests that touch threads, sockets or `TestClient` teardown must be run 40+ times in a loop before being called stable (a 35 % flake once passed three repeat runs).
 - Test snippets that begin with `import` lines show imports that belong in the **top import block** of the file they extend: merge them there and drop any that end up unused (ruff `I001`/`E402`).
@@ -578,7 +578,7 @@ services:
       - bunsho-data:/data
       - ./resources:/app/resources:ro
     restart: unless-stopped
-    stop_grace_period: 35s
+    stop_grace_period: 60s
     read_only: true
     tmpfs:
       - /tmp
@@ -1040,7 +1040,7 @@ Cover, in this order and only what is true of the files in this repo:
 2. Create `.env` (same three settings as the "Running the service" section; state again that the hash contains `$` and must be single-quoted in an env file, `$$` inside YAML).
 3. `docker compose up -d --build`, then `docker compose ps` (wait for `healthy`), the same first-run flow as the non-Docker section (login, config-check, POST build, poll status), and where the data lives (named volume `bunsho-data` at `/data`: `progress.db`, `content.db`, `backups/`; how to back up the volume, for example `docker run --rm -v bunsho-data:/data -v "$PWD":/backup busybox tar czf /backup/bunsho-data.tgz -C /data .`).
 4. Upgrading: `git pull && docker compose up -d --build`; the service migrates `progress.db` at startup after taking a backup in `backups/`; how to restore a backup (stop the service, copy a `backups/progress-...db` over `progress.db`).
-5. Stopping: `docker compose stop` waits up to 35 s so a running build can be cancelled cleanly.
+5. Stopping: `docker compose stop` waits up to 60 s so a build that is running finishes before the container exits (a build cannot be interrupted midway; `content.db` is only replaced when it completes).
 6. Limits and networking: one replica only; the container listens on 0.0.0.0 inside the network and compose publishes `8192`; to keep it off the LAN publish `127.0.0.1:8192:8192` via a compose override; no HTTPS in the app.
 7. Trusted proxies: replace the "proxy or Docker NAT" paragraph. Without `BUNSHO_SERVER__TRUSTED_PROXIES` proxy headers are ignored and the throttle keys on the TCP peer (behind a proxy or Docker Desktop NAT all clients share one bucket). If an nginx or similar proxy fronts the service, set `BUNSHO_SERVER__TRUSTED_PROXIES` to that proxy's address(es) or network (never `*`) and make the proxy **overwrite** `X-Forwarded-For` with the client address (nginx: `proxy_set_header X-Forwarded-For $remote_addr;`); with an entry configured, the address the proxy reports is trusted, so list only real proxies. Linux Docker with a published port preserves client addresses; Docker Desktop (Mac, Windows) shows the gateway address.
 8. Smoke test: `uv run python scripts/smoke_test.py` (what it checks, that it needs Docker and takes a few minutes).
