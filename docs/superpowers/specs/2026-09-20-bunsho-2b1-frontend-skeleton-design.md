@@ -190,3 +190,21 @@ before the screens so deployment risk is found early.
 - A slower CI and image build from the Node stage: cache mounts and layered `npm ci`.
 - Unhandled backend errors return their JSON 500 from outside CORS middleware (a known follow-up from
   2A); irrelevant for the same-origin deployment used here, relevant only for a cross-origin dev setup.
+
+## Implementation notes
+
+Decisions taken while building, where they differ from or refine the text above.
+
+- The HTML root is `lang="en"` (the UI text is English); every Japanese text run carries `lang="ja"`.
+- TypeScript is pinned to 6.0.3, not 7.0.2: `typescript-eslint` 8.70 supports only `typescript <6.1.0`, and
+  `openapi-typescript` 7.13 needs the JavaScript compiler API and declares `^5.x` as its peer range. An
+  `overrides` entry in `package.json` lets npm accept that peer range (verified to run on 6.0.3). Move to
+  TypeScript 7 when both tools support it.
+- React Router is used in declarative mode (`BrowserRouter`, `Routes`, `Route`, `Navigate`, `Outlet`); TanStack
+  Query owns data fetching. The UI's first-class routes are `/`, `/build` and `/login`.
+- Task order differs from "Order of work": the real-time provider and the Build screen came before the shell,
+  Home page and routing, so each screen was tested on its own before it was wired.
+- `SPAStaticFiles` answers 405 for non-GET methods on unknown non-API paths (Starlette's `StaticFiles` allows only
+  GET and HEAD); unknown `GET /api/...` paths keep their JSON 404.
+- The Log out control sits at the bottom of the navbar (and the mobile drawer) with visible text that it only
+  clears this browser; the server does not revoke refresh tokens yet.
