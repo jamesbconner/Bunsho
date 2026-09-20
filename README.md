@@ -102,6 +102,27 @@ migration at startup, a timestamped backup is written to `data_dir/backups/` fir
 backed up. Migrations run under a lock file (`progress.db.migrate.lock`, left in place and harmless), so
 two processes starting at once cannot collide. Backups are never pruned; delete old ones yourself.
 
+### Studying (review API)
+
+After a content build, the API serves flashcards. Every route needs a bearer token.
+
+| Route | What it does |
+|---|---|
+| `GET /api/v1/reviews/next` | The next card (with its content, and how long each grade would wait), or no card plus `next_due_at`; also the counts still to do. Fetching creates nothing. |
+| `POST /api/v1/reviews/answer` | Grade a card: `item_id`, `direction`, `grade` (1 Again, 2 Hard, 3 Good, 4 Easy), `expected_last_review` (copied from the card; `null` for a new card) and optionally `duration_ms`. A card that changed in the meantime (a double submit, or a second device) answers `409`. |
+| `GET /api/v1/stats/summary` | Reviews today, the last 30 days, 30-day retention, and progress per type and JLPT level. |
+| `GET /api/v1/settings`, `PUT /api/v1/settings` | The review settings (below). `PUT` replaces the whole document. |
+
+A card is an item plus a direction: kana `glyph_to_sound` / `sound_to_glyph`, kanji `kanji_to_meaning` / `kanji_to_reading` / `meaning_to_kanji`, vocabulary `recognition` / `recall`. Item ids are opaque strings taken from the API (`vocab:度:ど#2` exists); do not build or parse them. A card is created the first time it is graded; scheduling uses FSRS with a configurable target retention.
+
+**Settings** (defaults in brackets): `new_card_policy` (`strict_order`: N5 first, then N4 and so on; `mastery_unlock`: the next level also waits until `mastery_threshold` [0.80] of the current level's cards are in the FSRS Review state; `pinned_levels`: only `active_levels` [`["N5"]`]), `new_limits` per type in **cards** per day (kana 20, kanji 15, vocab 20; `0` = unlimited), `target_retention` [0.90, range 0.70-0.99] and `rollover_hour` [4, range 0-23]. Unleveled kanji are never offered.
+
+**Study day and timezone.** Daily limits reset at `rollover_hour` in the server's timezone, read from the `TZ` environment variable (an IANA name such as `America/New_York`). Without `TZ` the study day uses UTC and the service logs a warning. In Docker, put `TZ=America/New_York` in the env file next to the credentials.
+
+**One instance per data folder.** The service takes an exclusive lock (`.bunsho.instance.lock`) in the data folder; a second instance on the same folder refuses to start with an explanatory error. `progress.db` runs in WAL mode, so you will also see `progress.db-wal` and `progress.db-shm` files next to it; back up the folder with the service stopped, or use the timestamped backups in `backups/`.
+
+**Frontend development.** Allow the Vite dev server with `BUNSHO_SERVER__CORS_ORIGINS=http://localhost:5173` (comma-separated for several); CORS is off unless origins are listed, and `GET`, `POST` and `PUT` are allowed.
+
 ## Running with Docker
 
 The repository ships a multi-stage `Dockerfile` and a `compose.yaml` that run the same service as one

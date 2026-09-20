@@ -1,4 +1,6 @@
-"""Smoke-test the Bunshō container end to end (build, start, log in, build content, restart).
+"""Smoke-test the Bunshō container end to end.
+
+The scenario is: build, start, log in, build content, review a card, restart.
 
 Usage: ``uv run python scripts/smoke_test.py``. Needs Docker with Compose v2 and the real deck in
 ``resources/``. Exits 1 on any failure (after printing the container logs), 2 when Docker is not
@@ -178,6 +180,38 @@ def expect_summary(access: str) -> None:
     expect(got == EXPECTED_COUNTS, f"content counts {got} != {EXPECTED_COUNTS}")
 
 
+def exercise_reviews(access: str) -> None:
+    """Read the settings, answer one new card and check it is recorded exactly once."""
+    status, settings = request("GET", "/settings", token=access)
+    expect(status == 200, f"settings returned {status}: {settings}")
+    expect(settings["new_card_policy"] == "strict_order", f"unexpected settings: {settings}")
+    status, first = request("GET", "/reviews/next", token=access)
+    expect(status == 200, f"reviews/next returned {status}: {first}")
+    card = first["card"]
+    expect(card is not None and card["is_new"] is True, f"no new card offered: {first}")
+    # Every type starts with a full allowance and ties go to kana.
+    expect(card["item_type"] == "kana", f"first new card is {card['item_type']}, not kana")
+    body = {
+        "item_id": card["item_id"],
+        "direction": card["direction"],
+        "grade": 3,
+        "expected_last_review": card["expected_last_review"],
+    }
+    status, counts = request("POST", "/reviews/answer", token=access, body=body)
+    expect(status == 200, f"answer returned {status}: {counts}")
+    status, _ = request("POST", "/reviews/answer", token=access, body=body)
+    expect(status == 409, f"a repeated answer returned {status}, not 409")
+    expect_reviews_recorded(access)
+
+
+def expect_reviews_recorded(access: str) -> None:
+    """Check ``/stats/summary`` counts exactly one review (robust across the study-day rollover)."""
+    status, stats = request("GET", "/stats/summary", token=access)
+    expect(status == 200, f"stats returned {status}: {stats}")
+    total = sum(day["reviews"] for day in stats["daily_reviews"])
+    expect(total == 1, f"expected exactly one recorded review, stats say {total}")
+
+
 def expect_health(want: str) -> None:
     """Check ``/health`` reports overall status ``want`` and print the components."""
     status, health = request("GET", "/health")
@@ -235,6 +269,8 @@ def run(env_file: Path, password: str) -> None:
     build_content(tokens["access"])
     log(f"content build took {time.monotonic() - started:.0f} s")
     expect_summary(tokens["access"])
+    log("answering one card")
+    exercise_reviews(tokens["access"])
     expect_health("ok")
     log("waiting for Docker's healthcheck")
     wait_docker_healthy(env_file)
@@ -244,6 +280,7 @@ def run(env_file: Path, password: str) -> None:
     status, refreshed = request("POST", "/auth/refresh", body={"refresh_token": tokens["refresh"]})
     expect(status == 200, f"refresh after restart returned {status}: {refreshed}")
     expect_summary(refreshed["access_token"])
+    expect_reviews_recorded(refreshed["access_token"])  # progress.db survived the restart
     expect_health("ok")  # content.db and progress.db survived the restart
     log("checking the login throttle ignores forged X-Forwarded-For headers")
     expect_throttle_ignores_forwarded_for(password)

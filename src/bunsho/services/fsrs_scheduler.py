@@ -25,7 +25,7 @@ def _utc(now: datetime) -> datetime:
 
 def _to_card(current: CardSchedule, now: datetime) -> Card:
     if current.state is SchedState.NEW:
-        # py-fsrs has no "new" state: a fresh card is a Learning card at step 0.
+        # fsrs has no "new" state: a fresh card is a Learning card at step 0.
         return Card(
             state=State.Learning,
             step=0,
@@ -64,7 +64,7 @@ def _review(
 
 
 class FSRSScheduler:
-    """``Scheduler`` implementation backed by ``py-fsrs``."""
+    """``Scheduler`` implementation backed by ``fsrs``."""
 
     def __init__(self, *, desired_retention: float = 0.9, enable_fuzzing: bool = True) -> None:
         """Create the scheduler.
