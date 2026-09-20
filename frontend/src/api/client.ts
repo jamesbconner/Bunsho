@@ -52,17 +52,20 @@ export async function ensureAccessToken(): Promise<string> {
  * refreshes the session once and retries the call once.
  */
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const send = async (): Promise<T> =>
+  const send = (token: string): Promise<T> =>
     rawRequest<T>(path, {
       ...options,
-      headers: { ...options.headers, Authorization: `Bearer ${await ensureAccessToken()}` },
+      headers: { ...options.headers, Authorization: `Bearer ${token}` },
     });
+  // Outside the try: a 401 raised while getting a token is not the server rejecting this call, so
+  // it must not trigger a second refresh (which would end the session, and notify, twice).
+  const token = await ensureAccessToken();
   try {
-    return await send();
+    return await send(token);
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) {
       await refreshSession();
-      return send();
+      return send(await ensureAccessToken());
     }
     throw error;
   }

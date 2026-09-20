@@ -103,6 +103,41 @@ describe('request', () => {
     expect(session.getRefreshToken()).toBeNull();
   });
 
+  it('ends the session once, without calling the API, when the pre-flight refresh is rejected', async () => {
+    const expired = vi.fn();
+    session.onExpired(expired);
+    session.setTokens({ ...pair(9), expires_in: 10 }); // about to expire; refresh-9 is unknown
+    const refresh = { calls: 0 };
+    let apiCalls = 0;
+    server.use(
+      refreshHandler(refresh),
+      http.get(SUMMARY, () => {
+        apiCalls += 1;
+        return HttpResponse.json({ ok: true });
+      }),
+    );
+    await expect(request('/content/summary')).rejects.toMatchObject({ status: 401 });
+    expect(expired).toHaveBeenCalledTimes(1);
+    expect(refresh.calls).toBe(1);
+    expect(apiCalls).toBe(0);
+  });
+
+  it('ends the session once, without calling the API, when there is no refresh token', async () => {
+    const expired = vi.fn();
+    session.clear();
+    session.onExpired(expired);
+    let apiCalls = 0;
+    server.use(
+      http.get(SUMMARY, () => {
+        apiCalls += 1;
+        return HttpResponse.json({ ok: true });
+      }),
+    );
+    await expect(request('/content/summary')).rejects.toMatchObject({ status: 401 });
+    expect(expired).toHaveBeenCalledTimes(1);
+    expect(apiCalls).toBe(0);
+  });
+
   it('does not end the session when the server cannot be reached during a refresh', async () => {
     const expired = vi.fn();
     session.onExpired(expired);
