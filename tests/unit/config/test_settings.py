@@ -59,3 +59,19 @@ def test_data_dir_must_not_be_a_file(tmp_path: Path) -> None:
     blocker.write_text("not a directory")
     errors = validate_config(ConfigNormalizer({"paths": {"data_dir": str(blocker)}}))
     assert any("data_dir" in e for e in errors)
+
+
+def test_frontend_dir_is_unset_by_default() -> None:
+    assert load_app_config(ConfigNormalizer()).frontend_dir is None
+
+
+def test_frontend_dir_is_read_from_the_paths_section(tmp_path: Path) -> None:
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    config = load_app_config(ConfigNormalizer({"paths": {"frontend_dir": str(dist)}}))
+    assert config.frontend_dir == dist
+
+
+def test_frontend_dir_must_be_a_directory(tmp_path: Path) -> None:
+    errors = validate_config(ConfigNormalizer({"paths": {"frontend_dir": str(tmp_path / "nope")}}))
+    assert any("frontend_dir" in error and "not a directory" in error for error in errors)
