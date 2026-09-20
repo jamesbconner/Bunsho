@@ -75,7 +75,8 @@ and end as UTC instants. Timestamps are stored as UTC ISO strings (existing colu
 
 **Policies** (`NewCardPolicy` Protocol: catalogue + introduced keys + per-level progress in, next
 unintroduced cards out). Two rules apply to all three: kana is never level-gated, and unleveled kanji
-are never offered.
+are never offered. Level gates are evaluated **per type** (kanji progress never gates vocab, and the
+reverse).
 
 | Policy | Rule |
 |---|---|
