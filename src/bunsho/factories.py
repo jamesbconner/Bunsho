@@ -10,9 +10,10 @@ from bunsho.context import Context
 from bunsho.orchestration.content_build import ContentBuildError, ContentBuildOrchestrator
 from bunsho.services.anki_importer import AnkiDeckImporter
 from bunsho.services.content_repository import ContentWriter
+from bunsho.services.fsrs_scheduler import FSRSScheduler
 from bunsho.services.jamdict_service import JamdictService, JamdictUnavailableError
 from bunsho.services.kana_source import KanaSource
-from bunsho.services.protocols import KanjiCatalog, KanjiInfoSource
+from bunsho.services.protocols import KanjiCatalog, KanjiInfoSource, Scheduler
 
 
 def create_context(
@@ -72,3 +73,26 @@ def create_content_build_orchestrator(ctx: Context) -> ContentBuildOrchestrator:
         logger=ctx.logger,
         kanji_catalog=ctx.kanji_catalog,
     )
+
+
+def create_scheduler(
+    kind: str = "fsrs", *, desired_retention: float = 0.9, enable_fuzzing: bool = True
+) -> Scheduler:
+    """Build the spaced-repetition scheduler named by ``kind``.
+
+    Args:
+        kind: Scheduler algorithm; only ``"fsrs"`` is supported today.
+        desired_retention: Target probability of recall when a card comes due.
+        enable_fuzzing: Spread review intervals randomly (disable for deterministic tests).
+
+    Returns:
+        The scheduler.
+
+    Raises:
+        ValueError: ``kind`` is not a supported scheduler.
+    """
+    match kind:
+        case "fsrs":
+            return FSRSScheduler(desired_retention=desired_retention, enable_fuzzing=enable_fuzzing)
+        case _:
+            raise ValueError(f"unsupported scheduler {kind!r}; supported: 'fsrs'")

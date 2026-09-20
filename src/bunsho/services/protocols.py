@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from datetime import datetime
 from pathlib import Path
 from typing import Protocol
 
 from bunsho.models.content import ImportedDeck, Kana, Kanji, KanjiDetails, Vocab
+from bunsho.models.review import CardSchedule, Grade
 
 
 class DeckImporter(Protocol):
@@ -58,4 +60,24 @@ class ContentWriting(Protocol):
         meta: Mapping[str, str],
     ) -> None:
         """Write all content to ``target``."""
+        ...
+
+
+class Scheduler(Protocol):
+    """Spaced-repetition scheduling: what happens to a card when it is graded."""
+
+    def initial(self, now: datetime) -> CardSchedule:
+        """Return the state of a card that has never been reviewed (``SchedState.NEW``)."""
+        ...
+
+    def schedule(self, current: CardSchedule, grade: Grade, now: datetime) -> CardSchedule:
+        """Return the state after grading ``current`` at ``now``.
+
+        Raises:
+            ValueError: ``now`` is not timezone-aware.
+        """
+        ...
+
+    def preview(self, current: CardSchedule, now: datetime) -> dict[Grade, CardSchedule]:
+        """Return the state each of the four grades would produce (never fuzzed)."""
         ...
