@@ -72,7 +72,7 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-ra --strict-markers"
-markers = ["integration: needs the real deck and the jamdict-data-fix database"]
+markers = ["integration: cross-boundary tests that run the real application stack; some also need the real deck or the jamdict-data-fix database and skip without them"]
 
 [tool.coverage.run]
 source = ["src/bunsho"]

@@ -11,11 +11,13 @@ Bunshō serves an authenticated REST + WebSocket API under `/api/v1`. Interactiv
 (and `/openapi.json`); both are public by design, as is `GET /api/v1/health`.
 
 1. Create a password hash. It is computed locally with the project's own `pwdlib` dependency; the
-   password is prompted for and never echoed or stored:
+   password is prompted for twice (a typo aborts) and never echoed or stored:
 
    ```bash
-   uv run python -c "import getpass; from pwdlib import PasswordHash; print(PasswordHash.recommended().hash(getpass.getpass()))"
+   uv run python -c "import getpass; from pwdlib import PasswordHash; p = getpass.getpass('Password: '); assert p == getpass.getpass('Repeat: '), 'passwords differ'; print(PasswordHash.recommended().hash(p))"
    ```
+
+   In Git Bash `getpass` may not work; use PowerShell, or prefix the command with `winpty`.
 
 2. Put the settings in a `.env` file in the directory you start the service from (never commit it).
    Single-quote the hash: it contains `$`.
@@ -28,9 +30,42 @@ Bunshō serves an authenticated REST + WebSocket API under `/api/v1`. Interactiv
 
    A suitable secret: `uv run python -c "import secrets; print(secrets.token_urlsafe(48))"`.
 
+   The hash can instead be set as a real environment variable, which overrides `.env`. Always use single
+   quotes (or, in YAML, escape each `$`), otherwise the shell mangles the `$` signs:
+
+   ```bash
+   export BUNSHO_AUTH__PASSWORD_HASH='$argon2id$...'          # bash
+   ```
+
+   ```powershell
+   $env:BUNSHO_AUTH__PASSWORD_HASH='$argon2id$...'            # PowerShell, never double quotes
+   ```
+
+   ```yaml
+   BUNSHO_AUTH__PASSWORD_HASH: "$$argon2id$$v=19$$..."         # docker-compose: each $ becomes $$
+   ```
+
 3. Start it with `uv run bunsho` (default `127.0.0.1:8192`; port 8000 is refused). If the configuration is
-   invalid, every problem is logged together and the process exits with status 2. To let uvicorn manage
-   the process instead, use `uv run uvicorn --factory bunsho.main:create_app_from_env`.
+   invalid, every problem is logged together and the process exits with status 2. After starting, log in
+   once to confirm the password you hashed is the one you meant to set.
+
+4. First run. `paths.data_dir` defaults to `data` and `paths.resources_dir` to `resources`, both relative
+   to the current working directory, so starting the service from another directory silently creates a
+   new, empty `./data`; start it from the project root or set both paths explicitly. The content build
+   needs the deck at `resources/JLPT_N5_to_N1_Japanese_Vocabulary.apkg`. Call
+   `GET /api/v1/admin/config-check` first: it reports whether the deck and its checksum are in place.
+
+### Limits
+
+- Run a single worker (the `bunsho` launcher always does; never use `--workers` or `--reload` in service
+  use). The login throttle and the build task manager live in process memory and reset on restart.
+- The service speaks plain HTTP and does no HTTPS: passwords and tokens travel in clear text.
+- It is meant for a home network only; do not expose it to the internet.
+- Reverse proxies and Docker: the login throttle keys on the client address that uvicorn reports. The
+  launcher passes no proxy options, so uvicorn's defaults apply: behind a reverse proxy or Docker NAT the
+  client address is normally the proxy's, and all clients then share one throttle bucket. The Bunshō code
+  does no forwarded-header handling of its own; the proxy and client-address setup is settled with the
+  Docker setup in a later plan.
 
 ### Using the API
 
@@ -52,12 +87,6 @@ Bunshō serves an authenticated REST + WebSocket API under `/api/v1`. Interactiv
 - `/health` reports component status and exception class names only, never messages.
 - A build still running when the service shuts down is reported as failed with
   `Cancelled: build interrupted`.
-
-**Reverse proxies and Docker.** The login throttle keys on the client address that uvicorn reports. The
-launcher passes no proxy options, so uvicorn's defaults apply: behind a reverse proxy or Docker NAT the
-client address is normally the proxy's, and all clients then share one throttle bucket. The Bunshō code
-does no forwarded-header handling of its own; the proxy and client-address setup is settled with the
-Docker setup in a later plan.
 
 ### Settings
 
