@@ -3,6 +3,8 @@ name = "bunsho"
 version = "0.1.0"
 description = "Bunshō (文章): a Japanese learning tool with kana, JLPT kanji and vocabulary, and spaced-repetition flashcards."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "James", email = "jamesbconner@users.noreply.github.com" }]
 requires-python = ">=3.13"
 dependencies = [

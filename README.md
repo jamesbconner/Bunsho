@@ -97,3 +97,14 @@ named by `BUNSHO_CONFIG_FILE` (`BUNSHO_ENV_FILE` names a different `.env`). Keys
 `progress.db` (your study history) lives in `data_dir`. When an existing database needs a schema
 migration at startup, a timestamped backup is written to `data_dir/backups/` first; a database that is
 already current is not backed up.
+## License
+
+The Bunshō source code is released under the MIT License (see `LICENSE`).
+
+Third-party data is **not** covered by it:
+
+- `resources/JLPT_N5_to_N1_Japanese_Vocabulary.apkg` is GPL-3.0 (see `resources/LICENSE` and
+  `resources/README.md`). A `content.db` built from it is a derived work.
+- Dictionary data comes from `jamdict-data-fix` (JMdict and KANJIDIC2, distributed under the
+  [EDRDG licence](https://www.edrdg.org/edrdg/licence.html)). Check those terms before redistributing
+  a built `content.db`.
