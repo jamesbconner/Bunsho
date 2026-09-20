@@ -79,7 +79,8 @@ def run_migrations(
     Args:
         db_path: Location of ``progress.db`` (created if missing).
         backup_dir: Where the pre-migration backup is written.
-        now: Clock used for the backup file name (defaults to UTC now); the stamp is
+        now: Clock used for the backup file name (defaults to UTC now). It must return a
+            timezone-aware datetime (a naive one is treated as local time); the stamp is
             always formatted in UTC. A backup never overwrites an existing file: a
             colliding name gets a numeric suffix.
         logger: Logger for key=value messages.

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import Mapping
+from contextlib import suppress
 from pathlib import Path
 
 import uvicorn
@@ -83,7 +84,7 @@ def build_server_config(app: FastAPI, config: ServiceConfig) -> uvicorn.Config:
     )
 
 
-def main() -> None:  # pragma: no cover - thin process wrapper, exercised by hand
+def main() -> None:
     """Run the service (the ``bunsho`` console script).
 
     Exits with status 2 when the configuration is invalid.
@@ -95,4 +96,7 @@ def main() -> None:  # pragma: no cover - thin process wrapper, exercised by han
         logging.getLogger("bunsho").error("configuration_invalid\n%s", exc)
         raise SystemExit(2) from exc
     configure_logging(config.app.log_level)
-    uvicorn.Server(build_server_config(create_app(config), config)).run()
+    server = uvicorn.Server(build_server_config(create_app(config), config))
+    # After a graceful shutdown uvicorn re-raises the captured Ctrl-C; uvicorn.run ignores it too.
+    with suppress(KeyboardInterrupt):
+        server.run()

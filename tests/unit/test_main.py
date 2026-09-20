@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 
 from bunsho.api.app import create_app
 from bunsho.config.normalizer import ConfigError
-from bunsho.main import build_server_config, build_service_config, create_app_from_env
+from bunsho.main import build_server_config, build_service_config, create_app_from_env, main
 from tests.base import JWT_SECRET, PASSWORD, make_auth_settings, make_service_config
 
 
@@ -118,6 +118,7 @@ def live_server(tmp_path: Path) -> Iterator[int]:
     finally:
         server.should_exit = True
         thread.join(timeout=15)
+        assert not thread.is_alive(), "server thread did not shut down"
 
 
 def _login_status(port: int, forwarded_for: str) -> int:
@@ -137,3 +138,35 @@ def test_a_forged_forwarded_for_header_cannot_dodge_the_login_throttle(live_serv
     statuses = [_login_status(live_server, f"203.0.113.{n}") for n in range(1, 9)]
     assert statuses[:5] == [401] * 5
     assert 429 in statuses[5:]
+
+
+def test_ctrl_c_after_a_graceful_shutdown_exits_cleanly(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``uvicorn.Server.run`` re-raises the captured SIGINT after shutting down gracefully."""
+    monkeypatch.chdir(tmp_path)
+    for key, value in _env(tmp_path).items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setattr("bunsho.main.configure_logging", lambda *_args, **_kwargs: None)
+
+    class InterruptedServer:
+        def __init__(self, _config: uvicorn.Config) -> None:
+            pass
+
+        def run(self) -> None:
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr("bunsho.main.uvicorn.Server", InterruptedServer)
+    main()  # must return normally
+
+
+def test_an_invalid_configuration_exits_with_status_2(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    for key in ("USERNAME", "PASSWORD_HASH", "JWT_SECRET"):
+        monkeypatch.delenv(f"BUNSHO_AUTH__{key}", raising=False)
+    monkeypatch.setattr("bunsho.main.configure_logging", lambda *_args, **_kwargs: None)
+    with pytest.raises(SystemExit) as info:
+        main()
+    assert info.value.code == 2
