@@ -8,15 +8,23 @@ license-files = ["LICENSE"]
 authors = [{ name = "James", email = "jamesbconner@users.noreply.github.com" }]
 requires-python = ">=3.13"
 dependencies = [
+    "aiosqlite>=0.22.1",
+    "alembic>=1.20.0",
+    "fastapi>=0.141.1",
     "jamdict>=0.1a11.post2",
     "jamdict-data-fix>=1.5.1a2",
+    "pwdlib[argon2]>=0.3.1",
     "pydantic>=2.13.5",
+    "pyjwt>=2.14.0",
     "python-dotenv>=1.2.3",
+    "sqlalchemy[asyncio]>=2.0.54",
+    "uvicorn[standard]>=0.53.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "bandit>=1.9.4",
+    "httpx2>=2.13.0",
     "mypy>=2.3.1",
     "pre-commit>=4.6.2",
     "pytest>=9.1.1",
@@ -24,6 +32,9 @@ dev = [
     "ruff>=0.16.8",
     "twine>=7.0.0",
 ]
+
+[project.scripts]
+bunsho = "bunsho.main:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -63,7 +74,7 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-ra --strict-markers"
-markers = ["integration: needs the real deck and the jamdict-data-fix database"]
+markers = ["integration: cross-boundary tests that run the real application stack; some also need the real deck or the jamdict-data-fix database and skip without them"]
 
 [tool.coverage.run]
 source = ["src/bunsho"]

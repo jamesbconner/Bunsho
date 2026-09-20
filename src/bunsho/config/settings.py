@@ -78,6 +78,9 @@ def validate_config(cfg: ConfigNormalizer) -> list[str]:
             f"[paths] jamdict_db={jamdict!r} does not exist; "
             "unset it to use the database from the jamdict-data-fix package"
         )
+    data_dir = cfg.get_string("paths", "data_dir", "data")
+    if Path(data_dir).exists() and not Path(data_dir).is_dir():
+        errors.append(f"[paths] data_dir={data_dir!r} exists and is not a directory")
     return errors
 
 

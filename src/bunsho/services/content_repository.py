@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import time
 import uuid
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import closing, contextmanager
@@ -33,6 +34,27 @@ class ContentSchemaError(RuntimeError):
     """``content.db`` was written with a different (or unknown) schema version."""
 
 
+_REPLACE_ATTEMPTS = 5
+_REPLACE_DELAY_SECONDS = 0.1
+
+
+def _replace_with_retry(source: Path, target: Path) -> None:
+    """Move ``source`` over ``target``, retrying briefly on ``PermissionError``.
+
+    On Windows ``os.replace`` fails while another connection has ``target`` open; the
+    repository opens short-lived connections, so a few short retries almost always succeed.
+    """
+    for attempt in range(1, _REPLACE_ATTEMPTS + 1):
+        try:
+            os.replace(source, target)
+        except PermissionError:
+            if attempt == _REPLACE_ATTEMPTS:
+                raise
+            time.sleep(_REPLACE_DELAY_SECONDS * attempt)
+        else:
+            return
+
+
 class ContentWriter:
     """Writes a complete content database atomically."""
 
@@ -55,7 +77,8 @@ class ContentWriter:
         still serialize builds.
 
         On Windows ``os.replace`` raises ``PermissionError`` while another connection has
-        ``target`` open; callers must handle or retry that.
+        ``target`` open; the move is retried a few times (about a second in total) before
+        the error is raised.
 
         Args:
             target: Destination ``content.db`` path (parent directories are created).
@@ -97,7 +120,7 @@ class ContentWriter:
             tmp.unlink(missing_ok=True)
             raise
         try:
-            os.replace(tmp, target)
+            _replace_with_retry(tmp, target)
         except OSError:
             tmp.unlink(missing_ok=True)
             raise
