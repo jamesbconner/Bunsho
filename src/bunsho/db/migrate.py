@@ -46,10 +46,22 @@ def _current_revision(db_path: Path) -> str | None:
         engine.dispose()
 
 
+def _unused_backup_path(backup_dir: Path, stem: str) -> Path:
+    """Return ``<stem>.db``, or ``<stem>-2.db``, ``-3``, ... so no backup is overwritten."""
+    target = backup_dir / f"{stem}.db"
+    counter = 2
+    while target.exists():
+        target = backup_dir / f"{stem}-{counter}.db"
+        counter += 1
+    return target
+
+
 def _backup(db_path: Path, backup_dir: Path, revision: str | None, stamp: datetime) -> Path:
     backup_dir.mkdir(parents=True, exist_ok=True)
-    name = f"progress-{stamp.strftime('%Y%m%dT%H%M%SZ')}-from-{revision or 'unversioned'}.db"
-    target = backup_dir / name
+    utc_stamp = stamp.astimezone(UTC).strftime("%Y%m%dT%H%M%SZ")
+    target = _unused_backup_path(
+        backup_dir, f"progress-{utc_stamp}-from-{revision or 'unversioned'}"
+    )
     with closing(sqlite3.connect(db_path)) as source, closing(sqlite3.connect(target)) as dest:
         source.backup(dest)
     return target
@@ -67,7 +79,9 @@ def run_migrations(
     Args:
         db_path: Location of ``progress.db`` (created if missing).
         backup_dir: Where the pre-migration backup is written.
-        now: Clock used for the backup file name (defaults to UTC now).
+        now: Clock used for the backup file name (defaults to UTC now); the stamp is
+            always formatted in UTC. A backup never overwrites an existing file: a
+            colliding name gets a numeric suffix.
         logger: Logger for key=value messages.
 
     Returns:
@@ -77,6 +91,9 @@ def run_migrations(
         sqlalchemy.exc.DatabaseError: The file is not a valid SQLite database, or a
             migration failed part-way (any backup taken beforehand is kept and its
             path is logged).
+        alembic.util.exc.CommandError: The database is at a revision this version does not
+            know (for example after rolling back to an older image); the backup is kept
+            and the database is left untouched.
     """
     log = logger or logging.getLogger(__name__)
     clock = now or (lambda: datetime.now(UTC))

@@ -28,6 +28,10 @@ def load_config(
 
     Returns:
         The merged configuration. ``os.environ`` is never mutated.
+
+    Raises:
+        ConfigError: ``config_file`` or ``env_file`` does not exist, or ``config_file`` is
+            not valid TOML.
     """
     file_values: dict[str, Any] = {}
     if config_file is not None:
