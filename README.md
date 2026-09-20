@@ -178,9 +178,21 @@ curl -s -w '\n' -H "Authorization: Bearer $TOKEN" "$BASE/content/summary"
 ### Where the data lives
 
 The named volume `bunsho-data` is mounted at `/data` and holds `progress.db` (your study history),
-`content.db` (rebuilt from the deck at any time) and `backups/`. Because the compose project is named
+`content.db` (rebuilt from the deck at any time) and, once a migration backup has been taken,
+`backups/`. Because the compose project is named
 `bunsho`, the volume's full name is `bunsho_bunsho-data` (see `docker volume ls`). It survives
 `docker compose down`; only `docker compose down -v` deletes it, and your study history with it.
+
+Every `docker run ... busybox` command below mounts the volume at `/data`. Shell notes for them:
+
+- Linux, macOS and PowerShell: nothing special (in PowerShell write `-v "${PWD}:/backup"` where a command
+  has `-v "$PWD":/backup`).
+- **Git Bash on Windows** rewrites container-side paths (`/data` becomes `C:/Program Files/Git/data`), so
+  every one of these commands fails with "No such file or directory". Run `export MSYS_NO_PATHCONV=1` once
+  in that shell before them (or put `MSYS_NO_PATHCONV=1` in front of each `docker run`), and where a
+  command has `-v "$PWD":/backup` write `-v "$(pwd -W)":/backup` instead.
+- If your compose project is not named `bunsho` (for example you used `-p`), the volume is called
+  `<project>_bunsho-data`; substitute it in every command. Check with `docker volume ls`.
 
 Back up the whole volume to a tarball in the current directory. Stop the service first so the copy is
 consistent:
@@ -190,9 +202,6 @@ docker compose stop
 docker run --rm -v bunsho_bunsho-data:/data -v "$PWD":/backup busybox tar czf /backup/bunsho-data.tgz -C /data .
 docker compose start
 ```
-
-In PowerShell write the second mount as `-v "${PWD}:/backup"`. In Git Bash prefix the `docker run` with
-`MSYS_NO_PATHCONV=1` and use `-v "$(pwd -W)":/backup`, otherwise Git Bash rewrites the `/backup` path.
 
 To restore a tarball, stop the service and extract it into the volume (if you removed the volume, run
 `docker compose up -d` and `docker compose stop` once to recreate it). The archive carries the file
@@ -210,8 +219,9 @@ docker compose up -d --build
 ```
 
 At startup the service migrates `progress.db` if needed, after copying the existing file to
-`backups/progress-<UTC timestamp>-from-<revision or unversioned>.db` in the volume. To go back to a
-backup, stop the service, copy the backup over `progress.db` and hand the file back to the service
+`backups/progress-<UTC timestamp>-from-<revision or unversioned>.db` in the volume. The `backups/`
+folder only exists once a migration backup has been taken, so on a fresh volume `ls /data/backups` failing
+with "No such file or directory" is expected. To go back to a backup, stop the service, copy the backup over `progress.db` and hand the file back to the service
 user (a plain `cp` made by root leaves it owned by root), then start it again. List the backups first
 and put the file name you want in place of the example:
 
@@ -302,7 +312,8 @@ proxy that passes a client-supplied header through unchanged still lets clients 
 bucket. Trusting an address means believing whatever client address that host reports, so list only
 real proxies. Broad but legitimate networks
 (for example the Docker bridge `172.16.0.0/12`) are accepted; that is your call, and every host in the
-network can then set the client address. `*`, `0.0.0.0/0`, `::/0` and entries with host bits set (such
+network can then set the client address. Hostnames are not accepted (for example a compose service name
+such as `nginx`): use the proxy's IP address or its network. `*`, `0.0.0.0/0`, `::/0` and entries with host bits set (such
 as `127.0.0.5/8`) are rejected at startup, together with any other configuration errors.
 
 ### Smoke test

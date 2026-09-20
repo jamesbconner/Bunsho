@@ -30,18 +30,22 @@ Baseline from the spec:
 - [x] Plan 1C: Dockerfile (multi-stage, non-root), `compose.yaml` (port 8192, named data volume, read-only root filesystem),
       `.dockerignore`, `.gitattributes`
 - [x] CI rewrite (drop postgres/redis/jidou-api), plus a container smoke-test job (Plan 1C)
-- [ ] Strip Jidou content from `.claude/skills/{db-migration,release-notes,check-pr}` and `.claude/settings.local.json`
-      — first confirm with the user: the working-tree `.gitignore` now ignores `.claude/` and `.agents/`
+- [x] Jidou content stripped from `.claude/skills/{db-migration,release-notes,check-pr}` and `.claude/settings.local.json`
+      (no Jidou/TMDB text left there); the committed `.gitignore` (commit `ff3621b`) ignores `.claude/` and `.agents/`
 
 Carry-forward from Plan 1A's final review:
-- [ ] Rebuild endpoint: Windows `os.replace` over an open reader raises `PermissionError` -> retry/handle; serialize builds
-- [ ] Guard the WebSocket `on_progress` callback (an exception aborts the build); log/report `content_build_failed` when `writer.write` raises
-- [ ] Dry run costs ~2,109 x ~10 ms jamdict lookups (~20 s): background task with progress, never a synchronous request
-- [ ] `create_context`: also handle `OSError`/`sqlite3.Error` from the `Jamdict()` constructor and from `ContentRepository(...)`; add `/health`
-- [ ] Config loader: wrap `FileNotFoundError`/`TOMLDecodeError` in `ConfigError` for `config-check`; validate `data_dir`/`resources_dir`, absolute defaults for Docker
-- [x] Integration fixtures must fail, not skip, when `CI` is set (Plan 1C); `bandit -c pyproject.toml` runs in CI
+- [x] Rebuild endpoint: `_replace_with_retry` retries `PermissionError` (`services/content_repository.py`); a second
+      build is refused with `BuildAlreadyRunningError` -> HTTP 409 (`orchestration/build_tasks.py`, `api/routers/admin.py`)
+- [x] `on_progress` callback cannot raise into the build (`build_tasks.py`, `_make_callback`); `content_build_failed`
+      is logged when `writer.write` raises (`orchestration/content_build.py`)
+- [x] Dry run is a background task with progress (`BuildTaskManager.start(dry_run=...)`), never a synchronous request
+- [x] `create_context` catches `JamdictUnavailableError`/`OSError`/`sqlite3.Error` from the jamdict service (`factories.py`);
+      `ContentRepository(...)` opens no connection and is only built when `content.db` exists; `/health` exists
+- [x] Config loader wraps `FileNotFoundError`/`TOMLDecodeError` in `ConfigError` (`config/loader.py`); `data_dir` is
+      validated (`config/settings.py`); the image sets absolute `/data` and `/app/resources` (`Dockerfile`)
+- [x] Integration fixtures fail, not skip, when `CI` is set (Plan 1C); `bandit -c pyproject.toml` runs in CI
 - [x] `src/bunsho/py.typed` and `.pre-commit-config.yaml` (Plan 1C; pre-commit is optional per clone)
-- [ ] Call `ContentRepository.verify_schema()` at startup (and in Plan 2 before reading)
+- [ ] Call `ContentRepository.verify_schema()` at startup and in Plan 2 before reading (today only `/health` calls it)
 
 Delivered by Plan 1C (see `CHANGELOG.md` and the README's "Running with Docker"):
 - [x] Migration lock file, actionable startup errors (database path, backups folder, ownership hint), sweep of stale
@@ -95,15 +99,15 @@ Image and platform:
       `content.db` or a Docker image that contains it
 - [x] Plan 1A merged to `main` (PR #1, 2026-09-19). Working method going forward: branch -> push -> PR; James merges.
 - [ ] Optional history cleanup: four haiku-authored commits carry a "Claude Haiku 4.5" trailer (two on the subject line)
-- [ ] The uncommitted working-tree `.gitignore` (ignores `.claude/`, `.agents/`, `data/`, ...) needs a decision before the
-      Plan 1B skills cleanup: commit it, or stop ignoring `.claude/`
+- [x] The `.gitignore` decision: committed in `ff3621b`; `.claude/` and `.agents/` stay ignored (local agent config)
 
 ## Deferred minor findings (low priority)
 
 - [ ] furigana parser: untested edge cases (multiple/leading spaces, bare `[reading]`, unclosed `<mark>`); `(?<=])` vs `(?<=\])` spelling
 - [ ] importer: empty `Expression`/`Reading` accepted silently; encrypted-zip `RuntimeError`/`OSError` not wrapped
 - [ ] `is_kanji` misses CJK Extension B+ and compatibility ideographs
-- [ ] `logging_setup`: `force=True` would wipe uvicorn handlers if called after startup; format only half logfmt
+- [ ] `logging_setup`: `force=True` is still the default (a `force=False` option exists; the launcher configures logging
+      before uvicorn starts, so nothing is wiped today); the line format is only half logfmt (free-text message)
 - [ ] `.gitattributes` now covers the Dockerfile, `.dockerignore`, YAML and shell files only; add `* text=auto eol=lf`
       and `*.apkg binary` to stop the remaining CRLF warnings (for example on Markdown)
 - [ ] Test thinness: kana romaji spot-checks (~6 of 208), repeated-kanji case, `Kanji` frozen inheritance, Protocol conformance assertions
