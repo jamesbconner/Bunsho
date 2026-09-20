@@ -3,6 +3,11 @@
 #
 # Secrets live in an env file (default ./.env). Hashes contain "$": single-quote the value in
 # the env file (BUNSHO_AUTH__PASSWORD_HASH='$argon2id$...'); compose leaves it untouched.
+#
+# stop_grace_period is longer than the app's own 35 s shutdown budget: a running content build
+# is a thread that cannot be cancelled, so the process exits only once the build finishes
+# (about 40 s). A shorter grace period would SIGKILL it (exit 137).
+name: bunsho
 services:
   bunsho:
     build: .
@@ -15,10 +20,10 @@ services:
       - bunsho-data:/data
       - ./resources:/app/resources:ro
     restart: unless-stopped
-    stop_grace_period: 35s
+    stop_grace_period: 60s
     read_only: true
     tmpfs:
-      - /tmp
+      - /tmp:size=64m
     security_opt:
       - no-new-privileges:true
     cap_drop:
