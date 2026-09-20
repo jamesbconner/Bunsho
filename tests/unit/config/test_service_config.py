@@ -75,3 +75,56 @@ def test_cors_origins_are_parsed_and_must_be_explicit() -> None:
 def test_app_config_errors_are_included() -> None:
     cfg = _valid(paths={"deck_sha256": "abc"})
     assert any("deck_sha256" in e for e in validate_service_config(cfg))
+
+
+@pytest.mark.parametrize("value", ["127.0.0.1", "10.0.0.0/8", "127.0.0.1, 172.16.0.0/12", "::1"])
+def test_trusted_proxies_accept_addresses_and_networks(value: str) -> None:
+    config = load_service_config(_valid(server={"trusted_proxies": value}))
+    assert config.server.trusted_proxies == tuple(part.strip() for part in value.split(","))
+
+
+def test_trusted_proxies_default_to_empty() -> None:
+    assert load_service_config(_valid()).server.trusted_proxies == ()
+
+
+@pytest.mark.parametrize("value", ["*", "not-an-ip", "10.0.0.0/33", "127.0.0.1, *"])
+def test_trusted_proxies_reject_wildcards_and_garbage(value: str) -> None:
+    errors = validate_service_config(_valid(server={"trusted_proxies": value}))
+    assert any("trusted_proxies" in error for error in errors)
+
+
+@pytest.mark.parametrize("value", ["fd00::/8", "::1", "127.0.0.1", "127.0.0.0/8", "172.16.0.0/12"])
+def test_trusted_proxies_accept_ipv6_and_broad_but_bounded_networks(value: str) -> None:
+    assert load_service_config(
+        _valid(server={"trusted_proxies": value})
+    ).server.trusted_proxies == (value,)
+
+
+@pytest.mark.parametrize("value", ["0.0.0.0/0", "::/0", "10.0.0.0/8, 0.0.0.0/0"])
+def test_trusted_proxies_reject_match_everything_networks(value: str) -> None:
+    errors = [
+        e
+        for e in validate_service_config(_valid(server={"trusted_proxies": value}))
+        if "trusted_proxies" in e
+    ]
+    assert len(errors) == 1
+    assert "wildcard" in errors[0]
+
+
+def test_trusted_proxies_reject_host_bits_the_way_uvicorn_would() -> None:
+    errors = validate_service_config(_valid(server={"trusted_proxies": "127.0.0.5/8"}))
+    [error] = [e for e in errors if "trusted_proxies" in e]
+    assert "host bits" in error
+    assert "wildcard" not in error
+
+
+@pytest.mark.parametrize("value", ["*", "0.0.0.0/0"])
+def test_wildcard_hint_appears_for_wildcards(value: str) -> None:
+    [error] = validate_service_config(_valid(server={"trusted_proxies": value}))
+    assert "login-throttle bucket" in error
+
+
+def test_wildcard_hint_is_absent_for_other_bad_entries() -> None:
+    [error] = validate_service_config(_valid(server={"trusted_proxies": "bogus"}))
+    assert "bogus" in error
+    assert "wildcard" not in error

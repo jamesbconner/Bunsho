@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 from dataclasses import dataclass
 
 from bunsho.config.normalizer import ConfigError, ConfigNormalizer
@@ -19,6 +20,7 @@ class ServerSettings:
     host: str
     port: int
     cors_origins: tuple[str, ...]
+    trusted_proxies: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +56,34 @@ def _origins(cfg: ConfigNormalizer) -> tuple[str, ...]:
     return tuple(part.strip() for part in raw.split(",") if part.strip())
 
 
+def _trusted_proxies(cfg: ConfigNormalizer) -> tuple[str, ...]:
+    raw = cfg.get_string("server", "trusted_proxies")
+    return tuple(part.strip() for part in raw.split(",") if part.strip())
+
+
+_WILDCARD_HINT = "a wildcard would let any client choose its own login-throttle bucket"
+
+
+def _trusted_proxy_problem(entry: str) -> str | None:
+    """Describe what is wrong with a trusted-proxy entry, or return ``None`` if it is fine.
+
+    Validation is strict, like uvicorn's own parsing: an entry uvicorn would silently treat
+    as a literal string (for example one with host bits set) is rejected here instead.
+    """
+    try:
+        network = ipaddress.ip_network(entry, strict=True)
+    except ValueError:
+        try:
+            ipaddress.ip_network(entry, strict=False)
+        except ValueError:
+            reason = "is not an IP address or network"
+            return f"{reason} ({_WILDCARD_HINT})" if entry == "*" else reason
+        return "has host bits set; write the network address (for example 127.0.0.0/8)"
+    if network.prefixlen == 0:
+        return f"matches every address ({_WILDCARD_HINT})"
+    return None
+
+
 def validate_service_config(cfg: ConfigNormalizer) -> list[str]:
     """Validate library, server and auth settings; return every problem found."""
     errors = validate_config(cfg)
@@ -69,6 +99,9 @@ def validate_service_config(cfg: ConfigNormalizer) -> list[str]:
             errors.append(
                 f"[server] cors_origins entry {origin!r} must start with http:// or https://"
             )
+    for proxy in _trusted_proxies(cfg):
+        if problem := _trusted_proxy_problem(proxy):
+            errors.append(f"[server] trusted_proxies entry {proxy!r} {problem}")
     if not cfg.get_string("auth", "username").strip():
         errors.append("[auth] username is required")
     if not cfg.get_string("auth", "password_hash").startswith(_ARGON2_PREFIX):
@@ -101,6 +134,7 @@ def load_service_config(cfg: ConfigNormalizer) -> ServiceConfig:
             host=cfg.get_string("server", "host", "127.0.0.1").strip(),
             port=cfg.get_int("server", "port", 8192),
             cors_origins=_origins(cfg),
+            trusted_proxies=_trusted_proxies(cfg),
         ),
         auth=AuthSettings(
             username=cfg.get_string("auth", "username").strip(),

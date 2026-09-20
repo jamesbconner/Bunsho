@@ -210,7 +210,7 @@ def test_cancelling_the_runner_keeps_the_build_active_until_the_worker_ends(
         queue = manager.subscribe()
         task = manager.start(dry_run=True)
         await _until(lambda: task.progress == BuildProgress("enrich_kanji", 3, 3))
-        runner = manager._runner  # noqa: SLF001 - simulate a shutdown-style cancellation
+        runner = manager._runner  # simulate a shutdown-style cancellation
         assert runner is not None
         runner.cancel()
         await asyncio.sleep(0.05)
@@ -249,7 +249,7 @@ def test_progress_arriving_after_the_task_ended_is_ignored(
         queue = manager.subscribe()
         task = manager.start(dry_run=True)
         await _until(lambda: task.progress == BuildProgress("enrich_kanji", 3, 3))
-        runner = manager._runner  # noqa: SLF001 - simulate a shutdown-style cancellation
+        runner = manager._runner  # simulate a shutdown-style cancellation
         assert runner is not None
         runner.cancel()
         await asyncio.sleep(0.05)

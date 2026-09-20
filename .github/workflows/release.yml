@@ -15,6 +15,7 @@ permissions:
 
 env:
   PYTHONUTF8: "1"
+  # uv 0.12.17 is pinned in three places (ci.yml, release.yml, Dockerfile); bump them together.
   UV_VERSION: "0.12.17"
 
 jobs:
@@ -48,7 +49,9 @@ jobs:
       - name: Full checks before releasing
         run: |
           uv run ruff check .
+          uv run ruff format --check .
           uv run mypy src/
+          uv run bandit -c pyproject.toml -r src/ -l
           uv run pytest --cov
 
       - name: Build wheel and sdist

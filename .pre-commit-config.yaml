@@ -1,0 +1,31 @@
+# Optional per clone: `uv run pre-commit install`. Mirrors the local and CI checks.
+# Hooks here never rewrite files except ruff --fix / ruff-format (the same tools CI checks).
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=3000"]
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.8 # keep in step with the ruff version in uv.lock
+    hooks:
+      - id: ruff-check
+        args: ["--fix"]
+      - id: ruff-format
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy (strict, src)
+        entry: uv run mypy src/
+        language: system
+        pass_filenames: false
+        types: [python]
+      - id: bandit
+        name: bandit (medium+ severity, src)
+        entry: uv run bandit -c pyproject.toml -r src/ -l
+        language: system
+        pass_filenames: false
+        types: [python]

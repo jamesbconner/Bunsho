@@ -1,3 +1,4 @@
+import asyncio
 import sqlite3
 from contextlib import closing
 from pathlib import Path
@@ -8,6 +9,8 @@ from sqlalchemy.exc import DatabaseError
 
 from bunsho import __version__
 from bunsho.api.app import create_app
+from bunsho.api.services import StartupError, build_services
+from bunsho.config.service import ServiceConfig
 from tests.base import make_service_config
 
 
@@ -68,5 +71,35 @@ def test_a_corrupt_progress_db_aborts_startup(tmp_path: Path) -> None:
     config.app.data_dir.mkdir(parents=True)
     config.app.progress_db_path.write_bytes(b"definitely not sqlite" * 20)
 
-    with pytest.raises(DatabaseError), TestClient(create_app(config)):
+    with pytest.raises(StartupError) as info, TestClient(create_app(config)):
         pass
+    assert isinstance(info.value.__cause__, DatabaseError)
+
+
+def test_a_corrupt_progress_db_gives_an_actionable_startup_error(
+    service_config: ServiceConfig, caplog: pytest.LogCaptureFixture
+) -> None:
+    path = service_config.app.progress_db_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"not a database" * 100)
+    with pytest.raises(StartupError) as info:
+        asyncio.run(build_services(service_config))
+    message = str(info.value)
+    assert str(path) in message
+    assert str(service_config.app.data_dir / "backups") in message
+    assert "DatabaseError" in message
+    assert "progress_db_startup_failed" in caplog.text
+
+
+def test_stale_build_temp_files_are_swept_at_startup(service_config: ServiceConfig) -> None:
+    data_dir = service_config.app.data_dir
+    data_dir.mkdir(parents=True, exist_ok=True)
+    stale = data_dir / f"content.db.{'a' * 32}.tmp"
+    stale.write_bytes(b"x")
+
+    async def scenario() -> None:
+        services = await build_services(service_config)
+        await services.aclose()
+
+    asyncio.run(scenario())
+    assert not stale.exists()

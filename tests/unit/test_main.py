@@ -1,4 +1,5 @@
 import dataclasses
+import inspect
 import json
 import socket
 import threading
@@ -13,8 +14,17 @@ import uvicorn
 from fastapi.testclient import TestClient
 
 from bunsho.api.app import create_app
+from bunsho.api.routers.ws import MAX_AUTH_MESSAGE_CHARS
 from bunsho.config.normalizer import ConfigError
-from bunsho.main import build_server_config, build_service_config, create_app_from_env, main
+from bunsho.main import (
+    GRACEFUL_SHUTDOWN_SECONDS,
+    WS_MAX_MESSAGE_BYTES,
+    build_server_config,
+    build_service_config,
+    create_app_from_env,
+    main,
+)
+from bunsho.orchestration.build_tasks import BuildTaskManager
 from tests.base import JWT_SECRET, PASSWORD, make_auth_settings, make_service_config
 
 
@@ -91,6 +101,27 @@ def test_the_launcher_does_not_trust_proxy_headers(tmp_path: Path) -> None:
     assert server_config.proxy_headers is False
     assert (server_config.host, server_config.port) == (config.server.host, config.server.port)
     assert server_config.log_config is None
+    assert server_config.timeout_graceful_shutdown == GRACEFUL_SHUTDOWN_SECONDS == 35
+    assert server_config.ws_max_size == WS_MAX_MESSAGE_BYTES == 65536
+
+
+def test_the_launcher_trusts_only_the_configured_proxies(tmp_path: Path) -> None:
+    base = make_service_config(tmp_path)
+    server = dataclasses.replace(base.server, trusted_proxies=("10.0.0.0/8", "::1"))
+    config = dataclasses.replace(base, server=server)
+    server_config = build_server_config(create_app(config), config)
+    assert server_config.proxy_headers is True
+    assert server_config.forwarded_allow_ips == "10.0.0.0/8,::1"
+
+
+def test_the_frame_limit_fits_the_largest_auth_message() -> None:
+    """Up to 4 UTF-8 bytes per character, plus 512 bytes for the JSON wrapper."""
+    assert MAX_AUTH_MESSAGE_CHARS * 4 + 512 <= WS_MAX_MESSAGE_BYTES
+
+
+def test_the_shutdown_budget_exceeds_the_build_task_wait() -> None:
+    build_wait = inspect.signature(BuildTaskManager.aclose).parameters["timeout"].default
+    assert build_wait < GRACEFUL_SHUTDOWN_SECONDS
 
 
 def _free_port() -> int:
@@ -100,11 +131,17 @@ def _free_port() -> int:
 
 
 @pytest.fixture
-def live_server(tmp_path: Path) -> Iterator[int]:
-    """Serve the app on a free port exactly as the launcher configures uvicorn."""
+def live_server(tmp_path: Path, request: pytest.FixtureRequest) -> Iterator[int]:
+    """Serve the app on a free port exactly as the launcher configures uvicorn.
+
+    Parametrize indirectly with a tuple of ``trusted_proxies`` (default: none).
+    """
     base = make_service_config(tmp_path)
     port = _free_port()
-    config = dataclasses.replace(base, server=dataclasses.replace(base.server, port=port))
+    server_settings = dataclasses.replace(
+        base.server, port=port, trusted_proxies=getattr(request, "param", ())
+    )
+    config = dataclasses.replace(base, server=server_settings)
     server = uvicorn.Server(build_server_config(create_app(config), config))
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
@@ -136,6 +173,42 @@ def _login_status(port: int, forwarded_for: str) -> int:
 
 def test_a_forged_forwarded_for_header_cannot_dodge_the_login_throttle(live_server: int) -> None:
     statuses = [_login_status(live_server, f"203.0.113.{n}") for n in range(1, 9)]
+    assert statuses[:5] == [401] * 5
+    assert 429 in statuses[5:]
+
+
+TRUSTED_LOOPBACK = pytest.mark.parametrize("live_server", [("127.0.0.1",)], indirect=True)
+
+
+@TRUSTED_LOOPBACK
+def test_a_trusted_proxy_makes_the_same_forwarded_client_share_one_throttle_bucket(
+    live_server: int,
+) -> None:
+    statuses = [_login_status(live_server, "203.0.113.7") for _ in range(8)]
+    assert statuses[:5] == [401] * 5
+    assert 429 in statuses[5:]
+
+
+@TRUSTED_LOOPBACK
+def test_a_trusted_proxy_gives_each_forwarded_client_its_own_throttle_bucket(
+    live_server: int,
+) -> None:
+    """Trusting a proxy makes ``X-Forwarded-For`` authoritative: name only real proxies."""
+    statuses = [_login_status(live_server, f"203.0.113.{n}") for n in range(1, 9)]
+    assert statuses == [401] * 8
+
+
+@pytest.mark.parametrize("live_server", [("10.0.0.0/8",)], indirect=True)
+def test_a_proxy_list_that_excludes_the_peer_ignores_forwarded_for(live_server: int) -> None:
+    statuses = [_login_status(live_server, f"203.0.113.{n}") for n in range(1, 9)]
+    assert statuses[:5] == [401] * 5
+    assert 429 in statuses[5:]
+
+
+@TRUSTED_LOOPBACK
+def test_a_trusted_proxy_keys_on_the_rightmost_untrusted_forwarded_entry(live_server: int) -> None:
+    """A client that prepends forged hops cannot dodge the throttle: the proxy's entry wins."""
+    statuses = [_login_status(live_server, f"198.51.100.{n}, 203.0.113.7") for n in range(1, 9)]
     assert statuses[:5] == [401] * 5
     assert 429 in statuses[5:]
 
