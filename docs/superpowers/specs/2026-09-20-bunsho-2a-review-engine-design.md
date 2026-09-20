@@ -174,3 +174,19 @@ One branch (`feat/plan-2a-review-engine`), draft PR opened early so CI runs, no 
 - FSRS learning steps for cards that come due minutes later in the same session: `next` returns none
   with `next_due_at`, and the UI (2B) decides how to wait.
 - WAL on the volume: the compose file uses a named volume, which supports it; a network filesystem would not.
+
+## Implementation notes (added while planning and building)
+
+- The item type is derived from the direction, so an unknown item is a 404 and an unknown
+  direction a 422; there is no "invalid pair" case.
+- `ContentRepository.catalog(item_type)` returns ids and levels only (unleveled kanji excluded in
+  SQL); it replaces the `leveled_only` option on `list_kanji`.
+- The hydrated card carries the domain item (`kana`, `kanji` or `vocab`) rather than pre-rendered
+  front/back fields; the frontend decides the layout per direction.
+- The study-day timezone is `TZ` when set, otherwise UTC with a startup warning; `tzdata` is a
+  dependency.
+- The startup backup already used the SQLite backup API (WAL-safe); a test now proves it.
+- The review settings are one JSON document in `app_setting` (`review_settings`); `PUT` is a full
+  replacement.
+- The FSRS library's PyPI distribution is `fsrs` (import name `fsrs`), not `py-fsrs`; the
+  references to `py-fsrs` above are the name used while planning.

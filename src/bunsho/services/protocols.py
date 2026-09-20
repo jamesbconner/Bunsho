@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from datetime import datetime
 from pathlib import Path
 from typing import Protocol
 
 from bunsho.models.content import ImportedDeck, Kana, Kanji, KanjiDetails, Vocab
+from bunsho.models.review import CardKey, CardSchedule, CatalogEntry, Grade, ItemType, SchedState
 
 
 class DeckImporter(Protocol):
@@ -58,4 +60,45 @@ class ContentWriting(Protocol):
         meta: Mapping[str, str],
     ) -> None:
         """Write all content to ``target``."""
+        ...
+
+
+class Scheduler(Protocol):
+    """Spaced-repetition scheduling: what happens to a card when it is graded."""
+
+    def initial(self, now: datetime) -> CardSchedule:
+        """Return the state of a card that has never been reviewed (``SchedState.NEW``)."""
+        ...
+
+    def schedule(self, current: CardSchedule, grade: Grade, now: datetime) -> CardSchedule:
+        """Return the state after grading ``current`` at ``now``.
+
+        Raises:
+            ValueError: ``now`` is not timezone-aware.
+        """
+        ...
+
+    def preview(self, current: CardSchedule, now: datetime) -> dict[Grade, CardSchedule]:
+        """Return the state each of the four grades would produce (never fuzzed)."""
+        ...
+
+
+class NewCardPolicy(Protocol):
+    """Chooses which never-seen cards of one item type to introduce next."""
+
+    def select(
+        self,
+        item_type: ItemType,
+        catalog: Sequence[CatalogEntry],
+        states: Mapping[CardKey, SchedState],
+        limit: int | None,
+    ) -> list[CardKey]:
+        """Return up to ``limit`` unintroduced cards, in the order they should appear.
+
+        Args:
+            item_type: The item type the catalogue belongs to.
+            catalog: The type's entries (any order; the policy sorts them).
+            states: State of every card that has been reviewed (its keys are "introduced").
+            limit: Maximum number of cards, or ``None`` for no limit.
+        """
         ...

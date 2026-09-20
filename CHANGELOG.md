@@ -40,3 +40,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - CI policy: integration tests that skip because the real deck or dictionary database is missing
   fail instead when the `CI` environment variable is set; bandit now reads its configuration from
   `pyproject.toml`. A `py.typed` marker ships with the package.
+- Review engine: FSRS scheduling (`fsrs`) with a configurable target retention, cards created
+  on first grade, `GET /reviews/next`, `POST /reviews/answer` (stale answers get 409),
+  `GET /stats/summary` and `GET`/`PUT /settings`. New cards follow one of three user-selectable
+  policies (strict N5-to-N1 order, mastery unlock, pinned levels) within per-type daily limits and
+  a study-day rollover hour. New runtime dependencies: `fsrs` (scheduling) and `tzdata` (makes the
+  study-day timezone work on Windows and in slim images).
+- `GET /content/summary` reports unleveled kanji (`unleveled_kanji`) and per-level counts for
+  kanji and vocabulary.
+- Unhandled errors return `{"detail": "internal error"}` (status 500) and are logged; the exception
+  text is never sent to the client.
+- OpenAPI: explicit operation ids, documented 401/404/409/429/503 responses, and the WebSocket
+  message schemas in `components`, so a typed client can be generated.
+
+### Changed
+
+- `progress.db` runs in WAL mode with foreign keys enforced, and the service takes an exclusive
+  lock on the data folder: a second instance on the same folder refuses to start.
+- CORS allows `PUT` in addition to `GET` and `POST` (still off unless origins are configured).
+- Startup checks the `content.db` schema version and logs an error when a rebuild is needed.

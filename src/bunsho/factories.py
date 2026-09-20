@@ -7,12 +7,19 @@ import sqlite3
 
 from bunsho.config.settings import AppConfig
 from bunsho.context import Context
+from bunsho.models.review_settings import NewCardPolicyName, ReviewSettings
 from bunsho.orchestration.content_build import ContentBuildError, ContentBuildOrchestrator
 from bunsho.services.anki_importer import AnkiDeckImporter
 from bunsho.services.content_repository import ContentWriter
+from bunsho.services.fsrs_scheduler import FSRSScheduler
 from bunsho.services.jamdict_service import JamdictService, JamdictUnavailableError
 from bunsho.services.kana_source import KanaSource
-from bunsho.services.protocols import KanjiCatalog, KanjiInfoSource
+from bunsho.services.new_card_policies import (
+    MasteryUnlockPolicy,
+    PinnedLevelsPolicy,
+    StrictOrderPolicy,
+)
+from bunsho.services.protocols import KanjiCatalog, KanjiInfoSource, NewCardPolicy, Scheduler
 
 
 def create_context(
@@ -72,3 +79,54 @@ def create_content_build_orchestrator(ctx: Context) -> ContentBuildOrchestrator:
         logger=ctx.logger,
         kanji_catalog=ctx.kanji_catalog,
     )
+
+
+def create_scheduler(
+    kind: str = "fsrs", *, desired_retention: float = 0.9, enable_fuzzing: bool = True
+) -> Scheduler:
+    """Build the spaced-repetition scheduler named by ``kind``.
+
+    Args:
+        kind: Scheduler algorithm; only ``"fsrs"`` is supported today.
+        desired_retention: Target probability of recall when a card comes due.
+        enable_fuzzing: Spread review intervals randomly (disable for deterministic tests).
+
+    Returns:
+        The scheduler.
+
+    Raises:
+        ValueError: ``kind`` is not a supported scheduler.
+    """
+    match kind:
+        case "fsrs":
+            return FSRSScheduler(desired_retention=desired_retention, enable_fuzzing=enable_fuzzing)
+        case _:
+            raise ValueError(f"unsupported scheduler {kind!r}; supported: 'fsrs'")
+
+
+def create_new_card_policy(settings: ReviewSettings) -> NewCardPolicy:
+    """Build the new-card policy named by ``settings.new_card_policy``.
+
+    Args:
+        settings: The review settings (policy name, mastery threshold, active levels).
+
+    Returns:
+        The policy.
+
+    Raises:
+        ValueError: The policy name is not supported.
+    """
+    match settings.new_card_policy:
+        case NewCardPolicyName.STRICT_ORDER:
+            return StrictOrderPolicy()
+        case NewCardPolicyName.MASTERY_UNLOCK:
+            return MasteryUnlockPolicy(settings.mastery_threshold)
+        case NewCardPolicyName.PINNED_LEVELS:
+            return PinnedLevelsPolicy(settings.levels())
+        case _:
+            raise ValueError(f"unsupported new-card policy {settings.new_card_policy!r}")
+
+
+def create_scheduler_from_settings(settings: ReviewSettings) -> Scheduler:
+    """Build the scheduler configured by ``settings.target_retention`` (fuzzing on)."""
+    return create_scheduler("fsrs", desired_retention=settings.target_retention)

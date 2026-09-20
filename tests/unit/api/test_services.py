@@ -93,10 +93,14 @@ def test_engine_is_disposed_even_if_closing_the_build_manager_fails() -> None:
         async def dispose(self) -> None:
             disposed.append(True)
 
-    fake = SimpleNamespace(tasks=_Tasks(), progress_db=_Db())
+    class _Lock:
+        def release(self) -> None:
+            disposed.append(False)
+
+    fake = SimpleNamespace(tasks=_Tasks(), progress_db=_Db(), instance_lock=_Lock())
     with pytest.raises(RuntimeError, match="aclose boom"):
         asyncio.run(Services.aclose(fake))  # type: ignore[arg-type]
-    assert disposed == [True]
+    assert disposed == [True, False]  # engine disposed, then the instance lock released
 
 
 def test_health_is_503_when_progress_db_is_in_error(client: TestClient) -> None:

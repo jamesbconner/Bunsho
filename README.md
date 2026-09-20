@@ -101,6 +101,36 @@ migration at startup, a timestamped backup is written to `data_dir/backups/` fir
 `progress-<UTC timestamp>-from-<revision or unversioned>.db`; a database that is already current is not
 backed up. Migrations run under a lock file (`progress.db.migrate.lock`, left in place and harmless), so
 two processes starting at once cannot collide. Backups are never pruned; delete old ones yourself.
+To restore a backup, stop the service, delete `progress.db-wal` and `progress.db-shm` next to
+`progress.db` (SQLite would replay a leftover `-wal` onto the restored file and corrupt it), then copy
+the backup over `progress.db`.
+
+### Studying (review API)
+
+After a content build, the API serves flashcards. Every route needs a bearer token.
+
+| Route | What it does |
+|---|---|
+| `GET /api/v1/reviews/next` | The next card (with its content, and how long each grade would wait), or no card plus `next_due_at`; also the counts still to do. Fetching creates nothing. |
+| `POST /api/v1/reviews/answer` | Grade a card: `item_id`, `direction`, `grade` (1 Again, 2 Hard, 3 Good, 4 Easy), `expected_last_review` (copied from the card; `null` for a new card) and optionally `duration_ms`. A card that changed in the meantime (a double submit, or a second device) answers `409`. |
+| `GET /api/v1/stats/summary` | Reviews today, the last 30 days, 30-day retention, and progress per type and JLPT level. |
+| `GET /api/v1/settings`, `PUT /api/v1/settings` | The review settings (below). `PUT` replaces the whole document. |
+
+A card is an item plus a direction: kana `glyph_to_sound` / `sound_to_glyph`, kanji `kanji_to_meaning` / `kanji_to_reading` / `meaning_to_kanji`, vocabulary `recognition` / `recall`. Item ids are opaque strings taken from the API (`vocab:度:ど#2` exists); do not build or parse them. A card is created the first time it is graded; scheduling uses FSRS with a configurable target retention.
+
+**Settings** (defaults in brackets): `new_card_policy` (`strict_order`: N5 first, then N4 and so on; `mastery_unlock`: the next level also waits until `mastery_threshold` [0.80] of the current level's cards are in the FSRS Review state; `pinned_levels`: only `active_levels` [`["N5"]`]), `new_limits` per type in **cards** per day (kana 20, kanji 15, vocab 20; `0` = unlimited), `target_retention` [0.90, range 0.70-0.99] and `rollover_hour` [4, range 0-23]. Unleveled kanji are never offered.
+
+Some behaviours to know about:
+
+- `POST /reviews/answer` accepts any known item; it does not check that the card is due or was the one offered. This is a single-user app, and the stale-answer check (`409`) only protects against double submits and two devices.
+- Changing `rollover_hour` mid-day moves the study-day window, so that day's new-card allowance can look larger or smaller.
+- `pinned_levels` offers `active_levels` in study order N5 to N1, whatever order the list is written in.
+
+**Study day and timezone.** Daily limits reset at `rollover_hour` in the server's timezone, read from the `TZ` environment variable (an IANA name such as `America/New_York`). Without `TZ` the study day uses UTC and the service logs a warning. In Docker, put `TZ=America/New_York` in the env file next to the credentials.
+
+**One instance per data folder.** The service takes an exclusive lock (`.bunsho.instance.lock`) in the data folder; a second instance on the same folder refuses to start with an explanatory error. `progress.db` runs in WAL mode, so you will also see `progress.db-wal` and `progress.db-shm` files next to it; back up the folder with the service stopped, or use the timestamped backups in `backups/`. When you restore, stop the service and remove those two files first (see the note under "Where the data lives" and the restore steps above).
+
+**Frontend development.** Allow the Vite dev server with `BUNSHO_SERVER__CORS_ORIGINS=http://localhost:5173` (comma-separated for several); CORS is off unless origins are listed, and `GET`, `POST` and `PUT` are allowed.
 
 ## Running with Docker
 
@@ -210,10 +240,14 @@ docker compose start
 ```
 
 To restore a tarball, stop the service and extract it into the volume (if you removed the volume, run
-`docker compose up -d` and `docker compose stop` once to recreate it). The archive carries the file
-owners, so the service user keeps access:
+`docker compose up -d` and `docker compose stop` once to recreate it). `progress.db` runs in WAL mode, and
+SQLite replays a leftover `progress.db-wal` onto whatever `progress.db` sits beside it, which can corrupt
+the restored database: extract into an empty volume, or delete `progress.db-wal` and `progress.db-shm`
+first, as the first command below does. The archive carries the file owners, so the service user keeps
+access:
 
 ```bash
+docker run --rm -v bunsho_bunsho-data:/data busybox rm -f /data/progress.db-wal /data/progress.db-shm
 docker run --rm -v bunsho_bunsho-data:/data -v "$PWD":/backup busybox tar xzf /backup/bunsho-data.tgz -C /data
 ```
 
@@ -227,15 +261,16 @@ docker compose up -d --build
 At startup the service migrates `progress.db` if needed, after copying the existing file to
 `backups/progress-<UTC timestamp>-from-<revision or unversioned>.db` in the volume. The `backups/`
 folder only exists once a migration backup has been taken, so on a fresh volume `ls /data/backups` failing
-with "No such file or directory" is expected. To go back to a backup, stop the service, copy the backup over `progress.db` and hand the file back to the service
-user (a plain `cp` made by root leaves it owned by root), then start it again. List the backups first
-and put the file name you want in place of the example:
+with "No such file or directory" is expected. To go back to a backup, stop the service, delete `progress.db-wal` and `progress.db-shm` (a leftover WAL
+file would be replayed onto the restored database and corrupt it), copy the backup over `progress.db` and hand
+the file back to the service user (a plain `cp` made by root leaves it owned by root), then start it again.
+List the backups first and put the file name you want in place of the example:
 
 ```bash
 docker compose stop
 docker run --rm -v bunsho_bunsho-data:/data busybox ls /data/backups
 docker run --rm -v bunsho_bunsho-data:/data busybox sh -c \
-  'cp /data/backups/progress-20260101T000000Z-from-unversioned.db /data/progress.db && chown 10001:10001 /data/progress.db'
+  'rm -f /data/progress.db-wal /data/progress.db-shm && cp /data/backups/progress-20260101T000000Z-from-unversioned.db /data/progress.db && chown 10001:10001 /data/progress.db'
 docker compose start
 ```
 

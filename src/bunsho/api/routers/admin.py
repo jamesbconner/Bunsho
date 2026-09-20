@@ -7,6 +7,7 @@ import asyncio
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from bunsho.api.deps import ServicesDep, require_user
+from bunsho.api.responses import CONFLICT, NOT_FOUND, UNAUTHORIZED
 from bunsho.api.schemas import (
     BuildRequest,
     BuildStatusResponse,
@@ -17,10 +18,15 @@ from bunsho.api.schemas import (
 from bunsho.orchestration.build_tasks import BuildAlreadyRunningError
 from bunsho.services.config_check import run_config_checks
 
-router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_user)])
+router = APIRouter(
+    prefix="/admin",
+    tags=["admin"],
+    dependencies=[Depends(require_user)],
+    responses=UNAUTHORIZED,
+)
 
 
-@router.get("/config-check", response_model=ConfigCheckResponse)
+@router.get("/config-check", response_model=ConfigCheckResponse, operation_id="getConfigCheck")
 async def config_check(services: ServicesDep) -> ConfigCheckResponse:
     """Check that the deck, data directory and dictionary are usable."""
     results = await asyncio.to_thread(run_config_checks, services.config, services.ctx)
@@ -28,7 +34,11 @@ async def config_check(services: ServicesDep) -> ConfigCheckResponse:
 
 
 @router.post(
-    "/content/build", response_model=BuildStatusResponse, status_code=status.HTTP_202_ACCEPTED
+    "/content/build",
+    response_model=BuildStatusResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    operation_id="startContentBuild",
+    responses=CONFLICT,
 )
 async def start_build(body: BuildRequest, services: ServicesDep) -> BuildStatusResponse:
     """Start a content build in the background.
@@ -43,7 +53,12 @@ async def start_build(body: BuildRequest, services: ServicesDep) -> BuildStatusR
     return build_status(task)
 
 
-@router.get("/content/build", response_model=BuildStatusResponse)
+@router.get(
+    "/content/build",
+    response_model=BuildStatusResponse,
+    operation_id="getLatestContentBuild",
+    responses=NOT_FOUND,
+)
 async def latest_build(services: ServicesDep) -> BuildStatusResponse:
     """The most recent build.
 
@@ -56,7 +71,12 @@ async def latest_build(services: ServicesDep) -> BuildStatusResponse:
     return build_status(task)
 
 
-@router.get("/content/build/{task_id}", response_model=BuildStatusResponse)
+@router.get(
+    "/content/build/{task_id}",
+    response_model=BuildStatusResponse,
+    operation_id="getContentBuild",
+    responses=NOT_FOUND,
+)
 async def get_build(task_id: str, services: ServicesDep) -> BuildStatusResponse:
     """A build by id (only recent builds are remembered).
 

@@ -204,6 +204,7 @@ dependencies = [
     { name = "alembic" },
     { name = "fastapi" },
     { name = "filelock" },
+    { name = "fsrs" },
     { name = "jamdict" },
     { name = "jamdict-data-fix" },
     { name = "pwdlib", extra = ["argon2"] },
@@ -211,6 +212,7 @@ dependencies = [
     { name = "pyjwt" },
     { name = "python-dotenv" },
     { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "tzdata" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -233,6 +235,7 @@ requires-dist = [
     { name = "bandit", marker = "extra == 'dev'", specifier = ">=1.9.4" },
     { name = "fastapi", specifier = ">=0.141.1" },
     { name = "filelock", specifier = ">=3.32" },
+    { name = "fsrs", specifier = ">=6.3.2" },
     { name = "httpx2", marker = "extra == 'dev'", specifier = ">=2.13.0" },
     { name = "jamdict", specifier = ">=0.1a11.post2" },
     { name = "jamdict-data-fix", specifier = ">=1.5.1a2" },
@@ -247,6 +250,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.16.8" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.54" },
     { name = "twine", marker = "extra == 'dev'", specifier = ">=7.0.0" },
+    { name = "tzdata", specifier = ">=2026.4" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.53.0" },
 ]
 provides-extras = ["dev"]
@@ -650,6 +654,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/0f/59/e19834834cb01a32febfbb0f8a23a9088088f5d45991824ff2bc3b5e8acb/filelock-3.32.7.tar.gz", hash = "sha256:37b8a3d9811b0f9aef7e5ec5c71bb320de52df51e6ca9bcd6f5ad81187660da7", size = 225154 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/15/df/31098c5aeb4d966b553641472bd55fcf5fdfac953549894b8a765ba44e91/filelock-3.32.7-py3-none-any.whl", hash = "sha256:65ff0d0190ea42038b32bda4b77834fb05be2cad4c5b9b01aa4dfb3614536e52", size = 100157 },
+]
+
+[[package]]
+name = "fsrs"
+version = "6.3.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/7f/cf/3995867b03de059624aa49634d62895eef211f909b322c4a478dcd858bd8/fsrs-6.3.2.tar.gz", hash = "sha256:7fe79947ceb92ca35fdca3dfa511a239be15b317cde63d6643a2da6110844d91", size = 32766 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/00/b9/c815e796480dd22441886f06b23f249a7ff2e3f41fc9bfaa428332e34b49/fsrs-6.3.2-py3-none-any.whl", hash = "sha256:bc55066c821164b1cff6d75b17a3ed8e86cfd45789e3d775cfcb895319ce9ba4", size = 22837 },
 ]
 
 [[package]]
@@ -1654,6 +1670,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/a3/26/b09b8010994eccc3c09092e6b34058f36a460eea2d4c3e8b910c695975a0/typing_inspection-0.4.4.tar.gz", hash = "sha256:547274fa6b0a561ccf549cc9524b999a578e737d015d8709d021f9d0d13bea47", size = 76928 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/67/81/4add07e5172b7ac40d8ed5ff580409a7801a4fe26d529bdd915401dabfbe/typing_inspection-0.4.4-py3-none-any.whl", hash = "sha256:65b8397ba37ccbce054456aaccddfc91e6e3083c92824df348d96ca832f3f147", size = 14750 },
+]
+
+[[package]]
+name = "tzdata"
+version = "2026.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e4/31/3d74fa778a63b98b7374323befcc0be5ab3bd94afd4096a0124e7379152c/tzdata-2026.4.tar.gz", hash = "sha256:f1b8bd365d8d210c55353f4d7f8d6d8561c0ba50d704b700d195a9424bba0d79", size = 199350 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f9/bc/8737e8d54cf51106118039b83f485a4783112fab49ea9d044b234978a46e/tzdata-2026.4-py2.py3-none-any.whl", hash = "sha256:c2169a8b0a7a5e9674da5a135ccdfb2b3e671b333ed9fed17b41f73c34476e81", size = 347494 },
 ]
 
 [[package]]
