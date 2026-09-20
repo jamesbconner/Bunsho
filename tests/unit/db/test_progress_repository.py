@@ -97,6 +97,8 @@ def test_a_review_based_on_an_outdated_state_is_stale_and_leaves_no_log(
         outdated = await repo.get_card(VOCAB)
         assert outdated is not None
         await _review(repo, VOCAB, Grade.GOOD, NOW + timedelta(minutes=11))
+        newer = await repo.get_card(VOCAB)
+        assert newer is not None
         after = SCHEDULER.schedule(outdated.schedule, Grade.GOOD, NOW + timedelta(minutes=12))
         with pytest.raises(StaleReviewError):
             await repo.record_review(
@@ -109,6 +111,10 @@ def test_a_review_based_on_an_outdated_state_is_stale_and_leaves_no_log(
             )
         records = await repo.reviews_between(NOW - timedelta(days=1), NOW + timedelta(days=1))
         assert len(records) == 2  # the rejected review was not logged
+        unchanged = await repo.get_card(VOCAB)
+        assert unchanged is not None
+        assert unchanged.schedule.last_review == NOW + timedelta(minutes=11)
+        assert unchanged.reps == newer.reps
 
     run_with_database(tmp_path, scenario)
 

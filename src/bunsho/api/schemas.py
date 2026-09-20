@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import AwareDatetime, BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 from bunsho import __version__
 from bunsho.models.review import CardDirection, Grade
@@ -119,6 +119,8 @@ class ContentSummaryResponse(BaseModel):
     ``kanji`` counts every kanji row; ``unleveled_kanji`` of them have no JLPT level and are
     not offered as lessons.
     """
+
+    model_config = ConfigDict(json_schema_serialization_defaults_required=True)
 
     built: bool
     kana: int = 0
@@ -260,7 +262,9 @@ class AnswerRequest(BaseModel):
     expected_last_review: AwareDatetime | None = Field(
         description=(
             "The card's `expected_last_review` from `GET /reviews/next`, unchanged (null for "
-            "a new card). A mismatch means the card changed since it was fetched: 409."
+            "a new card). An opaque token: send it back exactly as received, byte for byte, "
+            "and never parse or reformat it. A mismatch means the card changed since it was "
+            "fetched: 409."
         )
     )
     duration_ms: int | None = Field(default=None, ge=0, le=3_600_000)

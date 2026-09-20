@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any, cast
@@ -47,12 +48,27 @@ _REVIEW_ERROR_STATUS: dict[type[ReviewError], int] = {
 }
 
 
+_INTERNAL_ERROR_DETAIL = "internal error"
+
+
 async def _review_error_handler(_request: Request, exc: Exception) -> JSONResponse:
-    """Map review-engine errors to their HTTP status with a string ``detail``."""
+    """Map review-engine errors to their HTTP status with a string ``detail``.
+
+    A ``ReviewError`` subclass without a mapping is a bug: it answers 500 with a fixed
+    ``detail`` instead of its message.
+    """
     status_code = next(
-        (code for kind, code in _REVIEW_ERROR_STATUS.items() if isinstance(exc, kind)), 500
+        (code for kind, code in _REVIEW_ERROR_STATUS.items() if isinstance(exc, kind)), None
     )
+    if status_code is None:
+        return JSONResponse(status_code=500, content={"detail": _INTERNAL_ERROR_DETAIL})
     return JSONResponse(status_code=status_code, content={"detail": str(exc)})
+
+
+async def _unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Answer 500 with a fixed JSON body; the exception is logged, never returned."""
+    logging.getLogger("bunsho").exception("unhandled_error path=%s", request.url.path, exc_info=exc)
+    return JSONResponse(status_code=500, content={"detail": _INTERNAL_ERROR_DETAIL})
 
 
 _WS_MESSAGE_MODELS = (WsAuthMessage, WsReady, WsSnapshot, WsEvent)
@@ -121,6 +137,7 @@ def create_app(config: ServiceConfig, *, overrides: ServiceOverrides | None = No
         )
     app.add_exception_handler(RequestValidationError, _validation_error_handler)
     app.add_exception_handler(ReviewError, _review_error_handler)
+    app.add_exception_handler(Exception, _unhandled_error_handler)
     app.include_router(health.router, prefix=API_PREFIX)
     app.include_router(auth.router, prefix=API_PREFIX)
     app.include_router(admin.router, prefix=API_PREFIX)

@@ -80,3 +80,41 @@ def test_websocket_messages_are_published_in_the_components(client: TestClient) 
 
 def test_the_schema_is_generated_once(client: TestClient) -> None:
     assert _schema(client) == _schema(client)
+
+
+def test_response_models_mark_defaulted_fields_required(client: TestClient) -> None:
+    schemas = _schema(client)["components"]["schemas"]
+    assert {"kana", "kanji", "vocab"} <= set(schemas["TypeCounts"]["required"])
+    assert {
+        "built",
+        "kana",
+        "kanji",
+        "vocab",
+        "unleveled_kanji",
+        "kanji_by_level",
+        "vocab_by_level",
+        "meta",
+    } <= set(schemas["ContentSummaryResponse"]["required"])
+
+    # ReviewSettings is both the PUT body and a response, so FastAPI splits it in two.
+    settings_fields = {
+        "new_card_policy",
+        "new_limits",
+        "target_retention",
+        "rollover_hour",
+        "active_levels",
+        "mastery_threshold",
+    }
+    response_schema = schemas["ReviewSettings-Output"]
+    request_schema = schemas["ReviewSettings-Input"]
+    assert settings_fields <= set(response_schema["required"])
+    assert not set(request_schema.get("required", []))  # a partial PUT still validates
+    assert {"kana", "kanji", "vocab"} <= set(schemas["NewLimits-Output"]["required"])
+    assert not set(schemas["NewLimits-Input"].get("required", []))
+
+
+def test_expected_last_review_is_documented_as_an_opaque_token(client: TestClient) -> None:
+    schemas = _schema(client)["components"]["schemas"]
+    for model in ("AnswerRequest", "CardView"):
+        description = schemas[model]["properties"]["expected_last_review"]["description"]
+        assert "opaque" in description, model

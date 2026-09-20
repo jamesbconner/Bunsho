@@ -100,6 +100,8 @@ def test_a_corrupt_progress_db_gives_an_actionable_startup_error(
     assert str(path) in message
     assert str(service_config.app.data_dir / "backups") in message
     assert "DatabaseError" in message
+    assert "progress.db-wal" in message
+    assert "progress.db-shm" in message
     assert "progress_db_startup_failed" in caplog.text
 
 

@@ -44,3 +44,4 @@ def test_an_unreadable_stored_document_falls_back_to_defaults_with_a_warning(
     with caplog.at_level(logging.WARNING, logger=LOGGER.name):
         run_with_database(tmp_path, scenario)
     assert "review_settings_invalid" in caplog.text
+    assert "rollover_hour" in caplog.text

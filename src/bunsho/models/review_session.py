@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import date
 
-from pydantic import AwareDatetime, BaseModel
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 from bunsho.models.content import Kana, Kanji, Vocab
 from bunsho.models.review import CardDirection, ItemType, SchedState
@@ -13,6 +13,8 @@ from bunsho.models.review import CardDirection, ItemType, SchedState
 
 class TypeCounts(BaseModel):
     """A count per item type."""
+
+    model_config = ConfigDict(json_schema_serialization_defaults_required=True)
 
     kana: int = 0
     kanji: int = 0
@@ -41,7 +43,7 @@ class CardView(BaseModel):
     """A card ready to show: identity, scheduling facts and the content item.
 
     Exactly one of ``kana``, ``kanji`` and ``vocab`` is set, matching ``item_type``. Send
-    ``expected_last_review`` back unchanged when answering.
+    ``expected_last_review`` back exactly as received when answering.
     """
 
     item_id: str
@@ -49,7 +51,13 @@ class CardView(BaseModel):
     item_type: ItemType
     is_new: bool
     state: SchedState
-    expected_last_review: AwareDatetime | None
+    expected_last_review: AwareDatetime | None = Field(
+        description=(
+            "An opaque token (null for a new card): send it back exactly as received, byte for "
+            "byte, in `POST /reviews/answer`. Never parse or reformat it; a client that "
+            "re-serialises the timestamp can lose microseconds and get a permanent 409."
+        )
+    )
     intervals: GradeIntervals
     kana: Kana | None = None
     kanji: Kanji | None = None

@@ -127,8 +127,8 @@ async def build_services(
                 f"progress.db could not be opened or migrated ({type(exc).__name__}). "
                 f"Database: {app_config.progress_db_path}. Backups: {backup_dir}. "
                 "Check that the data folder is writable by the service user and that the file is "
-                "a Bunshō progress database. To restore, stop the service and copy a backup over "
-                "progress.db."
+                "a Bunshō progress database. To restore, stop the service, delete progress.db-wal "
+                "and progress.db-shm next to progress.db, then copy a backup over progress.db."
             ) from exc
         await asyncio.to_thread(remove_stale_temp_files, app_config.content_db_path, logger)
         progress_db = ProgressDatabase(app_config.progress_db_path)

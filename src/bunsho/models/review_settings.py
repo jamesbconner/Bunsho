@@ -28,7 +28,7 @@ class NewCardPolicyName(StrEnum):
 class NewLimits(BaseModel):
     """Daily new-card limits per item type, counted in cards. ``0`` means unlimited."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", json_schema_serialization_defaults_required=True)
 
     kana: int = Field(default=20, ge=0, le=10_000)
     kanji: int = Field(default=15, ge=0, le=10_000)
@@ -48,7 +48,7 @@ class NewLimits(BaseModel):
 class ReviewSettings(BaseModel):
     """Every review setting. ``PUT /settings`` replaces the whole document."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", json_schema_serialization_defaults_required=True)
 
     new_card_policy: NewCardPolicyName = NewCardPolicyName.STRICT_ORDER
     new_limits: NewLimits = Field(default_factory=NewLimits)

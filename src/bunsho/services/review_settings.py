@@ -38,8 +38,11 @@ class ReviewSettingsService:
         try:
             return ReviewSettings.model_validate_json(raw)
         except ValidationError as exc:
+            fields = ",".join(".".join(str(part) for part in e["loc"]) for e in exc.errors())
             self._logger.warning(
-                "review_settings_invalid using=defaults errors=%d", exc.error_count()
+                "review_settings_invalid using=defaults errors=%d fields=%s",
+                exc.error_count(),
+                fields,
             )
             return ReviewSettings()
 
