@@ -1,8 +1,8 @@
 name: CI
 
 # Mirrors the local checks in .claude/CLAUDE.md: ruff, mypy, bandit, pytest with coverage.
-# Frontend checks (tsc -b, eslint, vitest) and the container smoke test arrive with Plan 2
-# and Plan 1C respectively.
+# The `smoke` job builds the Docker image and runs scripts/smoke_test.py against the real deck.
+# Frontend checks (tsc -b, eslint, vitest) arrive with Plan 2.
 
 on:
   push:
@@ -118,3 +118,25 @@ jobs:
           name: dist
           path: dist/
           retention-days: 7
+
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: [test]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --extra dev --locked
+
+      # Builds the image, logs in, builds content from the real deck and jamdict database,
+      # restarts the container and checks the data survived. On failure the script prints the
+      # container logs itself and always tears the stack down (docker compose down -v).
+      - name: Container smoke test (real deck, real jamdict database)
+        run: uv run python scripts/smoke_test.py
