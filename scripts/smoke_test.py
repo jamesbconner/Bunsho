@@ -38,12 +38,17 @@ PORT = int(os.environ.get("BUNSHO_SMOKE_PORT", "18192"))
 BASE = f"http://127.0.0.1:{PORT}/api/v1"
 USERNAME = "smoke"
 EXPECTED_COUNTS = {"vocab": 7734, "kanji": 3088, "kana": 208}
-COMPOSE_UP_TIMEOUT_SECONDS = 900
-COMPOSE_TIMEOUT_SECONDS = 120
+# The script's own timeouts must lose the race against the 25 minute (1500 s) CI job timeout, so
+# its `finally` teardown runs instead of the runner killing the job. Worst case, every stage
+# nearly times out, and the last one does: up 600 + healthy 120 + build 300 + docker healthy 90
+# + restart 60 + healthy 120 = 1290 s, then the failure path adds logs 60 + down 60 = 1410 s
+# (23.5 minutes, 90 s of margin). A normal run takes about one to two minutes.
+COMPOSE_UP_TIMEOUT_SECONDS = 600
+COMPOSE_TIMEOUT_SECONDS = 60
 LOG_TAIL_LINES = 200
-HEALTHY_TIMEOUT_SECONDS = 180
+HEALTHY_TIMEOUT_SECONDS = 120
 DOCKER_HEALTHY_TIMEOUT_SECONDS = 90
-BUILD_TIMEOUT_SECONDS = 600
+BUILD_TIMEOUT_SECONDS = 300
 POLL_SECONDS = 2
 # The login throttle blocks a client after this many failures inside its window.
 THROTTLE_MAX_FAILURES = 5

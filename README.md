@@ -115,7 +115,9 @@ application is MIT).
 - Docker with Compose v2 (the commands below were checked with Docker 29 and Compose v5).
 - The deck in `resources/`: it is committed to the repository, so a clone already has it.
 - An env file with the three required settings. compose refuses to build, start or even print the
-  configuration (`docker compose config`) when the env file is missing.
+  configuration (`docker compose config`) when the env file is missing. When the env file is present,
+  the output of `docker compose config` contains the JWT secret and the password hash in clear: do not
+  paste it into an issue or a chat.
 
 ### Configure
 
@@ -130,6 +132,10 @@ BUNSHO_AUTH__JWT_SECRET=<at least 32 random characters>
 
 The hash contains `$`, so single-quote it in an env file (the quotes are removed by compose). Only if you
 put the hash into a YAML `environment:` block of a compose file do you write each `$` as `$$`.
+
+The single quotes are a Docker Compose `env_file` convention. `docker run --env-file` does **not** strip
+them, so with plain `docker run` write the hash unquoted; otherwise the service exits with status 2 and
+"[auth] password_hash is required and must be an argon2 hash".
 
 The container gets `BUNSHO_SERVER__HOST=0.0.0.0`, `BUNSHO_PATHS__DATA_DIR=/data` and
 `BUNSHO_PATHS__RESOURCES_DIR=/app/resources` from the image, so no path settings are needed. Two
@@ -262,6 +268,10 @@ For a bind mount run `chown -R 10001:10001 <host directory>` on the host instead
 ### Limits and networking
 
 - One replica, one worker: the login throttle and the build task manager live in process memory.
+- Run one instance per data volume. Two instances on the same volume both start: the migration lock
+  protects only the startup migration, and a starting instance removes leftover build temp files
+  (`content.db.<hex>.tmp`), which can break a build running in the other instance. Docker Compose runs a
+  single replica; do not scale it (`docker compose up --scale`, `deploy.replicas`).
 - The container listens on `0.0.0.0` inside its network and compose publishes `8192` on **all** host
   interfaces, so anything on your LAN can reach it. The app does no HTTPS: passwords and tokens cross
   the network in clear text. Either keep it on a trusted network or put a TLS-terminating reverse proxy

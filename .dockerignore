@@ -19,5 +19,8 @@ scripts
 resources
 **/.env
 **/.env.*
+**/node_modules
+frontend/dist
+**/*.tsbuildinfo
 compose.yaml
 Dockerfile

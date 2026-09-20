@@ -4,6 +4,7 @@ ARG PYTHON_VERSION=3.13
 
 # ---- build: resolve and install locked dependencies into a virtualenv ----
 FROM python:${PYTHON_VERSION}-slim-bookworm AS builder
+# uv 0.12.17 is pinned in three places (ci.yml, release.yml, Dockerfile); bump them together.
 COPY --from=ghcr.io/astral-sh/uv:0.12.17 /uv /uvx /bin/
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \

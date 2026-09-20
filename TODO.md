@@ -83,6 +83,26 @@ Image and platform:
 - [ ] `Scheduler` interface + `FSRSScheduler` (py-fsrs), card generation, `ReviewSessionOrchestrator`
 - [ ] Review/stats endpoints; React 18 + Vite + TS frontend (login, first-run build, dashboard, flip + grade review, stats)
 - [ ] Document that content ids are opaque (`vocab:度:ど#2` exists); add an unfiltered `list_vocab()` consumer test
+- [ ] Instance lock for the data folder: one instance per volume (today two instances on one volume both start and
+      the startup temp-file sweep can break the other's running build); pair it with WAL and `PRAGMA foreign_keys=ON`
+      once every card grade writes to `progress.db`
+- [ ] Image: a Node stage (`FROM node AS frontend`), an explicit `COPY --from=frontend` of the built assets, a
+      `StaticFiles` mount in the app, and the read-only root filesystem implications
+- [ ] CI: a `frontend` job (`tsc -b`, eslint, vitest); decide whether `smoke` needs the built frontend
+- [ ] Dependabot: add the `npm` entry for `/frontend` (stubbed in the `.github/dependabot.yml` header comment)
+- [ ] Extend the smoke test: `index.html` is served, a review round-trip; revisit `EXPECTED_COUNTS` if the content
+      schema changes
+- [ ] CORS: open it for the Vite dev origin (development only)
+- [ ] Re-derive `WS_MAX_MESSAGE_BYTES` if review batches use the WebSocket
+- [ ] Single source of truth for the uv pin (0.12.17 is in `ci.yml`, `release.yml` and the `Dockerfile`), for example
+      an `ARG UV_VERSION` shared through a build-arg
+- [ ] Use a separate image tag for the smoke project (`bunsho:smoke`) so it never retags a developer's `bunsho:local`
+- [ ] First real run of `release.yml` (it has never run), and check that Dependabot's docker ecosystem can bump the
+      two Dockerfile image references
+- [ ] A corrupt `progress.db` makes the container restart loop print a full traceback on every attempt; log only the
+      `StartupError` message
+- [ ] Coverage gaps below 90 % per file: `db/migrations/env.py` and the `login_throttle` prune branch (the `0001`
+      `downgrade()` test is listed under Data)
 
 ## Later sub-projects
 

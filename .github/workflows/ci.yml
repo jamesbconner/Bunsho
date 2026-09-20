@@ -20,6 +20,7 @@ permissions:
 env:
   # Japanese text in test output must not depend on the runner's console code page.
   PYTHONUTF8: "1"
+  # uv 0.12.17 is pinned in three places (ci.yml, release.yml, Dockerfile); bump them together.
   UV_VERSION: "0.12.17"
 
 jobs:
