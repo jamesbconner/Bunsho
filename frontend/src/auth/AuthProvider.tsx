@@ -1,3 +1,4 @@
+import { notifications } from '@mantine/notifications';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
@@ -41,6 +42,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session.onExpired(() => {
         queryClient.clear();
         setSessionExpired(true);
+        // The login page shows the lasting "Signed out" alert; this toast is the moment-of-expiry
+        // cue (also on another page), worded differently so the two never repeat each other.
+        notifications.show({
+          color: 'yellow',
+          title: 'Session ended',
+          message: 'Log in again to continue.',
+        });
         setStatus('anonymous');
       }),
     [queryClient],

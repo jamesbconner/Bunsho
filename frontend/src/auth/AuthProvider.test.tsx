@@ -127,5 +127,6 @@ describe('AuthProvider sessions', () => {
       expect(screen.getByTestId('status')).toHaveTextContent('anonymous');
     });
     expect(screen.getByTestId('expired')).toHaveTextContent('true');
+    expect(await screen.findByText('Session ended')).toBeInTheDocument();
   });
 });
