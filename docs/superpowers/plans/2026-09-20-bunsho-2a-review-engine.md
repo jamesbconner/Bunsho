@@ -5329,7 +5329,7 @@ Expected: 40 clean loops. Any failure is a real race (instance lock, WAL writer 
 
 - [ ] **Step 4: Whole-branch review**
 
-Dispatch the final review with the `superpowers:requesting-code-review` skill (opus, whole branch against `main`, given the spec, this plan and "Refinements to the spec"). Fix Critical and Important findings with focused commits (`fix: ...`); record deferred Minor findings in `TODO.md`. Ask the reviewer to check specifically: the compare-and-set in `record_review`, that `next_card` never writes, that the daily allowance cannot be exceeded by concurrent answers, timezone handling of `study_date` near the rollover and DST, and that no route leaks paths or exception text.
+Dispatch the final review with the `superpowers:requesting-code-review` skill (a Sonnet review, not Opus: it is enough for this level of work; whole branch against `main`, given the spec, this plan and "Refinements to the spec"). Fix Critical and Important findings with focused commits (`fix: ...`); record deferred Minor findings in `TODO.md`. Ask the reviewer to check specifically: the compare-and-set in `record_review`, that `next_card` never writes, that the daily allowance cannot be exceeded by concurrent answers, timezone handling of `study_date` near the rollover and DST, and that no route leaks paths or exception text.
 
 - [ ] **Step 5: Push and prepare the PR for James**
 
