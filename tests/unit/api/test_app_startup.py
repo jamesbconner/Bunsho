@@ -40,6 +40,24 @@ def test_cors_is_only_enabled_for_configured_origins(tmp_path: Path) -> None:
         assert "access-control-allow-origin" not in other.headers
 
 
+def test_cors_exposes_retry_after_so_browsers_can_read_the_login_throttle(tmp_path: Path) -> None:
+    origin = "http://localhost:5173"
+    config = make_service_config(tmp_path, cors_origins=(origin,))
+    login = "/api/v1/auth/login"
+    wrong = {"username": "james", "password": "nope"}
+    with TestClient(create_app(config)) as client:
+        simple = client.get("/api/v1/health", headers={"Origin": origin})
+        assert "Retry-After" in simple.headers["access-control-expose-headers"]
+
+        for _ in range(5):
+            assert client.post(login, json=wrong, headers={"Origin": origin}).status_code == 401
+        blocked = client.post(login, json=wrong, headers={"Origin": origin})
+    assert blocked.status_code == 429
+    assert "retry-after" in blocked.headers
+    exposed = blocked.headers["access-control-expose-headers"]
+    assert "Retry-After" in [h.strip() for h in exposed.split(",")]
+
+
 def test_no_cors_headers_without_configured_origins(client: TestClient) -> None:
     response = client.get("/api/v1/health", headers={"Origin": "http://localhost:5173"})
     assert "access-control-allow-origin" not in response.headers

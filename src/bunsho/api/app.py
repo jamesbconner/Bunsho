@@ -63,6 +63,7 @@ def create_app(config: ServiceConfig, *, overrides: ServiceOverrides | None = No
             allow_origins=list(config.server.cors_origins),
             allow_methods=["GET", "POST"],
             allow_headers=["Authorization", "Content-Type"],
+            expose_headers=["Retry-After"],  # lets browser code read the login throttle's wait
         )
     app.add_exception_handler(RequestValidationError, _validation_error_handler)
     app.include_router(health.router, prefix=API_PREFIX)
