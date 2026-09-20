@@ -8,6 +8,7 @@ import math
 from fastapi import APIRouter, HTTPException, Request, status
 
 from bunsho.api.deps import ServicesDep
+from bunsho.api.responses import TOO_MANY_REQUESTS, UNAUTHORIZED
 from bunsho.api.schemas import LoginRequest, RefreshRequest, TokenResponse
 from bunsho.services.auth import AuthError, TokenPair
 
@@ -23,7 +24,12 @@ def _token_response(tokens: TokenPair) -> TokenResponse:
     )
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post(
+    "/login",
+    response_model=TokenResponse,
+    operation_id="login",
+    responses={**UNAUTHORIZED, **TOO_MANY_REQUESTS},
+)
 async def login(body: LoginRequest, request: Request, services: ServicesDep) -> TokenResponse:
     """Exchange the configured username and password for tokens.
 
@@ -53,7 +59,9 @@ async def login(body: LoginRequest, request: Request, services: ServicesDep) -> 
     return _token_response(services.auth.issue_tokens(services.config.auth.username))
 
 
-@router.post("/refresh", response_model=TokenResponse)
+@router.post(
+    "/refresh", response_model=TokenResponse, operation_id="refreshToken", responses=UNAUTHORIZED
+)
 async def refresh(body: RefreshRequest, services: ServicesDep) -> TokenResponse:
     """Exchange a refresh token for a new token pair.
 

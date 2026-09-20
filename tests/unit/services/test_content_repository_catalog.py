@@ -57,3 +57,10 @@ def test_get_kana_finds_a_kana_by_id(tmp_path: Path) -> None:
     assert found is not None
     assert found.char == "あ"
     assert repo.get_kana("kana:hira:missing") is None
+
+
+def test_level_counts_cover_every_level_and_count_unleveled_kanji(tmp_path: Path) -> None:
+    counts = _repo(tmp_path).level_counts()
+    assert counts.vocab_by_level == {"N5": 2, "N4": 1, "N3": 0, "N2": 0, "N1": 0}
+    assert counts.kanji_by_level == {"N5": 1, "N4": 1, "N3": 0, "N2": 0, "N1": 0}
+    assert counts.unleveled_kanji == 1

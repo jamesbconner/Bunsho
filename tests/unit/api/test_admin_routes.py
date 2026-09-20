@@ -39,6 +39,9 @@ def test_real_build_finishes_and_makes_content_visible(
         "kana": 0,
         "kanji": 0,
         "vocab": 0,
+        "unleveled_kanji": 0,
+        "kanji_by_level": {},
+        "vocab_by_level": {},
         "meta": {},
     }
     started = stub_client.post(BUILD, json={}, headers=auth_headers)
@@ -114,7 +117,16 @@ def test_unreadable_content_db_summarises_as_not_built(
     with caplog.at_level(logging.WARNING, logger="bunsho"):
         response = stub_client.get(summary_url, headers=auth_headers)
     assert response.status_code == 200
-    assert response.json() == {"built": False, "kana": 0, "kanji": 0, "vocab": 0, "meta": {}}
+    assert response.json() == {
+        "built": False,
+        "kana": 0,
+        "kanji": 0,
+        "vocab": 0,
+        "unleveled_kanji": 0,
+        "kanji_by_level": {},
+        "vocab_by_level": {},
+        "meta": {},
+    }
     assert str(db_path) not in response.text
     assert "sqlite" not in response.text.lower()
     assert any("content_summary_unreadable" in record.getMessage() for record in caplog.records)

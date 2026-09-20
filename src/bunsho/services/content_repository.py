@@ -172,6 +172,15 @@ class ContentCounts:
     vocab: int
 
 
+@dataclass(frozen=True, slots=True)
+class LevelCounts:
+    """Row counts per JLPT level (``"N5"`` first, every level present)."""
+
+    vocab_by_level: dict[str, int]
+    kanji_by_level: dict[str, int]
+    unleveled_kanji: int
+
+
 class ContentRepository:
     """Read-only queries over ``content.db``."""
 
@@ -204,6 +213,23 @@ class ContentRepository:
                 kanji=con.execute("SELECT COUNT(*) FROM kanji").fetchone()[0],
                 vocab=con.execute("SELECT COUNT(*) FROM vocab").fetchone()[0],
             )
+
+    def level_counts(self) -> LevelCounts:
+        """Return vocab and kanji counts per JLPT level plus the unleveled kanji count."""
+        with self._connect() as con:
+            vocab = dict(con.execute("SELECT level, COUNT(*) FROM vocab GROUP BY level").fetchall())
+            kanji = dict(
+                con.execute(
+                    "SELECT level, COUNT(*) FROM kanji WHERE level IS NOT NULL GROUP BY level"
+                ).fetchall()
+            )
+            unleveled = con.execute("SELECT COUNT(*) FROM kanji WHERE level IS NULL").fetchone()[0]
+        order = JlptLevel.study_order()
+        return LevelCounts(
+            vocab_by_level={level.label: vocab.get(int(level), 0) for level in order},
+            kanji_by_level={level.label: kanji.get(int(level), 0) for level in order},
+            unleveled_kanji=unleveled,
+        )
 
     def meta(self) -> dict[str, str]:
         """Return build metadata."""

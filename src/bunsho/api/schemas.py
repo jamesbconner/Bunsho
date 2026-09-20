@@ -114,12 +114,19 @@ class BuildStatusResponse(BaseModel):
 
 
 class ContentSummaryResponse(BaseModel):
-    """Response of ``GET /content/summary``."""
+    """Response of ``GET /content/summary``.
+
+    ``kanji`` counts every kanji row; ``unleveled_kanji`` of them have no JLPT level and are
+    not offered as lessons.
+    """
 
     built: bool
     kana: int = 0
     kanji: int = 0
     vocab: int = 0
+    unleveled_kanji: int = 0
+    kanji_by_level: dict[str, int] = Field(default_factory=dict)
+    vocab_by_level: dict[str, int] = Field(default_factory=dict)
     meta: dict[str, str] = Field(default_factory=dict)
 
 
