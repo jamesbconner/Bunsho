@@ -75,3 +75,19 @@ def test_cors_origins_are_parsed_and_must_be_explicit() -> None:
 def test_app_config_errors_are_included() -> None:
     cfg = _valid(paths={"deck_sha256": "abc"})
     assert any("deck_sha256" in e for e in validate_service_config(cfg))
+
+
+@pytest.mark.parametrize("value", ["127.0.0.1", "10.0.0.0/8", "127.0.0.1, 172.16.0.0/12", "::1"])
+def test_trusted_proxies_accept_addresses_and_networks(value: str) -> None:
+    config = load_service_config(_valid(server={"trusted_proxies": value}))
+    assert config.server.trusted_proxies == tuple(part.strip() for part in value.split(","))
+
+
+def test_trusted_proxies_default_to_empty() -> None:
+    assert load_service_config(_valid()).server.trusted_proxies == ()
+
+
+@pytest.mark.parametrize("value", ["*", "not-an-ip", "10.0.0.0/33", "127.0.0.1, *"])
+def test_trusted_proxies_reject_wildcards_and_garbage(value: str) -> None:
+    errors = validate_service_config(_valid(server={"trusted_proxies": value}))
+    assert any("trusted_proxies" in error for error in errors)

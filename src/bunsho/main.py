@@ -20,6 +20,13 @@ from bunsho.logging_setup import configure_logging
 CONFIG_FILE_ENV = "BUNSHO_CONFIG_FILE"
 ENV_FILE_ENV = "BUNSHO_ENV_FILE"
 
+GRACEFUL_SHUTDOWN_SECONDS = 35
+"""uvicorn's shutdown budget: a little more than ``BuildTaskManager.aclose``'s 30 s wait."""
+
+WS_MAX_MESSAGE_BYTES = 65536
+"""Largest WebSocket frame accepted. The auth message is at most 8,192 characters (32 KiB of
+UTF-8), so uvicorn's 16 MiB default only widens the unauthenticated attack surface."""
+
 
 def build_service_config(environ: Mapping[str, str] | None = None) -> ServiceConfig:
     """Load and validate the service configuration.
@@ -64,9 +71,10 @@ def create_app_from_env() -> FastAPI:
 def build_server_config(app: FastAPI, config: ServiceConfig) -> uvicorn.Config:
     """Build the uvicorn configuration used by the launcher.
 
-    Proxy headers are deliberately not trusted (see ``proxy_headers`` below): the login
-    throttle keys on the TCP peer address, and honouring ``X-Forwarded-For`` would let a
-    client pick its own throttle bucket.
+    Proxy headers (``X-Forwarded-For``) are honoured only from the addresses in
+    ``server.trusted_proxies``; with none configured they are ignored. The login throttle
+    keys on the client address, so trusting a peer makes that peer's headers authoritative:
+    list only real proxies and never pass ``*``.
 
     Args:
         app: The application to serve.
@@ -75,12 +83,16 @@ def build_server_config(app: FastAPI, config: ServiceConfig) -> uvicorn.Config:
     Returns:
         A uvicorn ``Config`` bound to ``server.host`` and ``server.port``.
     """
+    proxies = config.server.trusted_proxies
     return uvicorn.Config(
         app,
         host=config.server.host,
         port=config.server.port,
         log_config=None,
-        proxy_headers=False,
+        proxy_headers=bool(proxies),
+        forwarded_allow_ips=",".join(proxies) if proxies else None,
+        timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_SECONDS,
+        ws_max_size=WS_MAX_MESSAGE_BYTES,
     )
 
 
