@@ -1,6 +1,6 @@
 """Smoke-test the Bunshō container end to end.
 
-The scenario is: build, start, log in, build content, review a card, restart.
+The scenario is: build, start, serve the UI, log in, build content, review a card, restart.
 
 Usage: ``uv run python scripts/smoke_test.py``. Needs Docker with Compose v2 and the real deck in
 ``resources/``. Exits 1 on any failure (after printing the container logs), 2 when Docker is not
@@ -21,6 +21,7 @@ from __future__ import annotations
 import http.client
 import json
 import os
+import re
 import secrets
 import shutil
 import subprocess
@@ -37,7 +38,8 @@ from pwdlib import PasswordHash
 ROOT = Path(__file__).resolve().parent.parent
 PROJECT = "bunsho-smoke"
 PORT = int(os.environ.get("BUNSHO_SMOKE_PORT", "18192"))
-BASE = f"http://127.0.0.1:{PORT}/api/v1"
+ORIGIN = f"http://127.0.0.1:{PORT}"
+BASE = f"{ORIGIN}/api/v1"
 USERNAME = "smoke"
 EXPECTED_COUNTS = {"vocab": 7734, "kanji": 3088, "kana": 208}
 # The script's own timeouts must lose the race against the 25 minute (1500 s) CI job timeout, so
@@ -111,6 +113,37 @@ def request(
             return response.status, json.loads(response.read() or b"null")
     except urllib.error.HTTPError as exc:
         return exc.code, json.loads(exc.read() or b"null")
+
+
+def http_get(path: str) -> tuple[int, dict[str, str], bytes]:
+    """GET ``path`` on the server root (outside /api/v1) without raising on HTTP errors."""
+    req = urllib.request.Request(ORIGIN + path, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=15) as response:
+            headers = {name.lower(): value for name, value in response.headers.items()}
+            return response.status, headers, response.read()
+    except urllib.error.HTTPError as exc:
+        return exc.code, {name.lower(): value for name, value in exc.headers.items()}, exc.read()
+
+
+def expect_frontend_served() -> None:
+    """The container serves the built UI: shell, deep links, cache headers and JSON API 404s."""
+    status, headers, body = http_get("/")
+    expect(status == 200, f"GET / returned {status}, not 200")
+    expect("text/html" in headers.get("content-type", ""), "GET / is not HTML")
+    expect(b'<div id="root">' in body, "GET / did not return the app shell")
+    expect(headers.get("cache-control") == "no-cache", "the app shell must not be cached")
+    status, _, deep_link = http_get("/build")
+    expect(status == 200 and deep_link == body, "a client-side route did not return the shell")
+    script = re.search(rb'/assets/[^"\']+\.js', body)
+    expect(script is not None, "index.html references no hashed script")
+    status, headers, _ = http_get(script.group(0).decode())
+    expect(status == 200, f"the hashed script returned {status}")
+    expect("immutable" in headers.get("cache-control", ""), "hashed assets must be immutable")
+    expect(http_get("/assets/does-not-exist.js")[0] == 404, "a missing asset must be a 404")
+    status, headers, _ = http_get("/api/v1/does-not-exist")
+    expect(status == 404, f"an unknown API path returned {status}, not 404")
+    expect("application/json" in headers.get("content-type", ""), "an API 404 must be JSON")
 
 
 def expect(condition: bool, message: str) -> None:
@@ -259,6 +292,8 @@ def run(env_file: Path, password: str) -> None:
     """Drive the whole scenario against a running stack."""
     log("waiting for the service to answer")
     wait_healthy()
+    log("checking that the container serves the web UI")
+    expect_frontend_served()
     expect_health("degraded")  # first run: no content.db yet
     expect(request("GET", "/content/summary")[0] == 401, "summary must require a token")
     status, _ = request("POST", "/auth/login", body={"username": USERNAME, "password": "wrong"})
