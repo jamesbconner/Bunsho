@@ -145,6 +145,22 @@ describe('BuildStream', () => {
     expect(lastState(states)).toEqual({ kind: 'disconnected' });
   });
 
+  it('a connection that became ready earns a new authentication retry', async () => {
+    const { stream, sockets, refreshAuth } = harness();
+    stream.start();
+    await flush();
+    last(sockets).serverClose(1008);
+    await flush();
+    expect(refreshAuth).toHaveBeenCalledTimes(1);
+    const socket = last(sockets);
+    socket.open();
+    socket.receive(READY); // the refreshed session worked
+    socket.serverClose(1008); // the session expired again much later
+    await flush();
+    expect(refreshAuth).toHaveBeenCalledTimes(2);
+    expect(sockets).toHaveLength(3);
+  });
+
   it('gives up when the session cannot be refreshed', async () => {
     const refreshAuth = vi.fn(() => Promise.resolve(false));
     const { stream, sockets, states } = harness({ refreshAuth });

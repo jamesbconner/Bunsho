@@ -93,4 +93,55 @@ describe('applyMessage', () => {
     expect(cached?.state).toBe('failed');
     expect(cached?.error).toBe('the deck is missing');
   });
+
+  describe('a snapshot after a reconnect', () => {
+    const dependents = [queryKeys.latestBuild, queryKeys.contentSummary, queryKeys.configCheck];
+
+    it('refreshes the dependents when the build we saw running has finished meanwhile', () => {
+      queryClient.setQueryData(queryKeys.latestBuild, makeBuildStatus());
+      const task = makeBuildStatus({ state: 'succeeded' });
+      applyMessage(queryClient, { type: 'snapshot', task });
+      expect(queryClient.getQueryData(queryKeys.latestBuild)).toEqual(task);
+      expect(invalidatedKeys()).toEqual(dependents);
+    });
+
+    it('refreshes the dependents when a newer build has finished meanwhile', () => {
+      queryClient.setQueryData(
+        queryKeys.latestBuild,
+        makeBuildStatus({ task_id: 'older', state: 'succeeded' }),
+      );
+      applyMessage(queryClient, {
+        type: 'snapshot',
+        task: makeBuildStatus({ task_id: 'newer', state: 'failed' }),
+      });
+      expect(invalidatedKeys()).toEqual(dependents);
+    });
+
+    it('does not invalidate on the first connection, whatever the build state', () => {
+      applyMessage(queryClient, {
+        type: 'snapshot',
+        task: makeBuildStatus({ state: 'succeeded' }),
+      });
+      expect(invalidate).not.toHaveBeenCalled();
+    });
+
+    it('does not invalidate again for a finished build that is already cached', () => {
+      const task = makeBuildStatus({ state: 'succeeded' });
+      queryClient.setQueryData(queryKeys.latestBuild, task);
+      applyMessage(queryClient, { type: 'snapshot', task });
+      expect(invalidate).not.toHaveBeenCalled();
+    });
+
+    it('does not invalidate while the build is still running', () => {
+      queryClient.setQueryData(queryKeys.latestBuild, makeBuildStatus());
+      applyMessage(queryClient, { type: 'snapshot', task: makeBuildStatus() });
+      expect(invalidate).not.toHaveBeenCalled();
+    });
+  });
+
+  it('a repeated end event for a build already cached as finished invalidates nothing', () => {
+    queryClient.setQueryData(queryKeys.latestBuild, makeBuildStatus({ state: 'succeeded' }));
+    applyMessage(queryClient, event({ kind: 'state', state: 'succeeded', progress: null }));
+    expect(invalidate).not.toHaveBeenCalled();
+  });
 });
