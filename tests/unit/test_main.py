@@ -1,4 +1,5 @@
 import dataclasses
+import inspect
 import json
 import socket
 import threading
@@ -13,6 +14,7 @@ import uvicorn
 from fastapi.testclient import TestClient
 
 from bunsho.api.app import create_app
+from bunsho.api.routers.ws import MAX_AUTH_MESSAGE_CHARS
 from bunsho.config.normalizer import ConfigError
 from bunsho.main import (
     GRACEFUL_SHUTDOWN_SECONDS,
@@ -22,6 +24,7 @@ from bunsho.main import (
     create_app_from_env,
     main,
 )
+from bunsho.orchestration.build_tasks import BuildTaskManager
 from tests.base import JWT_SECRET, PASSWORD, make_auth_settings, make_service_config
 
 
@@ -111,6 +114,16 @@ def test_the_launcher_trusts_only_the_configured_proxies(tmp_path: Path) -> None
     assert server_config.forwarded_allow_ips == "10.0.0.0/8,::1"
 
 
+def test_the_frame_limit_fits_the_largest_auth_message() -> None:
+    """Up to 4 UTF-8 bytes per character, plus 512 bytes for the JSON wrapper."""
+    assert MAX_AUTH_MESSAGE_CHARS * 4 + 512 <= WS_MAX_MESSAGE_BYTES
+
+
+def test_the_shutdown_budget_exceeds_the_build_task_wait() -> None:
+    build_wait = inspect.signature(BuildTaskManager.aclose).parameters["timeout"].default
+    assert build_wait < GRACEFUL_SHUTDOWN_SECONDS
+
+
 def _free_port() -> int:
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
@@ -183,6 +196,13 @@ def test_a_trusted_proxy_gives_each_forwarded_client_its_own_throttle_bucket(
     """Trusting a proxy makes ``X-Forwarded-For`` authoritative: name only real proxies."""
     statuses = [_login_status(live_server, f"203.0.113.{n}") for n in range(1, 9)]
     assert statuses == [401] * 8
+
+
+@pytest.mark.parametrize("live_server", [("10.0.0.0/8",)], indirect=True)
+def test_a_proxy_list_that_excludes_the_peer_ignores_forwarded_for(live_server: int) -> None:
+    statuses = [_login_status(live_server, f"203.0.113.{n}") for n in range(1, 9)]
+    assert statuses[:5] == [401] * 5
+    assert 429 in statuses[5:]
 
 
 @TRUSTED_LOOPBACK
