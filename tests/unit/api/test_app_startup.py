@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import sqlite3
 from contextlib import closing
 from pathlib import Path
@@ -11,6 +12,7 @@ from bunsho import __version__
 from bunsho.api.app import create_app
 from bunsho.api.services import StartupError, build_services
 from bunsho.config.service import ServiceConfig
+from bunsho.services.content_repository import ContentWriter
 from tests.base import make_service_config
 
 
@@ -103,3 +105,61 @@ def test_stale_build_temp_files_are_swept_at_startup(service_config: ServiceConf
 
     asyncio.run(scenario())
     assert not stale.exists()
+
+
+def test_a_second_instance_on_the_same_data_folder_is_refused(
+    service_config: ServiceConfig,
+) -> None:
+    async def scenario() -> None:
+        first = await build_services(service_config)
+        try:
+            with pytest.raises(StartupError, match="instance"):
+                await build_services(service_config)
+        finally:
+            await first.aclose()
+        second = await build_services(service_config)  # the lock was released by aclose
+        await second.aclose()
+
+    asyncio.run(scenario())
+
+
+def test_a_failed_startup_releases_the_instance_lock(service_config: ServiceConfig) -> None:
+    from bunsho.db.instance_lock import InstanceLock
+
+    path = service_config.app.progress_db_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"not a database" * 100)
+    with pytest.raises(StartupError):
+        asyncio.run(build_services(service_config))
+    probe = InstanceLock(service_config.app.data_dir)
+    probe.acquire()  # would raise InstanceLockedError if the failed start kept the lock
+    probe.release()
+
+
+def test_an_unusable_data_folder_gives_an_actionable_startup_error(
+    service_config: ServiceConfig,
+) -> None:
+    service_config.app.data_dir.parent.mkdir(parents=True, exist_ok=True)
+    service_config.app.data_dir.write_text("a file, not a folder")
+    with pytest.raises(StartupError, match="instance lock"):
+        asyncio.run(build_services(service_config))
+
+
+def test_startup_logs_a_content_schema_mismatch_but_still_starts(
+    service_config: ServiceConfig, caplog: pytest.LogCaptureFixture
+) -> None:
+    ContentWriter().write(
+        service_config.app.content_db_path,
+        kana=[],
+        kanji=[],
+        vocab=[],
+        meta={"schema_version": "1"},
+    )
+
+    async def scenario() -> None:
+        services = await build_services(service_config)
+        await services.aclose()
+
+    with caplog.at_level(logging.ERROR, logger="bunsho"):
+        asyncio.run(scenario())
+    assert "content_schema_check_failed" in caplog.text
