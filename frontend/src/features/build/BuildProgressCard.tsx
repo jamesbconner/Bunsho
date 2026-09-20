@@ -3,12 +3,7 @@ import { Alert, Badge, Group, Paper, Progress, Stack, Text, Title } from '@manti
 import type { BuildStatus } from '../../api/endpoints';
 import { BuildReportTable } from './BuildReportTable';
 import { formatCount } from './format';
-
-const STAGE_LABELS: Record<string, string> = {
-  import_deck: 'Reading the vocabulary deck',
-  enrich_kanji: 'Looking up kanji details',
-  write: 'Writing the content database',
-};
+import { stageLabel } from './status';
 
 const STATE_BADGES: Record<BuildStatus['state'], { color: string; label: string }> = {
   running: { color: 'blue', label: 'Running' },
@@ -24,7 +19,7 @@ export function BuildProgressCard({ task }: { task: BuildStatus }) {
     progress !== null && progress.total > 0
       ? Math.round((progress.current / progress.total) * 100)
       : 0;
-  const stage = progress === null ? 'Starting' : (STAGE_LABELS[progress.stage] ?? progress.stage);
+  const stage = progress === null ? 'Starting' : stageLabel(progress.stage);
 
   return (
     <Paper withBorder p="md">
@@ -33,7 +28,7 @@ export function BuildProgressCard({ task }: { task: BuildStatus }) {
         <Badge color={badge.color}>{badge.label}</Badge>
       </Group>
       {task.state === 'running' && (
-        <Stack gap="xs" role="status" aria-live="polite">
+        <Stack gap="xs">
           <Text size="sm">
             {stage}
             {progress !== null && progress.total > 1
@@ -44,7 +39,7 @@ export function BuildProgressCard({ task }: { task: BuildStatus }) {
         </Stack>
       )}
       {task.state === 'failed' && (
-        <Alert color="red" title="The build failed">
+        <Alert color="red" title="The build failed" role="none">
           {task.error ?? 'No details were reported.'}
         </Alert>
       )}

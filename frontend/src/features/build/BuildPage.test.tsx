@@ -1,9 +1,11 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
+import { type QueryClient } from '@tanstack/react-query';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { BuildStatus } from '../../api/endpoints';
+import { queryKeys } from '../../api/queries';
 import { session } from '../../auth/session';
 import { makeBuildStatus, makeReport } from '../../test/fixtures';
 import { renderWithProviders } from '../../test/render';
@@ -58,6 +60,13 @@ function serve({ built = false, latest = null, checks = ALL_OK }: Scenario = {})
     }),
   );
   return posted;
+}
+
+/** Wait until the latest-build query has answered, so a test can then set what the stream would. */
+async function latestBuildLoaded(queryClient: QueryClient) {
+  await waitFor(() => {
+    expect(queryClient.getQueryState(queryKeys.latestBuild)?.status).toBe('success');
+  });
 }
 
 describe('BuildPage', () => {
@@ -130,13 +139,17 @@ describe('BuildPage', () => {
     serve({ built: false });
     server.use(
       http.post(BUILD, () =>
-        HttpResponse.json({ detail: 'a build is already running' }, { status: 409 }),
+        HttpResponse.json(
+          { detail: 'build 5f0c1e5e-6c47-4a51-9f3e-0d2a8f9a7b11 is already running' },
+          { status: 409 },
+        ),
       ),
     );
     renderWithProviders(<BuildPage />);
     await userEvent.click(await screen.findByRole('button', { name: 'Build content' }));
-    expect(await screen.findByText('a build is already running')).toBeInTheDocument();
+    expect(await screen.findByText('A build is already running.')).toBeInTheDocument();
     expect(screen.getByText('Could not start the build')).toBeInTheDocument();
+    expect(screen.queryByText(/5f0c1e5e/)).not.toBeInTheDocument();
   });
 
   it('shows the progress of a build that is already running', async () => {
@@ -145,7 +158,9 @@ describe('BuildPage', () => {
       latest: makeBuildStatus({ progress: { stage: 'enrich_kanji', current: 1200, total: 3088 } }),
     });
     renderWithProviders(<BuildPage />);
-    expect(await screen.findByText(/Looking up kanji details/)).toHaveTextContent('1,200 of 3,088');
+    expect(await screen.findByText(/Looking up kanji details \(/)).toHaveTextContent(
+      '1,200 of 3,088',
+    );
     expect(screen.getByRole('button', { name: 'Rebuild content' })).toBeDisabled();
   });
 
@@ -169,6 +184,79 @@ describe('BuildPage', () => {
     expect(within(table).getByText('3,053')).toBeInTheDocument(); // N1 vocabulary
     expect(screen.getByText(/7,734 vocabulary items/)).toBeInTheDocument();
     expect(screen.getByText(/Finished in 31\.4 seconds/)).toBeInTheDocument();
+  });
+
+  it('keeps other start failures on the shared readable message', async () => {
+    serve({ built: false });
+    server.use(http.post(BUILD, () => HttpResponse.error()));
+    renderWithProviders(<BuildPage />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Build content' }));
+    expect(await screen.findByText(/Can't reach the server/)).toBeInTheDocument();
+  });
+
+  it('announces the build state in one live region that is always on the page', async () => {
+    serve({ built: true });
+    const { queryClient } = renderWithProviders(<BuildPage />);
+    await latestBuildLoaded(queryClient);
+    const status = screen.getByRole('status');
+    expect(status).toHaveAttribute('aria-live', 'polite');
+    expect(status).toBeEmptyDOMElement();
+
+    act(() => {
+      queryClient.setQueryData(queryKeys.latestBuild, makeBuildStatus());
+    });
+    await waitFor(() => {
+      expect(status).toHaveTextContent('Build running: Reading the vocabulary deck');
+    });
+    expect(status).not.toHaveTextContent('of');
+
+    act(() => {
+      queryClient.setQueryData(
+        queryKeys.latestBuild,
+        makeBuildStatus({ state: 'succeeded', progress: null, report: makeReport() }),
+      );
+    });
+    expect(screen.getByRole('status')).toBe(status);
+    await waitFor(() => {
+      expect(status).toHaveTextContent('Build finished');
+    });
+  });
+
+  it('announces a failure once, with its message, in the same live region', async () => {
+    serve({ built: true });
+    const { queryClient } = renderWithProviders(<BuildPage />);
+    await latestBuildLoaded(queryClient);
+    const status = screen.getByRole('status');
+    act(() => {
+      queryClient.setQueryData(
+        queryKeys.latestBuild,
+        makeBuildStatus({ state: 'failed', progress: null, error: 'the deck is missing' }),
+      );
+    });
+    await waitFor(() => {
+      expect(status).toHaveTextContent('Build failed: the deck is missing');
+    });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('announces a dry run as such', async () => {
+    serve({ built: true });
+    const { queryClient } = renderWithProviders(<BuildPage />);
+    await latestBuildLoaded(queryClient);
+    act(() => {
+      queryClient.setQueryData(
+        queryKeys.latestBuild,
+        makeBuildStatus({
+          state: 'succeeded',
+          dry_run: true,
+          progress: null,
+          report: makeReport(),
+        }),
+      );
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Dry run finished');
+    });
   });
 
   it('marks a dry-run report as such', async () => {

@@ -1,15 +1,26 @@
-import { Alert, Button, Group, Modal, Stack, Switch, Text, Title } from '@mantine/core';
+import {
+  Alert,
+  Button,
+  Group,
+  Modal,
+  Stack,
+  Switch,
+  Text,
+  Title,
+  VisuallyHidden,
+} from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
-import { messageFor } from '../../api/errors';
 import { endpoints } from '../../api/endpoints';
 import { queryKeys, useContentSummary, useLatestBuild } from '../../api/queries';
 import { useConnectionState } from '../../realtime/realtimeContext';
 import { BuildProgressCard } from './BuildProgressCard';
 import { EnvironmentChecks } from './EnvironmentChecks';
+import { startFailureMessage } from './startFailure';
+import { announcementFor } from './status';
 
 /** Start a content build (or a dry run) and follow it live. */
 export function BuildPage() {
@@ -29,7 +40,7 @@ export function BuildPage() {
       notifications.show({
         color: 'red',
         title: 'Could not start the build',
-        message: messageFor(error),
+        message: startFailureMessage(error),
       });
     },
   });
@@ -70,6 +81,10 @@ export function BuildPage() {
           disabled={running}
         />
       </Group>
+      {/* Always mounted, so a screen reader hears the state change (running, finished, failed). */}
+      <VisuallyHidden role="status" aria-live="polite" aria-atomic>
+        {announcementFor(latest.data)}
+      </VisuallyHidden>
       {latest.data ? <BuildProgressCard task={latest.data} /> : null}
 
       <Modal opened={confirming} onClose={cancelConfirm} title="Rebuild content?" centered>
