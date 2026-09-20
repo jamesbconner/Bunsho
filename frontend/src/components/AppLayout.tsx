@@ -1,5 +1,5 @@
-import { AppShell, Burger, Button, Group, NavLink, Title } from '@mantine/core';
-import { useDisclosure } from '@mantine/hooks';
+import { AppShell, Burger, Button, Group, NavLink, Stack, Text, Title } from '@mantine/core';
+import { useDisclosure, useId } from '@mantine/hooks';
 import { Link, Outlet, useLocation } from 'react-router';
 
 import { useAuth } from '../auth/authContext';
@@ -17,6 +17,7 @@ export function AppLayout() {
   const [opened, { toggle, close }] = useDisclosure(false);
   const { logout } = useAuth();
   const { pathname } = useLocation();
+  const logoutNoteId = useId();
 
   return (
     <AppShell
@@ -41,27 +42,33 @@ export function AppLayout() {
           <Group gap="xs" wrap="nowrap">
             <ConnectionBadge />
             <ColorSchemeToggle />
-            <Button
-              variant="subtle"
-              onClick={logout}
-              title="Logs out this browser only; the server cannot end sessions yet"
-            >
-              Log out
-            </Button>
           </Group>
         </Group>
       </AppShell.Header>
       <AppShell.Navbar p="md">
-        {NAVIGATION.map((item) => (
-          <NavLink
-            key={item.to}
-            component={Link}
-            to={item.to}
-            label={item.label}
-            active={pathname === item.to}
-            onClick={close}
-          />
-        ))}
+        <Stack justify="space-between" h="100%">
+          <div>
+            {NAVIGATION.map((item) => (
+              <NavLink
+                key={item.to}
+                component={Link}
+                to={item.to}
+                label={item.label}
+                active={pathname === item.to}
+                onClick={close}
+              />
+            ))}
+          </div>
+          {/* In the navbar (not the header) so the notice is visible text in the burger drawer too. */}
+          <Stack gap={4}>
+            <Button variant="subtle" onClick={logout} aria-describedby={logoutNoteId}>
+              Log out
+            </Button>
+            <Text id={logoutNoteId} size="xs" c="dimmed">
+              Logging out only affects this browser: the server cannot end sessions yet.
+            </Text>
+          </Stack>
+        </Stack>
       </AppShell.Navbar>
       <AppShell.Main>
         <ErrorBoundary key={pathname}>

@@ -56,11 +56,19 @@ describe('AppLayout', () => {
     expect(logout).toHaveBeenCalledTimes(1);
   });
 
-  it('says that logging out only affects this browser', () => {
+  it('says, in visible text, that logging out only affects this browser', () => {
     renderLayout();
+    const note = screen.getByText(
+      'Logging out only affects this browser: the server cannot end sessions yet.',
+    );
+    expect(note).toBeVisible();
+    expect(note).toHaveAttribute('id');
+    expect(screen.getByRole('button', { name: 'Log out' })).toHaveAccessibleDescription(
+      note.textContent,
+    );
     expect(screen.getByRole('button', { name: 'Log out' })).toHaveAttribute(
-      'title',
-      expect.stringMatching(/this browser only/i),
+      'aria-describedby',
+      note.id,
     );
   });
 
