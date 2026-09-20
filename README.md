@@ -61,11 +61,10 @@ Bunshō serves an authenticated REST + WebSocket API under `/api/v1`. Interactiv
   use). The login throttle and the build task manager live in process memory and reset on restart.
 - The service speaks plain HTTP and does no HTTPS: passwords and tokens travel in clear text.
 - It is meant for a home network only; do not expose it to the internet.
-- Reverse proxies and Docker: the login throttle keys on the client address that uvicorn reports. The
-  launcher passes no proxy options, so uvicorn's defaults apply: behind a reverse proxy or Docker NAT the
-  client address is normally the proxy's, and all clients then share one throttle bucket. The Bunshō code
-  does no forwarded-header handling of its own; the proxy and client-address setup is settled with the
-  Docker setup in a later plan.
+- Reverse proxies and Docker: Bunshō starts uvicorn with `proxy_headers=False`, so it ignores
+  `X-Forwarded-For` and similar headers and keys the login throttle on the TCP peer address. Behind a
+  reverse proxy or Docker NAT every client therefore shares one throttle bucket. The trusted-proxy
+  configuration is decided in the Docker plan.
 
 ### Using the API
 

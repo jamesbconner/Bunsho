@@ -1,11 +1,21 @@
+import dataclasses
+import json
+import socket
+import threading
+import time
+import urllib.error
+import urllib.request
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+import uvicorn
 from fastapi.testclient import TestClient
 
+from bunsho.api.app import create_app
 from bunsho.config.normalizer import ConfigError
-from bunsho.main import build_service_config, create_app_from_env
-from tests.base import JWT_SECRET, make_auth_settings
+from bunsho.main import build_server_config, build_service_config, create_app_from_env
+from tests.base import JWT_SECRET, PASSWORD, make_auth_settings, make_service_config
 
 
 def _env(tmp_path: Path, **extra: str) -> dict[str, str]:
@@ -73,3 +83,57 @@ def test_create_app_from_env_serves_health(tmp_path: Path, monkeypatch: pytest.M
         monkeypatch.setenv(key, value)
     with TestClient(create_app_from_env()) as client:
         assert client.get("/api/v1/health").status_code == 200
+
+
+def test_the_launcher_does_not_trust_proxy_headers(tmp_path: Path) -> None:
+    config = make_service_config(tmp_path)
+    server_config = build_server_config(create_app(config), config)
+    assert server_config.proxy_headers is False
+    assert (server_config.host, server_config.port) == (config.server.host, config.server.port)
+    assert server_config.log_config is None
+
+
+def _free_port() -> int:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
+@pytest.fixture
+def live_server(tmp_path: Path) -> Iterator[int]:
+    """Serve the app on a free port exactly as the launcher configures uvicorn."""
+    base = make_service_config(tmp_path)
+    port = _free_port()
+    config = dataclasses.replace(base, server=dataclasses.replace(base.server, port=port))
+    server = uvicorn.Server(build_server_config(create_app(config), config))
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    deadline = time.monotonic() + 15
+    while not server.started:
+        assert thread.is_alive(), "server thread died during startup"
+        assert time.monotonic() < deadline, "server did not start"
+        time.sleep(0.02)
+    try:
+        yield port
+    finally:
+        server.should_exit = True
+        thread.join(timeout=15)
+
+
+def _login_status(port: int, forwarded_for: str) -> int:
+    request = urllib.request.Request(  # noqa: S310 - fixed http://127.0.0.1 URL
+        f"http://127.0.0.1:{port}/api/v1/auth/login",
+        data=json.dumps({"username": "james", "password": PASSWORD + "-wrong"}).encode(),
+        headers={"Content-Type": "application/json", "X-Forwarded-For": forwarded_for},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:  # noqa: S310
+            return int(response.status)
+    except urllib.error.HTTPError as exc:
+        return exc.code
+
+
+def test_a_forged_forwarded_for_header_cannot_dodge_the_login_throttle(live_server: int) -> None:
+    statuses = [_login_status(live_server, f"203.0.113.{n}") for n in range(1, 9)]
+    assert statuses[:5] == [401] * 5
+    assert 429 in statuses[5:]

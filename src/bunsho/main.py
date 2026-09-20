@@ -46,7 +46,10 @@ def build_service_config(environ: Mapping[str, str] | None = None) -> ServiceCon
 
 
 def create_app_from_env() -> FastAPI:
-    """Application factory for ``uvicorn --factory bunsho.main:create_app_from_env``.
+    """Build the FastAPI app from the environment.
+
+    The ``bunsho`` launcher (``main``) is the supported entry point; this factory exists
+    for the launcher and for tests.
 
     Returns:
         The FastAPI app configured from the environment.
@@ -55,6 +58,29 @@ def create_app_from_env() -> FastAPI:
         ConfigError: If the configuration is invalid.
     """
     return create_app(build_service_config())
+
+
+def build_server_config(app: FastAPI, config: ServiceConfig) -> uvicorn.Config:
+    """Build the uvicorn configuration used by the launcher.
+
+    Proxy headers are deliberately not trusted (see ``proxy_headers`` below): the login
+    throttle keys on the TCP peer address, and honouring ``X-Forwarded-For`` would let a
+    client pick its own throttle bucket.
+
+    Args:
+        app: The application to serve.
+        config: Validated service configuration.
+
+    Returns:
+        A uvicorn ``Config`` bound to ``server.host`` and ``server.port``.
+    """
+    return uvicorn.Config(
+        app,
+        host=config.server.host,
+        port=config.server.port,
+        log_config=None,
+        proxy_headers=False,
+    )
 
 
 def main() -> None:  # pragma: no cover - thin process wrapper, exercised by hand
@@ -69,6 +95,4 @@ def main() -> None:  # pragma: no cover - thin process wrapper, exercised by han
         logging.getLogger("bunsho").error("configuration_invalid\n%s", exc)
         raise SystemExit(2) from exc
     configure_logging(config.app.log_level)
-    uvicorn.run(
-        create_app(config), host=config.server.host, port=config.server.port, log_config=None
-    )
+    uvicorn.Server(build_server_config(create_app(config), config)).run()
