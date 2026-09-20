@@ -88,7 +88,7 @@ export function LoginPage() {
             <TextInput
               label="Username"
               autoComplete="username"
-              data-autofocus
+              autoFocus
               key={form.key('username')}
               {...form.getInputProps('username')}
             />

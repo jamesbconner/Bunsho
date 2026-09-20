@@ -45,6 +45,11 @@ describe('LoginPage', () => {
     expect(await screen.findByLabelText('Username')).toBeInTheDocument();
   });
 
+  it('puts the cursor in the username field', async () => {
+    renderApp({ initialEntries: ['/login'] });
+    expect(await screen.findByLabelText('Username')).toHaveFocus();
+  });
+
   it('asks for both fields before contacting the server', async () => {
     renderApp({ initialEntries: ['/login'] });
     await fillAndSubmit('', '');
