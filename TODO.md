@@ -1,8 +1,9 @@
 # Bunshō TODO
 
-Status: Plan 1A (content pipeline library) is implemented on branch `plan-1a-content-pipeline`
-(119 tests, 99.5% coverage). Design: `docs/superpowers/specs/2026-09-19-bunsho-foundation-and-review-engine-design.md`.
-Plan: `docs/superpowers/plans/2026-09-19-bunsho-1a-foundation-content-pipeline.md`.
+Status: Plan 1A (content pipeline library) and Plan 1B (authenticated API service) are merged to `main`.
+Plan 1C (delivery: Docker, compose, smoke test, tooling, docs) is implemented on branch
+`feat/plan-1c-delivery`. Design: `docs/superpowers/specs/2026-09-19-bunsho-foundation-and-review-engine-design.md`.
+Plans: `docs/superpowers/plans/` (`1a`, `1b`, `1c`).
 
 ## Now
 
@@ -19,26 +20,59 @@ Plan: `docs/superpowers/plans/2026-09-19-bunsho-1a-foundation-content-pipeline.m
   - [ ] `build()` docstring `Raises:` should list `JamdictUnavailableError` (from `graded_kanji()`); test a catalog that raises
   - [ ] Log the literals of skipped unleveled candidates at DEBUG; put `Context.kanji_catalog` after `content_repo`
 
-## Plan 1B — service shell (write the plan first)
+## Plan 1B — service shell (merged) and Plan 1C — delivery
 
 Baseline from the spec:
-- [ ] `progress.db` schema (SQLAlchemy 2.0 async + aiosqlite) + Alembic migrations, timestamped backup at startup
-- [ ] JWT auth, single local user (all REST and WebSocket routes protected)
-- [ ] FastAPI app factory, `/api/v1`: `health`, `admin/config-check`, `admin/content/build` (`dry_run`, background task), WebSocket progress
-- [ ] `bunsho` launcher entry point (uvicorn, no click/rich), Dockerfile (multi-stage), compose, port 8192
-- [ ] CI rewrite (drop postgres/redis/jidou-api), review `release.yml`
+- [x] `progress.db` schema (SQLAlchemy 2.0 async + aiosqlite) + Alembic migrations, timestamped backup at startup
+- [x] JWT auth, single local user (all REST and WebSocket routes protected)
+- [x] FastAPI app factory, `/api/v1`: `health`, `admin/config-check`, `admin/content/build` (`dry_run`, background task), WebSocket progress
+- [x] `bunsho` launcher entry point (uvicorn, no click/rich)
+- [x] Plan 1C: Dockerfile (multi-stage, non-root), `compose.yaml` (port 8192, named data volume, read-only root filesystem),
+      `.dockerignore`, `.gitattributes`
+- [x] CI rewrite (drop postgres/redis/jidou-api), plus a container smoke-test job (Plan 1C)
 - [ ] Strip Jidou content from `.claude/skills/{db-migration,release-notes,check-pr}` and `.claude/settings.local.json`
       — first confirm with the user: the working-tree `.gitignore` now ignores `.claude/` and `.agents/`
 
-Carry-forward from Plan 1A's final review (must be tasks or acceptance criteria in the 1B plan):
+Carry-forward from Plan 1A's final review:
 - [ ] Rebuild endpoint: Windows `os.replace` over an open reader raises `PermissionError` -> retry/handle; serialize builds
 - [ ] Guard the WebSocket `on_progress` callback (an exception aborts the build); log/report `content_build_failed` when `writer.write` raises
 - [ ] Dry run costs ~2,109 x ~10 ms jamdict lookups (~20 s): background task with progress, never a synchronous request
 - [ ] `create_context`: also handle `OSError`/`sqlite3.Error` from the `Jamdict()` constructor and from `ContentRepository(...)`; add `/health`
 - [ ] Config loader: wrap `FileNotFoundError`/`TOMLDecodeError` in `ConfigError` for `config-check`; validate `data_dir`/`resources_dir`, absolute defaults for Docker
-- [ ] Integration fixtures must fail, not skip, when `CI` is set; run `bandit -c pyproject.toml` in CI
-- [ ] Add `src/bunsho/py.typed` and `.pre-commit-config.yaml`
+- [x] Integration fixtures must fail, not skip, when `CI` is set (Plan 1C); `bandit -c pyproject.toml` runs in CI
+- [x] `src/bunsho/py.typed` and `.pre-commit-config.yaml` (Plan 1C; pre-commit is optional per clone)
 - [ ] Call `ContentRepository.verify_schema()` at startup (and in Plan 2 before reading)
+
+Delivered by Plan 1C (see `CHANGELOG.md` and the README's "Running with Docker"):
+- [x] Migration lock file, actionable startup errors (database path, backups folder, ownership hint), sweep of stale
+      `content.db.<hex>.tmp` files
+- [x] Proxy story: `server.trusted_proxies`, strict validation, documented nginx `X-Forwarded-For` requirement
+- [x] Bounded graceful shutdown (`stop_grace_period: 60s`), 64 KiB WebSocket frame limit
+- [x] Container smoke test (`scripts/smoke_test.py`) and CI job; CI skip policy; CHANGELOG
+
+## Deferred from Plan 1C (open)
+
+API and app:
+- [ ] OpenAPI quality, needed before generating TypeScript types: explicit operation ids, documented 401/404/409/429/503
+      responses, WebSocket message schemas in `components`
+- [ ] CORS: allow methods beyond GET/POST when the frontend needs them
+- [ ] Typed `unleveled_kanji` in the content summary (today it is only in `meta` as a string)
+- [ ] Logout / revocation for the stateless refresh tokens
+- [ ] Cap on unauthenticated WebSocket connections
+- [ ] Health-check access-log noise: the Docker healthcheck adds ~2,900 uvicorn access-log lines a day
+
+Data:
+- [ ] WAL journal mode and `PRAGMA foreign_keys=ON` for `progress.db`
+- [ ] Test for the migration `downgrade()` path
+- [ ] Backup retention: backups in `data_dir/backups/` are never pruned
+- [ ] `sqlite3.Error` from a full backups volume is not wrapped in the actionable startup error
+
+Image and platform:
+- [ ] Pin the base image by digest and add OCI labels
+- [ ] Image trim candidates: `pip` in the base image, `watchfiles`, the venv `activate` scripts
+- [ ] Windows: a CTRL_BREAK shutdown exits with code 3 (uvicorn re-raises the signal)
+- [ ] Local (git-ignored) `.claude/` guideline documents (`CLAUDE.md`, `llm-patterns.md`, `react.md`) still carry
+      Jidou/TMDB rules
 
 ## Plan 2 — review engine and first UI
 
@@ -70,5 +104,6 @@ Carry-forward from Plan 1A's final review (must be tasks or acceptance criteria 
 - [ ] importer: empty `Expression`/`Reading` accepted silently; encrypted-zip `RuntimeError`/`OSError` not wrapped
 - [ ] `is_kanji` misses CJK Extension B+ and compatibility ideographs
 - [ ] `logging_setup`: `force=True` would wipe uvicorn handlers if called after startup; format only half logfmt
-- [ ] `.gitattributes` (`* text=auto eol=lf`, `*.apkg binary`) to stop CRLF warnings
+- [ ] `.gitattributes` now covers the Dockerfile, `.dockerignore`, YAML and shell files only; add `* text=auto eol=lf`
+      and `*.apkg binary` to stop the remaining CRLF warnings (for example on Markdown)
 - [ ] Test thinness: kana romaji spot-checks (~6 of 208), repeated-kanji case, `Kanji` frozen inheritance, Protocol conformance assertions

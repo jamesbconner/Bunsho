@@ -61,10 +61,10 @@ Bunshō serves an authenticated REST + WebSocket API under `/api/v1`. Interactiv
   use). The login throttle and the build task manager live in process memory and reset on restart.
 - The service speaks plain HTTP and does no HTTPS: passwords and tokens travel in clear text.
 - It is meant for a home network only; do not expose it to the internet.
-- Reverse proxies and Docker: Bunshō starts uvicorn with `proxy_headers=False`, so it ignores
-  `X-Forwarded-For` and similar headers and keys the login throttle on the TCP peer address. Behind a
-  reverse proxy or Docker NAT every client therefore shares one throttle bucket. The trusted-proxy
-  configuration is decided in the Docker plan.
+- Reverse proxies and Docker: unless `server.trusted_proxies` is set, Bunshō ignores `X-Forwarded-For`
+  and similar headers and keys the login throttle on the TCP peer address, so behind a reverse proxy or
+  Docker Desktop NAT every client shares one throttle bucket. See "Trusted proxies" under "Running with
+  Docker" for the setting and what it makes you responsible for.
 
 ### Using the API
 
@@ -91,12 +91,260 @@ Bunshō serves an authenticated REST + WebSocket API under `/api/v1`. Interactiv
 
 Environment variables `BUNSHO_<SECTION>__<KEY>` override the `.env` file, which overrides a TOML file
 named by `BUNSHO_CONFIG_FILE` (`BUNSHO_ENV_FILE` names a different `.env`). Keys: `server.host`,
-`server.port`, `server.cors_origins` (comma separated; empty means no CORS), `auth.access_ttl_minutes`,
-`auth.refresh_ttl_days`, `paths.data_dir`, `paths.resources_dir`, `paths.jamdict_db`, `logging.level`.
+`server.port`, `server.cors_origins` (comma separated; empty means no CORS), `server.trusted_proxies`
+(comma separated IP addresses or CIDR networks whose `X-Forwarded-For` header is believed; empty, the
+default, means proxy headers are ignored), `auth.access_ttl_minutes`, `auth.refresh_ttl_days`,
+`paths.data_dir`, `paths.resources_dir`, `paths.jamdict_db`, `logging.level`.
 
 `progress.db` (your study history) lives in `data_dir`. When an existing database needs a schema
-migration at startup, a timestamped backup is written to `data_dir/backups/` first; a database that is
-already current is not backed up.
+migration at startup, a timestamped backup is written to `data_dir/backups/` first, named
+`progress-<UTC timestamp>-from-<revision or unversioned>.db`; a database that is already current is not
+backed up. Migrations run under a lock file (`progress.db.migrate.lock`, left in place and harmless), so
+two processes starting at once cannot collide. Backups are never pruned; delete old ones yourself.
+
+## Running with Docker
+
+The repository ships a multi-stage `Dockerfile` and a `compose.yaml` that run the same service as one
+container (one replica only: never scale it or add workers). The image is about 518 MB, of which about
+310 MB is the dictionary database. The Japanese vocabulary deck is **not** baked into the image: compose
+mounts the repository's `resources/` folder read-only at `/app/resources` (the deck is GPL-3.0, the
+application is MIT).
+
+### Prerequisites
+
+- Docker with Compose v2 (the commands below were checked with Docker 29 and Compose v5).
+- The deck in `resources/`: it is committed to the repository, so a clone already has it.
+- An env file with the three required settings. compose refuses to build, start or even print the
+  configuration (`docker compose config`) when the env file is missing.
+
+### Configure
+
+Create `.env` next to `compose.yaml` with the same three settings as step 2 of "Running the service"
+(create the hash the same way, with `uv run` on the host):
+
+```env
+BUNSHO_AUTH__USERNAME=your-username
+BUNSHO_AUTH__PASSWORD_HASH='<the $argon2id$... hash>'
+BUNSHO_AUTH__JWT_SECRET=<at least 32 random characters>
+```
+
+The hash contains `$`, so single-quote it in an env file (the quotes are removed by compose). Only if you
+put the hash into a YAML `environment:` block of a compose file do you write each `$` as `$$`.
+
+The container gets `BUNSHO_SERVER__HOST=0.0.0.0`, `BUNSHO_PATHS__DATA_DIR=/data` and
+`BUNSHO_PATHS__RESOURCES_DIR=/app/resources` from the image, so no path settings are needed. Two
+host-side variables, read by compose itself, are optional: `BUNSHO_ENV_FILE` (a different env file,
+default `.env`) and `BUNSHO_HOST_PORT` (the published host port, default `8192`).
+
+### Start and first run
+
+```bash
+docker compose up -d --build
+docker compose ps
+```
+
+`docker compose ps` shows `(healthy)` after up to a minute. On a first run the health endpoint answers
+HTTP 200 with status `degraded` (no content built yet), which Docker counts as healthy; after a content
+build it says `ok`. An HTTP 503 (the progress database is down) is reported as unhealthy. The health
+check adds one access-log line every 30 seconds.
+
+Then the first-run flow from "Running the service", here with `curl` (bash; on Windows use Git Bash, or
+make the same calls from the interactive docs at `http://localhost:8192/docs`). Replace the username and
+password with the ones you hashed:
+
+```bash
+BASE=http://localhost:8192/api/v1
+
+curl -s -w '\n' "$BASE/health"
+
+TOKEN=$(curl -s -X POST "$BASE/auth/login" -H 'Content-Type: application/json' \
+  -d '{"username":"your-username","password":"your-password"}' \
+  | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
+
+curl -s -w '\n' -H "Authorization: Bearer $TOKEN" "$BASE/admin/config-check"
+
+TASK=$(curl -s -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{}' \
+  "$BASE/admin/content/build" | sed -n 's/.*"task_id":"\([^"]*\)".*/\1/p')
+
+# Repeat until "state" is no longer "running" ("succeeded" on success); about 40 seconds.
+curl -s -w '\n' -H "Authorization: Bearer $TOKEN" "$BASE/admin/content/build/$TASK"
+
+curl -s -w '\n' -H "Authorization: Bearer $TOKEN" "$BASE/content/summary"
+```
+
+`config-check` should report the deck and its checksum as present. The access token expires after
+15 minutes by default; log in again if a later call answers `401`.
+
+### Where the data lives
+
+The named volume `bunsho-data` is mounted at `/data` and holds `progress.db` (your study history),
+`content.db` (rebuilt from the deck at any time) and `backups/`. Because the compose project is named
+`bunsho`, the volume's full name is `bunsho_bunsho-data` (see `docker volume ls`). It survives
+`docker compose down`; only `docker compose down -v` deletes it, and your study history with it.
+
+Back up the whole volume to a tarball in the current directory. Stop the service first so the copy is
+consistent:
+
+```bash
+docker compose stop
+docker run --rm -v bunsho_bunsho-data:/data -v "$PWD":/backup busybox tar czf /backup/bunsho-data.tgz -C /data .
+docker compose start
+```
+
+In PowerShell write the second mount as `-v "${PWD}:/backup"`. In Git Bash prefix the `docker run` with
+`MSYS_NO_PATHCONV=1` and use `-v "$(pwd -W)":/backup`, otherwise Git Bash rewrites the `/backup` path.
+
+To restore a tarball, stop the service and extract it into the volume (if you removed the volume, run
+`docker compose up -d` and `docker compose stop` once to recreate it). The archive carries the file
+owners, so the service user keeps access:
+
+```bash
+docker run --rm -v bunsho_bunsho-data:/data -v "$PWD":/backup busybox tar xzf /backup/bunsho-data.tgz -C /data
+```
+
+### Upgrading
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+At startup the service migrates `progress.db` if needed, after copying the existing file to
+`backups/progress-<UTC timestamp>-from-<revision or unversioned>.db` in the volume. To go back to a
+backup, stop the service, copy the backup over `progress.db` and hand the file back to the service
+user (a plain `cp` made by root leaves it owned by root), then start it again. List the backups first
+and put the file name you want in place of the example:
+
+```bash
+docker compose stop
+docker run --rm -v bunsho_bunsho-data:/data busybox ls /data/backups
+docker run --rm -v bunsho_bunsho-data:/data busybox sh -c \
+  'cp /data/backups/progress-20260101T000000Z-from-unversioned.db /data/progress.db && chown 10001:10001 /data/progress.db'
+docker compose start
+```
+
+Backups accumulate in the volume; nothing prunes them.
+
+### Stopping
+
+`docker compose stop` sends SIGTERM and waits up to 60 seconds (`stop_grace_period`). A content build
+runs in a thread that cannot be interrupted, so a stop issued mid-build waits for the build to finish
+(about 40 seconds for the real deck) before the process exits; the 60 seconds cover that. `content.db`
+is only replaced when a build completes, so neither a stop nor a hard kill can corrupt it; leftover
+`content.db.<hex>.tmp` files from a hard kill are removed at the next start. The container is set to
+`restart: unless-stopped`, so it comes back after a reboot or a crash but not after you stop it.
+
+### Data folder ownership
+
+The service runs as the unprivileged user 10001 with a read-only root filesystem, a 64 MB `/tmp`,
+`no-new-privileges` and all capabilities dropped. A fresh named volume works with no setup, because
+the image creates `/data` owned by that user. A bind mount (`./data:/data`) or a volume created by
+root is not writable by it: the service then refuses to start with an error that names the database
+path and the backups folder, and, because of `restart: unless-stopped`, keeps restarting in a loop
+(`docker compose logs bunsho` shows the message). Fix the ownership and it starts by itself:
+
+```bash
+docker run --rm -v bunsho_bunsho-data:/data busybox chown -R 10001:10001 /data
+```
+
+For a bind mount run `chown -R 10001:10001 <host directory>` on the host instead.
+
+### Limits and networking
+
+- One replica, one worker: the login throttle and the build task manager live in process memory.
+- The container listens on `0.0.0.0` inside its network and compose publishes `8192` on **all** host
+  interfaces, so anything on your LAN can reach it. The app does no HTTPS: passwords and tokens cross
+  the network in clear text. Either keep it on a trusted network or put a TLS-terminating reverse proxy
+  in front. Never expose the port to the internet.
+- To keep the service off the LAN, publish it on the loopback interface only. The simplest way is a
+  `compose.override.yaml` next to `compose.yaml` (compose reads it automatically). Plain `ports:` would
+  be merged with the existing entry and leave the LAN-wide port open, so replace the list with
+  `!override` (needs a recent Compose; checked with v5.1):
+
+  ```yaml
+  services:
+    bunsho:
+      ports: !override
+        - "127.0.0.1:8192:8192"
+  ```
+
+  With it, `docker compose ps` shows `127.0.0.1:8192->8192/tcp`, and `BUNSHO_HOST_PORT` no longer has an
+  effect.
+- The WebSocket layer rejects frames over 64 KiB (close code 1009) before they reach the application;
+  the first authentication message is additionally capped at 8,192 characters.
+
+### Trusted proxies
+
+Without `BUNSHO_SERVER__TRUSTED_PROXIES` the service ignores proxy headers and keys the login throttle
+(5 failed logins per 60 seconds) on the TCP peer address. That has two consequences:
+
+- Behind a reverse proxy every client arrives from the proxy's address and shares one bucket.
+- Docker Desktop (Mac, Windows) routes published ports through NAT, so every client, including the other
+  machines on your LAN, appears as the gateway address (`172.19.0.1` was observed). The throttle is then
+  effectively global: one host's failed logins can lock everyone out for the 60 second window. Docker
+  on Linux with a published port preserves the real client address and does not have this problem.
+
+If a reverse proxy such as nginx fronts the service, set the setting in the env file to the proxy's
+address or network (comma separated), and make the proxy **overwrite** `X-Forwarded-For` with the
+address it sees, so nothing the client sent is passed on:
+
+```env
+BUNSHO_SERVER__TRUSTED_PROXIES=192.168.1.10
+```
+
+```nginx
+proxy_set_header X-Forwarded-For $remote_addr;
+```
+
+When the peer is trusted, uvicorn takes the rightmost address in `X-Forwarded-For` that is not itself
+trusted as the client, so entries a client prepends before a proxy-supplied one do not help it; but a
+proxy that passes a client-supplied header through unchanged still lets clients choose their own
+bucket. Trusting an address means believing whatever client address that host reports, so list only
+real proxies. Broad but legitimate networks
+(for example the Docker bridge `172.16.0.0/12`) are accepted; that is your call, and every host in the
+network can then set the client address. `*`, `0.0.0.0/0`, `::/0` and entries with host bits set (such
+as `127.0.0.5/8`) are rejected at startup, together with any other configuration errors.
+
+### Smoke test
+
+```bash
+uv run python scripts/smoke_test.py
+```
+
+This needs Docker with Compose v2 and the real deck, and takes about a minute with a warm build cache
+and up to four minutes cold. It builds the image and starts a throwaway stack (compose project
+`bunsho-smoke`, port 18192, generated credentials in a temporary folder), then checks: the first-run
+`degraded` health, a `401` for a wrong password, login, a full content build from the real deck (7,734
+vocabulary entries, 3,088 kanji, 208 kana), health `ok`, Docker's own health check, a container restart
+that keeps the data and accepts the old refresh token, and that forged `X-Forwarded-For` headers do
+not give an attacker new throttle buckets. It always removes its containers, network, volume and temp
+folder (set `BUNSHO_SMOKE_KEEP=1` to keep them for debugging, `BUNSHO_SMOKE_PORT` to change the port).
+It only shares the image tag `bunsho:local` with your own compose stack: it reuses and retags it. CI
+runs the same script in its `smoke` job.
+
+## Development
+
+```bash
+uv sync --extra dev
+```
+
+The checks CI runs (and that must pass before a change is merged):
+
+```bash
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy src/
+uv run bandit -c pyproject.toml -r src/ -l
+uv run pytest --cov
+```
+
+The tests fail below 90 % coverage. Some integration tests need the real deck and the jamdict database;
+locally they are skipped when either is missing. CI sets `CI=1`, which turns those skips into failures,
+so `CI=1 uv run pytest --cov` reproduces what CI sees (PowerShell: `$env:CI=1; uv run pytest --cov`).
+
+Git hooks are optional and installed per clone: `uv run pre-commit install` runs YAML and TOML checks,
+ruff (lint and format), mypy and bandit on each commit.
+
 ## License
 
 The Bunshō source code is released under the MIT License (see `LICENSE`).
