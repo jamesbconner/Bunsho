@@ -1,14 +1,17 @@
 import { AppShell, Burger, Button, Group, NavLink, Stack, Text, Title } from '@mantine/core';
 import { useDisclosure, useId } from '@mantine/hooks';
+import { Suspense } from 'react';
 import { Link, Outlet, useLocation } from 'react-router';
 
 import { useAuth } from '../auth/authContext';
 import { ConnectionBadge } from '../realtime/ConnectionBadge';
 import { ColorSchemeToggle } from './ColorSchemeToggle';
 import { ErrorBoundary } from './ErrorBoundary';
+import { PageLoader } from './PageLoader';
 
 const NAVIGATION = [
   { to: '/', label: 'Home' },
+  { to: '/review', label: 'Study' },
   { to: '/build', label: 'Build content' },
 ] as const;
 
@@ -72,7 +75,9 @@ export function AppLayout() {
       </AppShell.Navbar>
       <AppShell.Main>
         <ErrorBoundary key={pathname}>
-          <Outlet />
+          <Suspense fallback={<PageLoader />}>
+            <Outlet />
+          </Suspense>
         </ErrorBoundary>
       </AppShell.Main>
     </AppShell>

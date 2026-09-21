@@ -1,5 +1,6 @@
-import { screen } from '@testing-library/react';
+import { act, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { lazy } from 'react';
 import { Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -8,7 +9,17 @@ import { RealtimeContext } from '../realtime/realtimeContext';
 import { renderWithProviders } from '../test/render';
 import { AppLayout } from './AppLayout';
 
-function renderLayout(logout = vi.fn()) {
+let releaseSlowPage: () => void = () => undefined;
+const SlowPage = lazy(
+  () =>
+    new Promise<{ default: () => React.JSX.Element }>((resolve) => {
+      releaseSlowPage = () => {
+        resolve({ default: () => <p>Slow page loaded</p> });
+      };
+    }),
+);
+
+function renderLayout(logout = vi.fn(), initialEntries: string[] = ['/']) {
   const auth: AuthContextValue = {
     status: 'authenticated',
     sessionExpired: false,
@@ -23,10 +34,12 @@ function renderLayout(logout = vi.fn()) {
           <Route element={<AppLayout />}>
             <Route index element={<p>Home content</p>} />
             <Route path="build" element={<p>Build content page</p>} />
+            <Route path="slow" element={<SlowPage />} />
           </Route>
         </Routes>
       </RealtimeContext>
     </AuthContext>,
+    { initialEntries },
   );
   return logout;
 }
@@ -37,6 +50,7 @@ describe('AppLayout', () => {
     expect(screen.getByRole('heading', { name: /Bunshō/ })).toBeInTheDocument();
     expect(document.querySelector('span[lang="ja"]')).toHaveTextContent('文章');
     expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Study' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Build content' })).toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Live');
     expect(screen.getByText('Home content')).toBeInTheDocument();
@@ -75,5 +89,17 @@ describe('AppLayout', () => {
   it('has a theme toggle', () => {
     renderLayout();
     expect(screen.getByRole('radio', { name: 'Dark' })).toBeInTheDocument();
+  });
+
+  it('shows a loading indicator while a page is being fetched, then the page', async () => {
+    renderLayout(vi.fn(), ['/slow']);
+    expect(screen.getByRole('status', { name: 'Loading page' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
+    await act(async () => {
+      releaseSlowPage();
+      await Promise.resolve();
+    });
+    expect(await screen.findByText('Slow page loaded')).toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: 'Loading page' })).not.toBeInTheDocument();
   });
 });

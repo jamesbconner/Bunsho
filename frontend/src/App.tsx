@@ -1,14 +1,12 @@
 import { MantineProvider } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { useState } from 'react';
+import { lazy, useState } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router';
 
 import { AuthProvider } from './auth/AuthProvider';
 import { RequireAuth } from './auth/RequireAuth';
 import { AppLayout } from './components/AppLayout';
-import { BuildPage } from './features/build/BuildPage';
-import { HomePage } from './features/home/HomePage';
 import { LoginPage } from './features/login/LoginPage';
 import { NotFoundPage } from './features/NotFoundPage';
 import { createQueryClient } from './queryClient';
@@ -17,6 +15,17 @@ import { theme } from './theme';
 
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
+
+// The pages load on demand, so the first screen (login) does not carry the study or build code.
+const HomePage = lazy(() =>
+  import('./features/home/HomePage').then((module) => ({ default: module.HomePage })),
+);
+const ReviewPage = lazy(() =>
+  import('./features/review/ReviewPage').then((module) => ({ default: module.ReviewPage })),
+);
+const BuildPage = lazy(() =>
+  import('./features/build/BuildPage').then((module) => ({ default: module.BuildPage })),
+);
 
 export function App() {
   const [queryClient] = useState(createQueryClient);
@@ -38,6 +47,7 @@ export function App() {
                   }
                 >
                   <Route index element={<HomePage />} />
+                  <Route path="review" element={<ReviewPage />} />
                   <Route path="build" element={<BuildPage />} />
                   <Route path="*" element={<NotFoundPage />} />
                 </Route>

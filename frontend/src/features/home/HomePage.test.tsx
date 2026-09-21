@@ -5,6 +5,7 @@ import { Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { session } from '../../auth/session';
+import { makeKanaCard, makeNextCard } from '../../test/fixtures';
 import { renderWithProviders } from '../../test/render';
 import { server } from '../../test/server';
 import { HomePage } from './HomePage';
@@ -33,6 +34,9 @@ describe('HomePage', () => {
   beforeEach(() => {
     session.clear();
     session.setTokens({ access_token: 'a1', refresh_token: 'r1', expires_in: 900 });
+    server.use(
+      http.get('/api/v1/reviews/next', () => HttpResponse.json(makeNextCard(makeKanaCard()))),
+    );
   });
 
   it('shows the totals and the per-level table of built content', async () => {
@@ -83,5 +87,24 @@ describe('HomePage', () => {
     server.use(http.get('/api/v1/content/summary', () => HttpResponse.json(BUILT)));
     await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(await screen.findByRole('heading', { name: 'Your content' })).toBeInTheDocument();
+  });
+
+  it('puts the study queue above the content when content is built', async () => {
+    server.use(http.get('/api/v1/content/summary', () => HttpResponse.json(BUILT)));
+    renderHome();
+    expect(await screen.findByRole('link', { name: 'Study now' })).toBeInTheDocument();
+    const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
+    expect(headings).toEqual(['Today', 'Your content']);
+  });
+
+  it('does not show the study queue before anything is built', async () => {
+    server.use(
+      http.get('/api/v1/content/summary', () =>
+        HttpResponse.json({ ...BUILT, built: false, kana: 0, kanji: 0, vocab: 0 }),
+      ),
+    );
+    renderHome();
+    expect(await screen.findByText('Welcome to Bunshō')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Study now' })).not.toBeInTheDocument();
   });
 });

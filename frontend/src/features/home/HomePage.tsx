@@ -14,6 +14,7 @@ import { Link } from 'react-router';
 import { messageFor } from '../../api/errors';
 import { useContentSummary } from '../../api/queries';
 import { formatCount } from '../build/format';
+import { StudyPanel } from './StudyPanel';
 
 const LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'] as const;
 
@@ -80,6 +81,7 @@ export function HomePage() {
 
   return (
     <Stack gap="md">
+      <StudyPanel />
       <Title order={2}>Your content</Title>
       <SimpleGrid cols={{ base: 1, sm: 3 }}>
         <Stat label="Kana" value={data.kana} />
