@@ -14,7 +14,7 @@ import {
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 
 import type { ReviewSettings, ReviewSettingsInput } from '../../api/endpoints';
 import { ApiError, messageFor } from '../../api/errors';
@@ -39,6 +39,15 @@ const HOURS = Array.from({ length: 24 }, (_, hour) => ({
   label: `${hour}:00`,
 }));
 
+/** The ids of a `Input.Wrapper`'s label, description and (when shown) error, for a group's aria. */
+function groupAria(id: string, hasError: boolean) {
+  return {
+    role: 'group',
+    'aria-labelledby': `${id}-label`,
+    'aria-describedby': hasError ? `${id}-error ${id}-description` : `${id}-description`,
+  };
+}
+
 function isLevel(value: string): value is Level {
   return LEVELS.some((level) => level === value);
 }
@@ -46,6 +55,8 @@ function isLevel(value: string): value is Level {
 /** The form, seeded once from `initial`: a background refetch must never replace what is typed. */
 function SettingsForm({ initial }: { initial: ReviewSettings }) {
   const save = useUpdateSettings();
+  const levelsId = useId();
+  const retentionId = useId();
   const [general, setGeneral] = useState<{ message: string; retryable: boolean } | null>(null);
   const form = useForm<SettingsFormValues>({
     mode: 'controlled',
@@ -80,6 +91,12 @@ function SettingsForm({ initial }: { initial: ReviewSettings }) {
   const dirty = form.isDirty();
   const pinned = values.new_card_policy === 'pinned_levels';
   const mastery = values.new_card_policy === 'mastery_unlock';
+  const levelsError =
+    typeof form.errors.active_levels === 'string' ? form.errors.active_levels : undefined;
+  const retentionError =
+    typeof form.errors.target_retention_percent === 'string'
+      ? form.errors.target_retention_percent
+      : undefined;
 
   return (
     <form
@@ -133,13 +150,13 @@ function SettingsForm({ initial }: { initial: ReviewSettings }) {
         <Stack gap="md">
           <Title order={3}>Levels</Title>
           <Input.Wrapper
+            id={levelsId}
             label="Levels to study"
             description={
               pinned ? 'New cards come only from these levels.' : 'Only used by "Pinned levels".'
             }
-            error={
-              typeof form.errors.active_levels === 'string' ? form.errors.active_levels : undefined
-            }
+            error={levelsError}
+            {...groupAria(levelsId, levelsError !== undefined)}
           >
             <Chip.Group
               multiple
@@ -176,13 +193,11 @@ function SettingsForm({ initial }: { initial: ReviewSettings }) {
         <Stack gap="md">
           <Title order={3}>Scheduling</Title>
           <Input.Wrapper
+            id={retentionId}
             label={`Target retention: ${String(values.target_retention_percent)}%`}
             description="How often you want to remember a card when it comes back. Higher means more reviews."
-            error={
-              typeof form.errors.target_retention_percent === 'string'
-                ? form.errors.target_retention_percent
-                : undefined
-            }
+            error={retentionError}
+            {...groupAria(retentionId, retentionError !== undefined)}
           >
             <Slider
               mt="sm"
@@ -247,6 +262,7 @@ function SettingsForm({ initial }: { initial: ReviewSettings }) {
             variant="subtle"
             onClick={() => {
               form.setValues(toFormValues(RECOMMENDED_SETTINGS));
+              form.setDirty({});
             }}
           >
             Reset to recommended values

@@ -280,6 +280,84 @@ describe('SettingsPage', () => {
     expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
   });
 
+  it('lets Save through after Reset even when an earlier edit was undone by hand', async () => {
+    const user = userEvent.setup();
+    serveSettings(makeSettings({ new_limits: { kana: 50, kanji: 15, vocab: 20 } }));
+    await openSettings();
+    await user.click(screen.getByRole('radio', { name: /Pinned levels/ }));
+    await user.click(screen.getByRole('radio', { name: /Strict order/ }));
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: 'Reset to recommended values' }));
+
+    expect(screen.getByRole('textbox', { name: 'Kana per day' })).toHaveValue('20');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+  });
+
+  it('keeps Save disabled when Reset lands on what is already saved after an edit', async () => {
+    const user = userEvent.setup();
+    serveSettings();
+    await openSettings();
+    await setNumber(user, 'Kana per day', '30');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+
+    await user.click(screen.getByRole('button', { name: 'Reset to recommended values' }));
+
+    expect(screen.getByRole('textbox', { name: 'Kana per day' })).toHaveValue('20');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument();
+  });
+
+  it('names the levels as a group and ties the hint and the error to it', async () => {
+    const user = userEvent.setup();
+    serveSettings();
+    await openSettings();
+    const levels = screen.getByRole('group', { name: 'Levels to study' });
+    expect(within(levels).getAllByRole('checkbox')).toHaveLength(5);
+    expect(levels).toHaveAccessibleDescription('Only used by "Pinned levels".');
+
+    await user.click(screen.getByRole('radio', { name: /Pinned levels/ }));
+    expect(levels).toHaveAccessibleDescription('New cards come only from these levels.');
+    await user.click(screen.getByRole('checkbox', { name: 'N5' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await screen.findByText('Pick at least one level.');
+    expect(levels).toHaveAccessibleDescription(
+      'Pick at least one level. New cards come only from these levels.',
+    );
+  });
+
+  it('ties the retention help and a server message to the retention control', async () => {
+    const user = userEvent.setup();
+    server.use(
+      http.get('/api/v1/settings', () => HttpResponse.json(makeSettings())),
+      http.put('/api/v1/settings', () =>
+        HttpResponse.json(
+          {
+            detail: [
+              {
+                loc: ['body', 'target_retention'],
+                msg: 'Input should be at least 0.7',
+                type: 'x',
+              },
+            ],
+          },
+          { status: 422 },
+        ),
+      ),
+    );
+    await openSettings();
+    const retention = screen.getByRole('group', { name: /Target retention/ });
+    expect(retention).toHaveAccessibleName('Target retention: 90%');
+    expect(retention).toHaveAccessibleDescription(/How often you want to remember a card/);
+
+    await setNumber(user, 'Kana per day', '30');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('Input should be at least 0.7')).toBeInTheDocument();
+    expect(retention).toHaveAccessibleDescription(/Input should be at least 0\.7/);
+  });
+
   it('marks the next card and the statistics stale after a save', async () => {
     const user = userEvent.setup();
     serveSettings();
