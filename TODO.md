@@ -1,8 +1,8 @@
 # Bunshō TODO
 
-Status: Plans 1A, 1B and 1C are merged. Plan 2A (review engine backend) is implemented on
-`feat/plan-2a-review-engine`; Plan 2B (frontend and delivery) is next. Design: the specs in
-`docs/superpowers/specs/`. Plans: `docs/superpowers/plans/`.
+Status: Plans 1A, 1B, 1C and 2A are merged. Plan 2B-1 (frontend skeleton and delivery) is implemented
+on `feat/plan-2b1-frontend-skeleton`; Plan 2B-2 (dashboard, review, stats, settings) is next. Design:
+the specs in `docs/superpowers/specs/`. Plans: `docs/superpowers/plans/`.
 
 ## Now
 
@@ -58,8 +58,8 @@ Delivered by Plan 1C (see `CHANGELOG.md` and the README's "Running with Docker")
 API and app:
 - [x] OpenAPI quality, needed before generating TypeScript types: explicit operation ids, documented 401/404/409/429/503
       responses, WebSocket message schemas in `components` (Plan 2A)
-- [ ] CORS: methods beyond GET/POST are done for `PUT` (Plan 2A); the Vite dev origin is an opt-in setting (documented,
-      `BUNSHO_SERVER__CORS_ORIGINS`); open it in development only once the frontend exists (Plan 2B)
+- [x] CORS: methods beyond GET/POST are done for `PUT` (Plan 2A); the Vite dev server uses a proxy, so no CORS is
+      needed (Plan 2B-1); `BUNSHO_SERVER__CORS_ORIGINS` stays for setups without the proxy
 - [x] Typed `unleveled_kanji` in the content summary (today it is only in `meta` as a string) (Plan 2A)
 - [ ] Logout / revocation for the stateless refresh tokens
 - [ ] Cap on unauthenticated WebSocket connections
@@ -86,12 +86,12 @@ Image and platform:
 - [x] Instance lock for the data folder: one instance per volume (today two instances on one volume both start and
       the startup temp-file sweep can break the other's running build); pair it with WAL and `PRAGMA foreign_keys=ON`
       once every card grade writes to `progress.db` (Plan 2A)
-- [ ] Image: a Node stage (`FROM node AS frontend`), an explicit `COPY --from=frontend` of the built assets, a
-      `StaticFiles` mount in the app, and the read-only root filesystem implications
-- [ ] CI: a `frontend` job (`tsc -b`, eslint, vitest); decide whether `smoke` needs the built frontend
-- [ ] Dependabot: add the `npm` entry for `/frontend` (stubbed in the `.github/dependabot.yml` header comment)
-- [ ] Extend the smoke test: `index.html` is served, a review round-trip; revisit `EXPECTED_COUNTS` if the content
-      schema changes
+- [x] Image: a Node stage (`FROM node AS frontend`), an explicit `COPY --from=frontend` of the built assets, a
+      `StaticFiles` mount in the app, and the read-only root filesystem implications (Plan 2B-1)
+- [x] CI: a `frontend` job (`tsc -b`, eslint, vitest); decide whether `smoke` needs the built frontend (Plan 2B-1)
+- [x] Dependabot: add the `npm` entry for `/frontend` (stubbed in the `.github/dependabot.yml` header comment) (Plan 2B-1)
+- [x] Extend the smoke test: `index.html` is served, a review round-trip (round trip: Plan 2A; `index.html` check:
+      Plan 2B-1); revisit `EXPECTED_COUNTS` if the content schema changes
 - [ ] Re-derive `WS_MAX_MESSAGE_BYTES` if review batches use the WebSocket
 - [ ] Single source of truth for the uv pin (0.12.17 is in `ci.yml`, `release.yml` and the `Dockerfile`), for example
       an `ARG UV_VERSION` shared through a build-arg
@@ -113,6 +113,52 @@ Image and platform:
 - [ ] A Prometheus-style or structured metric for review latency (only if the box gets monitoring)
 - [ ] Coverage gaps below 90 % per file: `db/migrations/env.py` and the `login_throttle` prune branch (the `0001`
       `downgrade()` test is listed under Data)
+
+## Plan 2B-2 and later
+
+- [ ] Dashboard, flip-and-grade review with keyboard shortcuts and furigana, statistics and settings screens (Plan 2B-2)
+- [ ] Code-split the routes: the production JS chunk is about 540 kB (Vite warns above 500 kB)
+- [ ] Move to TypeScript 7 once `typescript-eslint` and `openapi-typescript` support it (TypeScript is pinned to 6.0.3;
+      see the Plan 2B-1 plan). Dependabot's `ignore` rule for TypeScript (and `@types/node`) major versions stops it
+      proposing 7, so adopt it by hand: remove the ignore rule and the pin together
+- [ ] Content-Security-Policy header for the served UI (Mantine injects inline styles: needs nonces or hashes)
+- [ ] Browser end-to-end test of the deployed UI
+- [ ] Refresh-token logout/revocation on the server (the UI's Log out only clears this browser)
+- [ ] The JSON 500 from unhandled errors is produced outside CORS middleware (only matters for cross-origin setups)
+- [ ] `.gitattributes` `frontend/** text eol=lf` would corrupt binary assets: add `binary` overrides before committing
+      any image or font
+- [ ] Security headers (nosniff, Referrer-Policy, X-Frame-Options) are set on static responses only; extend to API/docs
+      responses together with the CSP work
+- [ ] An unmatched WebSocket path under the `/` static mount reaches StaticFiles' `assert scope["type"] == "http"`
+      (AssertionError instead of a clean rejection): guard it
+- [ ] Login: map 422 field errors onto the form inputs; tighten `returnPath` (reject backslash) and carry search/hash
+      through RequireAuth
+- [ ] Mobile shell: Burger aria-expanded/aria-controls, hide the collapsed drawer from keyboard users, verify header fit
+      at 360 px; add a top-level error boundary around the shell
+- [ ] Toasts: session-expiry toast plus the inline 'Signed out' alert overlap in meaning; toasts at top-right overlap
+      header controls
+- [ ] If the root `.gitignore` `build/` pattern is narrowed to `/build/`, remove the `!src/features/build/` override in
+      `frontend/.gitignore`
+- [ ] Wrong-method requests to real API routes behave differently when the UI is served: the catch-all `/` mount wins
+      the full match over the router's partial (method) match, so POST to a GET-only route gives 405 without an
+      `Allow` header, GET on a POST-only route gives 404 instead of 405, and `HEAD /api/...` gives 404
+- [ ] Root `.gitignore` patterns `lib/`, `env/`, `var/`, `parts/`, `downloads/` would silently ignore a future
+      `frontend/src/lib` or `src/env`: anchor them (as with `build/` -> `/build/`)
+- [ ] Add Mantine `ColorSchemeScript` to `index.html` to avoid a light flash for dark-scheme users
+- [ ] The OpenAPI snapshot embeds `info.version`: a release version bump fails
+      `test_the_committed_snapshot_matches_the_app` until `scripts/export_openapi.py` and `npm run gen:api` are re-run
+      (add to the release checklist)
+- [ ] Docker Node stage: add `--platform=$BUILDPLATFORM` so multi-arch builds do not run the JS build under emulation
+- [ ] After a second close-1008 the stream stays offline until a reload: retry on `online`/`visibilitychange`
+- [ ] Logout can be undone by a refresh that is in flight (`session.setTokens` after `session.clear()`): add a session
+      epoch
+- [ ] Test the logout -> login stream lifecycle (stream closes on logout, a new one opens after login) and StrictMode
+      double mount
+- [ ] Deferred review notes: `buildJustFinished` treats a cached `null` (no build ever) like nothing cached; Build
+      screen: disable the button while the summary query errored, guard the modal Rebuild against a build started
+      elsewhere, clamp progress percent; Home: keep good data when a background refetch fails
+      (`isError && data === undefined`), add a missing-level test; shell: h1 and toast placement; `RequireAuth` `from`/`returnPath`
+      hardening (already listed above)
 
 ## Later sub-projects
 

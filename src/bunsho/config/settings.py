@@ -16,7 +16,10 @@ _LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR"})
 
 @dataclass(frozen=True, slots=True)
 class AppConfig:
-    """Validated runtime configuration."""
+    """Validated runtime configuration.
+
+    ``frontend_dir`` is the built web UI to serve; ``None`` serves the API only.
+    """
 
     data_dir: Path
     resources_dir: Path
@@ -24,6 +27,7 @@ class AppConfig:
     deck_sha256: str
     jamdict_db: Path | None
     log_level: str
+    frontend_dir: Path | None = None
 
     @property
     def content_db_path(self) -> Path:
@@ -44,6 +48,7 @@ class AppConfig:
     def from_normalizer(cls, cfg: ConfigNormalizer) -> AppConfig:
         """Build from an already-validated normalizer (see ``validate_config``)."""
         jamdict = cfg.get_string("paths", "jamdict_db")
+        frontend = cfg.get_string("paths", "frontend_dir")
         return cls(
             data_dir=Path(cfg.get_string("paths", "data_dir", "data")),
             resources_dir=Path(cfg.get_string("paths", "resources_dir", "resources")),
@@ -51,6 +56,7 @@ class AppConfig:
             deck_sha256=cfg.get_string("paths", "deck_sha256", DEFAULT_DECK_SHA256).lower(),
             jamdict_db=Path(jamdict) if jamdict else None,
             log_level=cfg.get_string("logging", "level", "INFO").upper(),
+            frontend_dir=Path(frontend) if frontend else None,
         )
 
 
@@ -81,6 +87,12 @@ def validate_config(cfg: ConfigNormalizer) -> list[str]:
     data_dir = cfg.get_string("paths", "data_dir", "data")
     if Path(data_dir).exists() and not Path(data_dir).is_dir():
         errors.append(f"[paths] data_dir={data_dir!r} exists and is not a directory")
+    frontend = cfg.get_string("paths", "frontend_dir")
+    if frontend and not Path(frontend).is_dir():
+        errors.append(
+            f"[paths] frontend_dir={frontend!r} is not a directory; build the UI with "
+            "'npm run build' in frontend/, or unset it to serve the API only"
+        )
     return errors
 
 

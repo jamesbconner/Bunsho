@@ -130,7 +130,9 @@ Some behaviours to know about:
 
 **One instance per data folder.** The service takes an exclusive lock (`.bunsho.instance.lock`) in the data folder; a second instance on the same folder refuses to start with an explanatory error. `progress.db` runs in WAL mode, so you will also see `progress.db-wal` and `progress.db-shm` files next to it; back up the folder with the service stopped, or use the timestamped backups in `backups/`. When you restore, stop the service and remove those two files first (see the note under "Where the data lives" and the restore steps above).
 
-**Frontend development.** Allow the Vite dev server with `BUNSHO_SERVER__CORS_ORIGINS=http://localhost:5173` (comma-separated for several); CORS is off unless origins are listed, and `GET`, `POST` and `PUT` are allowed.
+**Web UI.** The Docker image contains the built web UI and serves it at `http://<host>:8192/` (log in with the credentials from your env file; the pages are `/` for Home, `/build` for the content build and `/login`). Outside Docker the API serves the UI only when `paths.frontend_dir` (`BUNSHO_PATHS__FRONTEND_DIR`) points at a built `frontend/dist`; unset, it serves the API only. Unknown paths under `/api` stay JSON 404s. The UI's Log out only clears the tokens in this browser; the server does not revoke them.
+
+**Developing the UI.** Requires Node 24 or newer. Start the backend (`uv run bunsho`), then in `frontend/`: `npm ci`, `npm run dev`, and open `http://localhost:5173`. The dev server proxies `/api` (WebSocket included) to `http://127.0.0.1:8192`, so no CORS setup is needed (set `VITE_API_TARGET` if the backend runs elsewhere). Other commands: `npm run lint`, `npm run format:check`, `npm test`, `npm run coverage`, `npm run build`. After changing the API, refresh the frontend's types: `uv run python scripts/export_openapi.py` (rewrites `frontend/openapi.json`; a unit test fails while it is stale), then `npm run gen:api`, and commit both files. The `BUNSHO_SERVER__CORS_ORIGINS` setting remains available for setups that do not use the proxy.
 
 ## Running with Docker
 
@@ -397,6 +399,18 @@ uv run pytest --cov
 The tests fail below 90 % coverage. Some integration tests need the real deck and the jamdict database;
 locally they are skipped when either is missing. CI sets `CI=1`, which turns those skips into failures,
 so `CI=1 uv run pytest --cov` reproduces what CI sees (PowerShell: `$env:CI=1; uv run pytest --cov`).
+
+The frontend checks (Node 24 or newer), run in `frontend/`, are what CI's `frontend` job runs:
+
+```bash
+npm ci
+npm run format:check
+npm run lint
+npm run build      # type-check and production build
+npm run coverage   # vitest; fails below 80 %
+```
+
+CI also checks that the generated API types are current (`npm run gen:api`, then `git diff --exit-code -- src/api/schema.d.ts`); a backend unit test checks `frontend/openapi.json` against the API.
 
 Git hooks are optional and installed per clone: `uv run pre-commit install` runs YAML and TOML checks,
 ruff (lint and format), mypy and bandit on each commit.

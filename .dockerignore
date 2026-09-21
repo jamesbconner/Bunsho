@@ -21,6 +21,7 @@ resources
 **/.env.*
 **/node_modules
 frontend/dist
+frontend/coverage
 **/*.tsbuildinfo
 compose.yaml
 Dockerfile

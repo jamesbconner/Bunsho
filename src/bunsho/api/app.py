@@ -18,6 +18,7 @@ from bunsho.api import API_PREFIX
 from bunsho.api.routers import admin, auth, content, health, reviews, settings, stats, ws
 from bunsho.api.schemas import WsAuthMessage, WsEvent, WsReady, WsSnapshot
 from bunsho.api.services import ServiceOverrides, build_services
+from bunsho.api.static import SPAStaticFiles
 from bunsho.config.service import ServiceConfig
 from bunsho.logging_setup import configure_logging
 from bunsho.models.review import (
@@ -119,6 +120,10 @@ def create_app(config: ServiceConfig, *, overrides: ServiceOverrides | None = No
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         configure_logging(config.app.log_level, force=False)
+        if config.app.frontend_dir is None:
+            logging.getLogger("bunsho").info("frontend_not_configured api_only=true")
+        else:
+            logging.getLogger("bunsho").info("frontend_serving dir=%s", config.app.frontend_dir)
         services = await build_services(config, overrides)
         app.state.services = services
         try:
@@ -146,5 +151,10 @@ def create_app(config: ServiceConfig, *, overrides: ServiceOverrides | None = No
     app.include_router(stats.router, prefix=API_PREFIX)
     app.include_router(settings.router, prefix=API_PREFIX)
     app.include_router(ws.router, prefix=API_PREFIX)
+    if config.app.frontend_dir is not None:
+        # Last on purpose: API routes, /docs and /openapi.json must win over the catch-all mount.
+        app.mount(
+            "/", SPAStaticFiles(directory=config.app.frontend_dir, html=True), name="frontend"
+        )
     _publish_websocket_schemas(app)
     return app

@@ -2,7 +2,7 @@ name: CI
 
 # Mirrors the local checks in .claude/CLAUDE.md: ruff, mypy, bandit, pytest with coverage.
 # The `smoke` job builds the Docker image and runs scripts/smoke_test.py against the real deck.
-# Frontend checks (tsc -b, eslint, vitest) arrive with Plan 2.
+# The frontend job runs Prettier, ESLint, the type-check/build and vitest with coverage.
 
 on:
   push:
@@ -54,6 +54,43 @@ jobs:
 
       - name: Bandit security scan
         run: uv run bandit -c pyproject.toml -r src/ -l
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node
+        # Pinned by commit (the release tag is in the comment).
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prettier
+        run: npm run format:check
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: API types are up to date
+        run: |
+          npm run gen:api
+          git diff --exit-code -- src/api/schema.d.ts
+
+      - name: Type-check and build
+        run: npm run build
+
+      - name: Tests with coverage
+        run: npm run coverage
 
   test:
     runs-on: ${{ matrix.os }}

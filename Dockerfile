@@ -1,6 +1,17 @@
 # syntax=docker/dockerfile:1
 
 ARG PYTHON_VERSION=3.13
+ARG NODE_VERSION=24
+
+# ---- frontend: build the static UI (no Python needed: the API types are committed) ----
+FROM node:${NODE_VERSION}-bookworm-slim AS frontend
+WORKDIR /frontend
+# Dependencies first so this layer is cached until package.json or the lockfile change.
+COPY frontend/package.json frontend/package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci
+COPY frontend ./
+RUN npm run build
 
 # ---- build: resolve and install locked dependencies into a virtualenv ----
 FROM python:${PYTHON_VERSION}-slim-bookworm AS builder
@@ -24,10 +35,12 @@ RUN groupadd --system --gid 10001 bunsho \
     && useradd --system --uid 10001 --gid bunsho --home-dir /nonexistent --shell /usr/sbin/nologin bunsho \
     && install -d -o bunsho -g bunsho -m 0750 /data
 COPY --from=builder /app/.venv /app/.venv
+COPY --from=frontend /frontend/dist /app/frontend
 ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     BUNSHO_SERVER__HOST=0.0.0.0 \
+    BUNSHO_PATHS__FRONTEND_DIR=/app/frontend \
     BUNSHO_PATHS__DATA_DIR=/data \
     BUNSHO_PATHS__RESOURCES_DIR=/app/resources
 WORKDIR /app

@@ -52,6 +52,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   text is never sent to the client.
 - OpenAPI: explicit operation ids, documented 401/404/409/429/503 responses, and the WebSocket
   message schemas in `components`, so a typed client can be generated.
+- Web UI (`frontend/`, React with Mantine): log in (the refresh token is remembered in the browser,
+  the access token only in memory), an app shell with a light, dark or system theme, a Home page
+  showing what has been built, and a Build screen that runs a content build or dry run with live
+  progress over the WebSocket (with reconnect and a polling fallback). Log out only clears this
+  browser; the server does not revoke tokens yet. The Docker image builds the UI in a Node stage and
+  the service serves it (`paths.frontend_dir`), with cache and security headers and a fallback to
+  `index.html` for client-side routes.
+- The API's OpenAPI document is committed as `frontend/openapi.json`; a unit test fails when it is
+  stale, and the frontend's TypeScript types are generated from it.
+- CI: a `frontend` job (Prettier, ESLint, type-check and build, vitest with coverage, and a check
+  that the generated API types are current); Dependabot updates the npm dependencies; the
+  container smoke test checks that the UI is served.
 
 ### Changed
 
