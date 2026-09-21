@@ -1,7 +1,7 @@
 # Bunshō TODO
 
-Status: Plans 1A, 1B, 1C, 2A and 2B-1 are merged. Plan 2B-2 (the study loop: dashboard and review) is
-implemented on `feat/plan-2b2-study-loop`; Plan 2B-3 (statistics and settings screens) is next. Design:
+Status: Plans 1A, 1B, 1C, 2A, 2B-1 and 2B-2 are merged. Plan 2B-3 (statistics and settings screens) is
+implemented on `feat/plan-2b3-stats-settings`; the first version of the UI is then complete. Design:
 the specs in `docs/superpowers/specs/`. Plans: `docs/superpowers/plans/`.
 
 ## Now
@@ -117,7 +117,7 @@ Image and platform:
 ## Plan 2B-2 and later
 
 - [x] Dashboard and flip-and-grade review with keyboard shortcuts and furigana (Plan 2B-2)
-- [ ] Statistics and settings screens (Plan 2B-3)
+- [x] Statistics and settings screens (Plan 2B-3)
 - [x] Code-split the routes: the production main chunk was about 540 kB, now about 388 kB (lazy routes, Plan 2B-2)
 - [ ] Move to TypeScript 7 once `typescript-eslint` and `openapi-typescript` support it (TypeScript is pinned to 6.0.3;
       see the Plan 2B-1 plan). Dependabot's `ignore` rule for TypeScript (and `@types/node`) major versions stops it
@@ -139,7 +139,7 @@ Image and platform:
 - [ ] Undo of a grade and study-ahead need API support (the review log is append-only, `next` has no look-ahead)
 - [ ] Check Japanese font rendering in real browsers (Hiragino, Yu Gothic, Noto) and self-host Noto Sans JP if the
       system stack looks poor
-- [ ] Per-level progress on the dashboard (with the statistics screen, Plan 2B-3)
+- [ ] Per-level progress is on the statistics screen (Plan 2B-3); optionally summarise it on the dashboard too
 - [ ] A 503 on `POST /reviews/answer` shows the generic save-failed alert without the Build link (a card on screen
       implies built content)
 - [ ] Study loop hardening and test follow-ups from the reviews:
@@ -193,6 +193,32 @@ Image and platform:
       elsewhere, clamp progress percent; Home: keep good data when a background refetch fails
       (`isError && data === undefined`), add a missing-level test; shell: h1 and toast placement; `RequireAuth` `from`/`returnPath`
       hardening (already listed above)
+- [ ] Ask before leaving the settings page with unsaved changes
+- [ ] Expose the review-setting defaults through the API so the form does not repeat them
+      (`RECOMMENDED_SETTINGS` is checked against the OpenAPI snapshot)
+- [ ] Settings: show the server timezone and the next study-day rollover (needs an API field)
+- [ ] Statistics: a longer range than 30 days and a retention-by-day line need API changes
+- [ ] The statistics chunk is about 410 kB because of recharts: if it grows, consider a lighter chart
+- [ ] Browser end-to-end tests of the whole UI
+- [ ] Statistics and settings hardening and test follow-ups from the reviews:
+      - `useSettings` has no test that it skips refetch on window focus/reconnect or that `staleTime: 0`
+        overrides the app default; the `useUpdateSettings` test does not assert the submitted document reached
+        `updateSettings` or that a failed save triggers no invalidation
+      - Statistics: the chart's `series.name`/`dataKey` are not tied to the row keys by a test (a rename would
+        blank the bars with green tests: share constants); the pending skeleton has no `aria-busy` and no test;
+        the loading/503/error states of the page render no heading; the cards-by-type row names should be
+        `th scope="row"`; `VisuallyHidden` wraps a table in a span (use `component="div"`); the date tests
+        assume an English locale; small dimmed text has weak contrast (design-wide)
+      - Settings: Try again re-sends the original request and a success resets the form to it (newer
+        edits are dropped); the 422 test should assert the field's accessible error and that an error clears
+        on edit; `slider.focus()` in a test runs outside `act`; `SettingsPage.tsx` holds the page and a
+        ~230-line form (split it)
+      - No focus or announcement moves to the first invalid field after a failed client-side submit
+      - The settings form has no test of a second failure or 422 on Try again, and Try again drops edits made
+        after the failed save
+      - `formatCount` is imported from `features/build` by the stats components: move it to a shared utility
+      - `StatsPage` replaces good data with the error alert when a background refetch fails (same shape as the
+        Home follow-up)
 
 ## Later sub-projects
 

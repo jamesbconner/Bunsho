@@ -51,6 +51,8 @@ describe('AppLayout', () => {
     expect(document.querySelector('span[lang="ja"]')).toHaveTextContent('文章');
     expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Study' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Statistics' })).toHaveAttribute('href', '/stats');
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings');
     expect(screen.getByRole('link', { name: 'Build content' })).toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Live');
     expect(screen.getByText('Home content')).toBeInTheDocument();

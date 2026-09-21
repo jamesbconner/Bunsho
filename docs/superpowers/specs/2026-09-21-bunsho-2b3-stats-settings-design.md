@@ -156,3 +156,40 @@ One branch (`feat/plan-2b3-stats-settings`), draft PR opened early, no stacked P
 - **Browser verification:** the authenticated screens cannot be checked in a browser by the assistant
   (credentials are not typed into login forms); the PR lists what to eyeball: the chart, the slider, the
   policy cards, dark mode and the mobile layout.
+
+## Implementation notes
+
+Details that differ from, or refine, the design above (as built).
+
+- **Number inputs clamp on blur.** Mantine's `NumberInput` clamps a typed value to its range when it loses
+  focus, so an empty field is the only invalid limit reachable by typing; the range rule is still checked
+  before sending.
+- **Toasts and alerts both use `role="alert"`**, so tests assert on text rather than on the absence of that
+  role.
+- **The form is seeded once.** `SettingsForm` takes its values from `initial` when it mounts, and
+  `useSettings` never refetches on window focus or reconnect (`staleTime: 0`), so a background refetch cannot
+  replace what is being typed. After a save the form resets to the server's response.
+- **Percentages keep their precision.** Retention and the mastery threshold are converted with `toFixed`, so a
+  stored 0.905 shows as 90.5% and is sent back unchanged.
+- **Reset to recommended values** only refills the form. The unsaved state is computed by
+  `isSettingsDirty` (a canonical comparison of the values with the initial values), not by Mantine's
+  per-field dirty map: that map goes stale after a reset, and re-ticked chips reorder the levels.
+- **Group semantics.** The Levels and Retention controls are `role="group"` wrappers whose accessible name
+  and description come from their labels; Mantine does not tie the chips and the slider to their hints
+  otherwise.
+- **The recommended-values test reads `openapi.json` through `?raw`** (the app's tsconfig has no
+  `resolveJsonModule`) and compares `RECOMMENDED_SETTINGS` with the API's declared defaults.
+- **The statistics chart is `aria-hidden`.** A visually hidden table with the same 30 days sits beside it
+  for assistive technology.
+- **The chart is not focusable.** `BarChart` gets `accessibilityLayer={false}`: its SVG must not take
+  focus inside the `aria-hidden` wrapper. The y-axis does not show fractional ticks.
+- **`App.test.tsx` preloads the two page modules** (`StatsPage`, `SettingsPage`) so a cold cache does not
+  exhaust the 1 s wait while the lazy recharts chunk is transformed; the lazy path is still exercised.
+- **Kana has no level rows** in the per-level progress (kana is not levelled); only kanji and vocabulary
+  are listed.
+- **Bundle sizes (production build).** Statistics chunk about 411 kB (recharts), settings chunk about 53 kB,
+  main chunk about 388.6 kB (unchanged); no chunk-size warning. The chart code and its CSS load only on
+  `/stats`.
+- **Tests.** About 288 frontend tests in 31 files; no backend change (552 Python tests).
+- **Navigation.** Two lazy pages, `/stats` and `/settings`; the nav order is Home, Study, Statistics,
+  Settings, Build content; the review screen's "done for now" state links to Settings.

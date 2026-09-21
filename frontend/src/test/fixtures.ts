@@ -1,4 +1,11 @@
-import type { BuildStatus, CardView, NextCard, RubySegment } from '../api/endpoints';
+import type {
+  BuildStatus,
+  CardView,
+  NextCard,
+  ReviewSettings,
+  RubySegment,
+  StatsSummary,
+} from '../api/endpoints';
 
 export type BuildReport = NonNullable<BuildStatus['report']>;
 
@@ -133,6 +140,50 @@ export function makeNextCard(card: CardView | null, overrides: Partial<NextCard>
       new_remaining: ZERO,
     },
     next_due_at: null,
+    ...overrides,
+  };
+}
+
+/** The settings a fresh install starts with (the backend's defaults). */
+export function makeSettings(overrides: Partial<ReviewSettings> = {}): ReviewSettings {
+  return {
+    new_card_policy: 'strict_order',
+    new_limits: { kana: 20, kanji: 15, vocab: 20 },
+    target_retention: 0.9,
+    rollover_hour: 4,
+    active_levels: ['N5'],
+    mastery_threshold: 0.8,
+    ...overrides,
+  };
+}
+
+/** 30 study days ending on 2026-09-20, with reviews on some of them. */
+export function makeDailyReviews(): StatsSummary['daily_reviews'] {
+  return Array.from({ length: 30 }, (_, index) => {
+    const day = new Date(Date.UTC(2026, 7, 22 + index)).toISOString().slice(0, 10);
+    return { day, reviews: index % 3 === 0 ? 0 : index * 2 };
+  });
+}
+
+/** A statistics summary for someone a few weeks into studying. */
+export function makeStatsSummary(overrides: Partial<StatsSummary> = {}): StatsSummary {
+  return {
+    reviewed_today: 42,
+    introduced_today: { kana: 5, kanji: 3, vocab: 8 },
+    retention_30d: 0.8765,
+    daily_reviews: makeDailyReviews(),
+    by_type: {
+      kana: { total: 416, learning: 10, review: 120, relearning: 2 },
+      kanji: { total: 2109, learning: 30, review: 200, relearning: 5 },
+      vocab: { total: 15468, learning: 60, review: 900, relearning: 12 },
+    },
+    by_level: [
+      { item_type: 'kanji', level: 'N5', total: 960, introduced: 300, review: 180 },
+      { item_type: 'kanji', level: 'N4', total: 704, introduced: 20, review: 5 },
+      { item_type: 'kanji', level: 'N3', total: 0, introduced: 0, review: 0 },
+      { item_type: 'vocab', level: 'N5', total: 1334, introduced: 700, review: 500 },
+      { item_type: 'vocab', level: 'N4', total: 1260, introduced: 100, review: 20 },
+    ],
     ...overrides,
   };
 }

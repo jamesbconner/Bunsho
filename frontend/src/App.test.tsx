@@ -1,12 +1,12 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from './App';
 import { REFRESH_TOKEN_KEY, session } from './auth/session';
 import { FakeSocket } from './test/fakeSocket';
-import { makeKanaCard, makeNextCard } from './test/fixtures';
+import { makeKanaCard, makeNextCard, makeSettings, makeStatsSummary } from './test/fixtures';
 import { server } from './test/server';
 
 const TOKENS = { access_token: 'a2', refresh_token: 'r2', token_type: 'bearer', expires_in: 900 };
@@ -37,6 +37,8 @@ function rememberLogin() {
     http.post('/api/v1/auth/refresh', () => HttpResponse.json(TOKENS)),
     http.get('/api/v1/content/summary', () => HttpResponse.json(SUMMARY)),
     http.get('/api/v1/reviews/next', () => HttpResponse.json(makeNextCard(makeKanaCard()))),
+    http.get('/api/v1/stats/summary', () => HttpResponse.json(makeStatsSummary())),
+    http.get('/api/v1/settings', () => HttpResponse.json(makeSettings())),
     http.get('/api/v1/admin/config-check', () => HttpResponse.json({ ok: true, checks: [] })),
     http.get('/api/v1/admin/content/build', () =>
       HttpResponse.json({ detail: 'no build has run yet' }, { status: 404 }),
@@ -49,6 +51,12 @@ function goTo(path: string) {
 }
 
 describe('App', () => {
+  // Pay the cost of transforming the lazy pages (recharts is large) outside the tests' 1 s waits.
+  beforeAll(async () => {
+    await import('./features/stats/StatsPage');
+    await import('./features/settings/SettingsPage');
+  }, 30_000);
+
   beforeEach(() => {
     session.clear();
     TrackedSocket.instances = [];
@@ -93,6 +101,28 @@ describe('App', () => {
     expect(window.location.pathname).toBe('/review');
     await user.click(screen.getByRole('link', { name: 'Home' }));
     expect(await screen.findByRole('heading', { name: 'Today' })).toBeInTheDocument();
+  });
+
+  it('opens the statistics and the settings from the navigation', async () => {
+    rememberLogin();
+    render(<App />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('link', { name: 'Statistics' }));
+    expect(await screen.findByRole('heading', { name: 'Statistics' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/stats');
+    await user.click(screen.getByRole('link', { name: 'Settings' }));
+    expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Save' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/settings');
+  });
+
+  it('serves a deep link to the settings after the login is restored', async () => {
+    rememberLogin();
+    goTo('/settings');
+    render(<App />);
+    expect(
+      await screen.findByRole('button', { name: 'Reset to recommended values' }),
+    ).toBeInTheDocument();
   });
 
   it('serves a deep link after the login is restored', async () => {

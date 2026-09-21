@@ -12,6 +12,8 @@ import { PageLoader } from './PageLoader';
 const NAVIGATION = [
   { to: '/', label: 'Home' },
   { to: '/review', label: 'Study' },
+  { to: '/stats', label: 'Statistics' },
+  { to: '/settings', label: 'Settings' },
   { to: '/build', label: 'Build content' },
 ] as const;
 
