@@ -64,6 +64,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   flip, 1 to 4 to grade), the projected interval on every grade button, furigana on the answer side
   (and on the front with a switch), and a finished state with the next due time. The pages are
   loaded on demand, so the first screen no longer carries the study and build code.
+- Statistics and settings screens in the web UI. Statistics: today's reviews and new cards, 30-day
+  retention, a 30-day chart (Mantine Charts, with the same numbers in an accessible table), cards by
+  state and progress by JLPT level. Settings: one form for the new-card policy, daily limits, levels,
+  mastery threshold, target retention and the study-day hour, with validation in the browser, the
+  server's messages placed on the matching fields, and the new limits applied from the next card. The
+  review screen's "done for now" state links to Settings. Adds the `@mantine/charts` and `recharts`
+  dependencies (loaded only on the statistics page).
 - The API's OpenAPI document is committed as `frontend/openapi.json`; a unit test fails when it is
   stale, and the frontend's TypeScript types are generated from it.
 - CI: a `frontend` job (Prettier, ESLint, type-check and build, vitest with coverage, and a check
