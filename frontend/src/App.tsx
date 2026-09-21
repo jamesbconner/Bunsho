@@ -23,6 +23,12 @@ const HomePage = lazy(() =>
 const ReviewPage = lazy(() =>
   import('./features/review/ReviewPage').then((module) => ({ default: module.ReviewPage })),
 );
+const StatsPage = lazy(() =>
+  import('./features/stats/StatsPage').then((module) => ({ default: module.StatsPage })),
+);
+const SettingsPage = lazy(() =>
+  import('./features/settings/SettingsPage').then((module) => ({ default: module.SettingsPage })),
+);
 const BuildPage = lazy(() =>
   import('./features/build/BuildPage').then((module) => ({ default: module.BuildPage })),
 );
@@ -48,6 +54,8 @@ export function App() {
                 >
                   <Route index element={<HomePage />} />
                   <Route path="review" element={<ReviewPage />} />
+                  <Route path="stats" element={<StatsPage />} />
+                  <Route path="settings" element={<SettingsPage />} />
                   <Route path="build" element={<BuildPage />} />
                   <Route path="*" element={<NotFoundPage />} />
                 </Route>

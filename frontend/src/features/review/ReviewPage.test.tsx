@@ -324,6 +324,9 @@ describe('ReviewPage', () => {
       'href',
       '/',
     );
+    expect(
+      screen.getByRole('link', { name: 'Change your daily limits in Settings' }),
+    ).toHaveAttribute('href', '/settings');
   });
 
   it('leaves out the next due time when nothing is scheduled', async () => {

@@ -20,6 +20,9 @@ export function ReviewDone({ data }: { data: NextCard }) {
       <Button component={Link} to="/" variant="light">
         Back to the dashboard
       </Button>
+      <Button component={Link} to="/settings" variant="subtle" size="xs">
+        Change your daily limits in Settings
+      </Button>
     </Stack>
   );
 }
