@@ -159,6 +159,16 @@ Image and platform:
         swap the card mid-view (consider `false`)
       - Shell tests: the Study nav link's active state and href, a failed lazy chunk reaching the ErrorBoundary
       - `useAnswerReview` sets no explicit `retry: false` (it relies on the query client default)
+- [ ] The Show furigana switch keeps focus after it is toggled, so Space then toggles it again instead of
+      flipping the card (and digits are ignored until focus moves): decide on blur/refocus after toggling
+      (check in a browser)
+- [ ] Two keydowns landing before the re-render after the first grade both call `mutate` (the server rejects the
+      second with a 409, shown as a spurious "changed elsewhere" notice): add a synchronous in-flight guard
+- [ ] A held Enter that flips the next card through native button repeat (preventDefault repeated Space/Enter
+      inside the review controls)
+- [ ] An empty on/kun reading list renders an empty `span lang=ja`; after the last card focus falls to the body
+      and only the status text announces the finish; the nav active state is an exact path match (`/review/` is
+      not highlighted)
 - [ ] Login: map 422 field errors onto the form inputs; tighten `returnPath` (reject backslash) and carry search/hash
       through RequireAuth
 - [ ] Mobile shell: Burger aria-expanded/aria-controls, hide the collapsed drawer from keyboard users, verify header fit

@@ -217,3 +217,12 @@ Decisions taken while building, where the built code refines the text above.
 - **Test fixtures need `segment()`.** The generated types make `RubySegment.highlighted` and `Vocab.tags`
   required (the API declares defaults as required), so fixtures build segments with the `segment()` helper and
   include `tags: []`.
+- **One send path.** A grade and the Try again button after a failed save share one `submit()`, so a 409 on
+  the resend is handled like a 409 on the first send (the plan text had a separate resend path).
+- **Answer-hook test.** It uses a deferred fetch of the next card to prove that the counts are cached at once
+  and that the mutation stays pending until the next card has been fetched.
+- **Load behaviour.** A 503 on `GET /reviews/next` (content not built) is not retried, so the not-built screen
+  shows at once; the query does not refetch on window focus or on reconnect, so a card never changes under the
+  learner.
+- **Status after a failed save.** The status region is empty while the "Couldn't save your answer" alert is
+  shown, so "Answer shown" never reads like a success next to the alert.
