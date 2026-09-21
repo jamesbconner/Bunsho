@@ -151,12 +151,8 @@ Image and platform:
         glyph_to_sound or sound_to_glyph renders as sound_to_glyph instead of the placeholder; an empty main text
         has no placeholder
       - `FlipMode`/`useReviewShortcuts` tests: the Shift guard, keys typed in a text field after the flip,
-        `defaultPrevented`, and `lang="ja"` on `ReviewCard` main text and reading lines; the flip button is not
-        disabled while pending
-      - `ReviewPage` tests and polish: a FAILED refetch after a successful grade shows the load-error state with
-        no live grade buttons (correct by reading, untested); after a failed save the status text changes to
-        "Answer shown" while the alert also announces; the lower clamp of `duration_ms`; `refetchOnReconnect` can
-        swap the card mid-view (consider `false`)
+        `defaultPrevented`; the flip button is not disabled while pending
+      - `ReviewPage` tests: the lower clamp of `duration_ms`
       - Shell tests: the Study nav link's active state and href, a failed lazy chunk reaching the ErrorBoundary
       - `useAnswerReview` sets no explicit `retry: false` (it relies on the query client default)
 - [ ] The Show furigana switch keeps focus after it is toggled, so Space then toggles it again instead of
