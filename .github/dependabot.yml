@@ -27,6 +27,14 @@ updates:
     groups:
       frontend-minor-patch:
         update-types: ["minor", "patch"]
+    ignore:
+      # TypeScript stays on 6.x until typescript-eslint and openapi-typescript support 7: remove
+      # this rule together with the pin in frontend/package.json when adopting TypeScript 7.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      # @types/node follows the Node 24 runtime (Docker stage and CI), not the newest Node.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"

@@ -199,7 +199,8 @@ Decisions taken while building, where they differ from or refine the text above.
 - TypeScript is pinned to 6.0.3, not 7.0.2: `typescript-eslint` 8.70 supports only `typescript <6.1.0`, and
   `openapi-typescript` 7.13 needs the JavaScript compiler API and declares `^5.x` as its peer range. An
   `overrides` entry in `package.json` lets npm accept that peer range (verified to run on 6.0.3). Move to
-  TypeScript 7 when both tools support it.
+  TypeScript 7 when both tools support it. Dependabot's `ignore` rule (major versions of `typescript` and
+  `@types/node`) stops it proposing TypeScript 7; adopt it by hand, removing the rule and the pin together.
 - React Router is used in declarative mode (`BrowserRouter`, `Routes`, `Route`, `Navigate`, `Outlet`); TanStack
   Query owns data fetching. The UI's first-class routes are `/`, `/build` and `/login`.
 - Task order differs from "Order of work": the real-time provider and the Build screen came before the shell,

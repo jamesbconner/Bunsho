@@ -119,7 +119,8 @@ Image and platform:
 - [ ] Dashboard, flip-and-grade review with keyboard shortcuts and furigana, statistics and settings screens (Plan 2B-2)
 - [ ] Code-split the routes: the production JS chunk is about 540 kB (Vite warns above 500 kB)
 - [ ] Move to TypeScript 7 once `typescript-eslint` and `openapi-typescript` support it (TypeScript is pinned to 6.0.3;
-      see the Plan 2B-1 plan)
+      see the Plan 2B-1 plan). Dependabot's `ignore` rule for TypeScript (and `@types/node`) major versions stops it
+      proposing 7, so adopt it by hand: remove the ignore rule and the pin together
 - [ ] Content-Security-Policy header for the served UI (Mantine injects inline styles: needs nonces or hashes)
 - [ ] Browser end-to-end test of the deployed UI
 - [ ] Refresh-token logout/revocation on the server (the UI's Log out only clears this browser)
@@ -138,6 +139,26 @@ Image and platform:
       header controls
 - [ ] If the root `.gitignore` `build/` pattern is narrowed to `/build/`, remove the `!src/features/build/` override in
       `frontend/.gitignore`
+- [ ] Wrong-method requests to real API routes behave differently when the UI is served: the catch-all `/` mount wins
+      the full match over the router's partial (method) match, so POST to a GET-only route gives 405 without an
+      `Allow` header, GET on a POST-only route gives 404 instead of 405, and `HEAD /api/...` gives 404
+- [ ] Root `.gitignore` patterns `lib/`, `env/`, `var/`, `parts/`, `downloads/` would silently ignore a future
+      `frontend/src/lib` or `src/env`: anchor them (as with `build/` -> `/build/`)
+- [ ] Add Mantine `ColorSchemeScript` to `index.html` to avoid a light flash for dark-scheme users
+- [ ] The OpenAPI snapshot embeds `info.version`: a release version bump fails
+      `test_the_committed_snapshot_matches_the_app` until `scripts/export_openapi.py` and `npm run gen:api` are re-run
+      (add to the release checklist)
+- [ ] Docker Node stage: add `--platform=$BUILDPLATFORM` so multi-arch builds do not run the JS build under emulation
+- [ ] After a second close-1008 the stream stays offline until a reload: retry on `online`/`visibilitychange`
+- [ ] Logout can be undone by a refresh that is in flight (`session.setTokens` after `session.clear()`): add a session
+      epoch
+- [ ] Test the logout -> login stream lifecycle (stream closes on logout, a new one opens after login) and StrictMode
+      double mount
+- [ ] Deferred review notes: `buildJustFinished` treats a cached `null` (no build ever) like nothing cached; Build
+      screen: disable the button while the summary query errored, guard the modal Rebuild against a build started
+      elsewhere, clamp progress percent; Home: keep good data when a background refetch fails
+      (`isError && data === undefined`), add a missing-level test; shell: h1 and toast placement; `RequireAuth` `from`/`returnPath`
+      hardening (already listed above)
 
 ## Later sub-projects
 
