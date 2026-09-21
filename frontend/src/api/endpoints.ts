@@ -14,6 +14,11 @@ export type AnswerRequest = Schemas['AnswerRequest'];
 export type Grade = Schemas['Grade'];
 export type GradeIntervals = Schemas['GradeIntervals'];
 export type RubySegment = Schemas['RubySegment'];
+export type StatsSummary = Schemas['StatsSummary'];
+export type LevelProgress = Schemas['LevelProgress'];
+export type ReviewSettings = Schemas['ReviewSettings-Output'];
+export type ReviewSettingsInput = Schemas['ReviewSettings-Input'];
+export type NewCardPolicyName = Schemas['NewCardPolicyName'];
 
 /** Every authenticated API call the screens make, typed from the generated schema. */
 export const endpoints = {
@@ -39,6 +44,15 @@ export const endpoints = {
 
   /** The next card to study (or none), with the counts and the next time something is due. */
   nextReview: () => request<NextCard>('/reviews/next'),
+
+  /** Study statistics: today's counts, the last 30 days, retention, cards by state and level. */
+  statsSummary: () => request<StatsSummary>('/stats/summary'),
+
+  getSettings: () => request<ReviewSettings>('/settings'),
+
+  /** Replace the whole settings document (all or nothing: a 422 changes nothing). */
+  updateSettings: (settings: ReviewSettingsInput) =>
+    request<ReviewSettings>('/settings', { method: 'PUT', body: settings }),
 
   /** Grade a card; the server answers with the fresh counts. */
   answerReview: (answer: AnswerRequest) =>

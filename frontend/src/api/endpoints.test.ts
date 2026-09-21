@@ -2,6 +2,7 @@ import { http, HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { session } from '../auth/session';
+import { makeSettings, makeStatsSummary } from '../test/fixtures';
 import { server } from '../test/server';
 import { endpoints } from './endpoints';
 
@@ -107,5 +108,25 @@ describe('endpoints', () => {
     } as const;
     await expect(endpoints.answerReview(answer)).resolves.toEqual(counts);
     expect(bodies).toEqual([answer]);
+  });
+  it('reads the statistics summary', async () => {
+    const payload = makeStatsSummary();
+    server.use(http.get('/api/v1/stats/summary', () => HttpResponse.json(payload)));
+    await expect(endpoints.statsSummary()).resolves.toEqual(payload);
+  });
+
+  it('reads the settings and replaces them with a PUT of the whole document', async () => {
+    const bodies: unknown[] = [];
+    const saved = makeSettings({ new_card_policy: 'pinned_levels', active_levels: ['N5', 'N4'] });
+    server.use(
+      http.get('/api/v1/settings', () => HttpResponse.json(makeSettings())),
+      http.put('/api/v1/settings', async ({ request }) => {
+        bodies.push(await request.json());
+        return HttpResponse.json(saved);
+      }),
+    );
+    await expect(endpoints.getSettings()).resolves.toEqual(makeSettings());
+    await expect(endpoints.updateSettings(saved)).resolves.toEqual(saved);
+    expect(bodies).toEqual([saved]);
   });
 });

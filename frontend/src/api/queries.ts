@@ -9,6 +9,8 @@ export const queryKeys = {
   configCheck: ['admin', 'config-check'] as const,
   latestBuild: ['build', 'latest'] as const,
   reviewNext: ['review', 'next'] as const,
+  statsSummary: ['stats', 'summary'] as const,
+  settings: ['settings'] as const,
 };
 
 /** While a build runs and the live stream is down, ask the server this often. */
@@ -111,6 +113,49 @@ export function useAnswerReview() {
         (previous) => previous && { ...previous, counts },
       );
       await queryClient.invalidateQueries({ queryKey: queryKeys.reviewNext });
+    },
+  });
+}
+
+/** Statistics are cheap to compute and change with every review: ask again whenever a screen opens. */
+export function useStatsSummary() {
+  return useQuery({
+    queryKey: queryKeys.statsSummary,
+    queryFn: endpoints.statsSummary,
+    staleTime: 0,
+  });
+}
+
+/**
+ * The review settings. The form copies them once when it opens, so a background refetch must not
+ * replace what the learner is typing: no refetch on window focus or reconnect.
+ */
+export function useSettings() {
+  return useQuery({
+    queryKey: queryKeys.settings,
+    queryFn: endpoints.getSettings,
+    staleTime: 0,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+}
+
+/**
+ * Save the whole settings document. On success the saved document goes into the cache and what
+ * depends on it (the next card, whose limits changed, and the statistics) is marked stale, so
+ * the dashboard shows the new numbers when it is next opened. The mutation never retries by
+ * itself.
+ */
+export function useUpdateSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: endpoints.updateSettings,
+    onSuccess: async (saved) => {
+      queryClient.setQueryData(queryKeys.settings, saved);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.reviewNext }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.statsSummary }),
+      ]);
     },
   });
 }

@@ -4,7 +4,13 @@ import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createTestQueryClient } from '../test/render';
-import { makeBuildStatus, makeKanaCard, makeNextCard } from '../test/fixtures';
+import {
+  makeBuildStatus,
+  makeKanaCard,
+  makeNextCard,
+  makeSettings,
+  makeStatsSummary,
+} from '../test/fixtures';
 import { endpoints, type NextCard } from './endpoints';
 import { ApiError, NetworkError } from './errors';
 import { shouldRetry } from '../queryClient';
@@ -16,6 +22,9 @@ import {
   useAnswerReview,
   useLatestBuild,
   useNextReview,
+  useSettings,
+  useStatsSummary,
+  useUpdateSettings,
 } from './queries';
 
 describe('pollInterval', () => {
@@ -244,5 +253,63 @@ describe('useAnswerReview', () => {
       expect(answer.result.current.isError).toBe(true);
     });
     expect(send).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('useStatsSummary and useSettings', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('load the statistics and the settings under their own keys', async () => {
+    vi.spyOn(endpoints, 'statsSummary').mockResolvedValue(makeStatsSummary());
+    vi.spyOn(endpoints, 'getSettings').mockResolvedValue(makeSettings());
+    const queryClient = createTestQueryClient();
+    const stats = renderHook(() => useStatsSummary(), { wrapper: wrapperFor(queryClient) });
+    const settings = renderHook(() => useSettings(), { wrapper: wrapperFor(queryClient) });
+    await waitFor(() => {
+      expect(stats.result.current.data?.reviewed_today).toBe(42);
+      expect(settings.result.current.data?.rollover_hour).toBe(4);
+    });
+    expect(queryClient.getQueryData(queryKeys.statsSummary)).toEqual(makeStatsSummary());
+    expect(queryClient.getQueryData(queryKeys.settings)).toEqual(makeSettings());
+  });
+});
+
+describe('useUpdateSettings', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('caches the saved document and marks the next card and the statistics stale', async () => {
+    const saved = makeSettings({ target_retention: 0.95 });
+    vi.spyOn(endpoints, 'updateSettings').mockResolvedValue(saved);
+    const queryClient = createTestQueryClient();
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    const { result } = renderHook(() => useUpdateSettings(), { wrapper: wrapperFor(queryClient) });
+
+    result.current.mutate(makeSettings({ target_retention: 0.95 }));
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(queryClient.getQueryData(queryKeys.settings)).toEqual(saved);
+    const keys = invalidate.mock.calls.map((call) => call[0]?.queryKey);
+    expect(keys).toEqual([queryKeys.reviewNext, queryKeys.statsSummary]);
+  });
+
+  it('does not retry a failed save and leaves the cache alone', async () => {
+    const send = vi.spyOn(endpoints, 'updateSettings').mockRejectedValue(new Error('down'));
+    const queryClient = createTestQueryClient();
+    queryClient.setQueryData(queryKeys.settings, makeSettings());
+    const { result } = renderHook(() => useUpdateSettings(), { wrapper: wrapperFor(queryClient) });
+
+    result.current.mutate(makeSettings({ rollover_hour: 6 }));
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true);
+    });
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(queryClient.getQueryData(queryKeys.settings)).toEqual(makeSettings());
   });
 });
