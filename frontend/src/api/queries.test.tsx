@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createTestQueryClient } from '../test/render';
 import { makeBuildStatus, makeKanaCard, makeNextCard } from '../test/fixtures';
-import { endpoints } from './endpoints';
+import { endpoints, type NextCard } from './endpoints';
 import {
   BUILD_POLL_MS,
   buildJustFinished,
@@ -126,19 +126,28 @@ describe('useAnswerReview', () => {
     vi.restoreAllMocks();
   });
 
-  it('writes the fresh counts into the cache and refetches the next card', async () => {
+  it('caches the fresh counts at once and stays pending until the next card arrives', async () => {
     const before = makeNextCard(makeKanaCard());
     const after = makeNextCard(null);
-    const counts = { ...after.counts, due: { kana: 5, kanji: 0, vocab: 0 } };
+    const counts = { ...before.counts, due: { kana: 5, kanji: 0, vocab: 0 } };
     vi.spyOn(endpoints, 'answerReview').mockResolvedValue(counts);
-    const fetchNext = vi.spyOn(endpoints, 'nextReview').mockResolvedValue(after);
+    const fetchNext = vi.spyOn(endpoints, 'nextReview').mockResolvedValueOnce(before);
     const queryClient = createTestQueryClient();
-    queryClient.setQueryData(queryKeys.reviewNext, before);
     const next = renderHook(() => useNextReview(), { wrapper: wrapperFor(queryClient) });
     await waitFor(() => {
-      expect(next.result.current.data).toEqual(after);
+      expect(next.result.current.data).toEqual(before);
     });
+
+    // From here the next-card fetch stays in flight until the test lets it settle.
+    let settle: (value: NextCard) => void = () => undefined;
     fetchNext.mockClear();
+    fetchNext.mockImplementation(
+      () =>
+        new Promise<NextCard>((resolve) => {
+          settle = resolve;
+        }),
+    );
+
     const answer = renderHook(() => useAnswerReview(), { wrapper: wrapperFor(queryClient) });
     answer.result.current.mutate({
       item_id: 'kana:あ',
@@ -147,9 +156,20 @@ describe('useAnswerReview', () => {
       expected_last_review: null,
     });
     await waitFor(() => {
+      expect(fetchNext).toHaveBeenCalledTimes(1);
+    });
+
+    // The counts are already in the cache, the old card still is, and the mutation waits.
+    const cached = queryClient.getQueryData<NextCard>(queryKeys.reviewNext);
+    expect(cached?.counts).toEqual(counts);
+    expect(cached?.card).toEqual(before.card);
+    expect(answer.result.current.isPending).toBe(true);
+
+    settle(after);
+    await waitFor(() => {
       expect(answer.result.current.isSuccess).toBe(true);
     });
-    expect(fetchNext).toHaveBeenCalledTimes(1);
+    expect(queryClient.getQueryData(queryKeys.reviewNext)).toEqual(after);
   });
 
   it('does not retry a failed answer', async () => {
