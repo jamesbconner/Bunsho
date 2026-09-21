@@ -73,4 +73,39 @@ describe('endpoints', () => {
     await endpoints.getBuild('abc 123');
     expect(requestedPath).toBe('/api/v1/admin/content/build/abc%20123');
   });
+  it('asks for the next card', async () => {
+    const payload = {
+      card: null,
+      counts: {
+        due: { kana: 0, kanji: 0, vocab: 0 },
+        new_remaining: { kana: 0, kanji: 0, vocab: 0 },
+      },
+      next_due_at: null,
+    };
+    server.use(http.get('/api/v1/reviews/next', () => HttpResponse.json(payload)));
+    await expect(endpoints.nextReview()).resolves.toEqual(payload);
+  });
+
+  it('posts a grade exactly as given, including the opaque expected_last_review', async () => {
+    const bodies: unknown[] = [];
+    const counts = {
+      due: { kana: 0, kanji: 1, vocab: 0 },
+      new_remaining: { kana: 0, kanji: 0, vocab: 0 },
+    };
+    server.use(
+      http.post('/api/v1/reviews/answer', async ({ request }) => {
+        bodies.push(await request.json());
+        return HttpResponse.json(counts);
+      }),
+    );
+    const answer = {
+      item_id: 'kanji:日',
+      direction: 'kanji_to_meaning',
+      grade: 3,
+      expected_last_review: '2026-09-19T08:00:00.123456Z',
+      duration_ms: 4200,
+    } as const;
+    await expect(endpoints.answerReview(answer)).resolves.toEqual(counts);
+    expect(bodies).toEqual([answer]);
+  });
 });

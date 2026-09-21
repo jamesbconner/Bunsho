@@ -7,6 +7,13 @@ type Schemas = components['schemas'];
 export type ContentSummary = Schemas['ContentSummaryResponse'];
 export type ConfigCheck = Schemas['ConfigCheckResponse'];
 export type BuildStatus = Schemas['BuildStatusResponse'];
+export type NextCard = Schemas['NextCard'];
+export type CardView = Schemas['CardView'];
+export type ReviewCounts = Schemas['ReviewCounts'];
+export type AnswerRequest = Schemas['AnswerRequest'];
+export type Grade = Schemas['Grade'];
+export type GradeIntervals = Schemas['GradeIntervals'];
+export type RubySegment = Schemas['RubySegment'];
 
 /** Every authenticated API call the screens make, typed from the generated schema. */
 export const endpoints = {
@@ -29,4 +36,11 @@ export const endpoints = {
 
   getBuild: (taskId: string) =>
     request<BuildStatus>(`/admin/content/build/${encodeURIComponent(taskId)}`),
+
+  /** The next card to study (or none), with the counts and the next time something is due. */
+  nextReview: () => request<NextCard>('/reviews/next'),
+
+  /** Grade a card; the server answers with the fresh counts. */
+  answerReview: (answer: AnswerRequest) =>
+    request<ReviewCounts>('/reviews/answer', { method: 'POST', body: answer }),
 };
