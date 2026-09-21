@@ -1,0 +1,91 @@
+/* The study surface: large, calm, centred. Colours come from Mantine variables so light and dark
+   mode both work. */
+
+.card {
+  max-width: 40rem;
+  margin-inline: auto;
+  padding-block: var(--mantine-spacing-lg);
+  text-align: center;
+}
+
+.caption {
+  margin-bottom: var(--mantine-spacing-xs);
+  font-size: var(--mantine-font-size-xs);
+  letter-spacing: 0.04em;
+  color: var(--mantine-color-dimmed);
+}
+
+.mainJapanese {
+  font-size: clamp(2.5rem, 12vw, 5rem);
+  font-weight: 500;
+  line-height: 1.6;
+}
+
+.mainLatin {
+  font-size: clamp(1.5rem, 6vw, 2.25rem);
+  line-height: 1.4;
+}
+
+.lines {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--mantine-spacing-xs) var(--mantine-spacing-md);
+  margin: var(--mantine-spacing-md) auto 0;
+  max-width: 28rem;
+  text-align: start;
+}
+
+.lines dt {
+  color: var(--mantine-color-dimmed);
+  font-size: var(--mantine-font-size-sm);
+}
+
+.lines dd {
+  margin: 0;
+}
+
+.sentence {
+  margin-top: var(--mantine-spacing-md);
+  font-size: 1.25rem;
+  line-height: 2.2;
+}
+
+.english {
+  color: var(--mantine-color-dimmed);
+  font-size: var(--mantine-font-size-sm);
+}
+
+.answer {
+  margin-top: var(--mantine-spacing-lg);
+  padding-top: var(--mantine-spacing-lg);
+  border-top: 1px solid var(--mantine-color-default-border);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .answer {
+    animation: reveal 150ms ease-out;
+  }
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.key {
+  margin-inline-end: var(--mantine-spacing-xs);
+  font-family: var(--mantine-font-family-monospace);
+  font-size: var(--mantine-font-size-xs);
+  opacity: 0.7;
+}
+
+.grades:focus {
+  outline: none;
+}
