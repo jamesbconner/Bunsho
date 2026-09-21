@@ -1,7 +1,7 @@
 # Bunshō TODO
 
-Status: Plans 1A, 1B, 1C and 2A are merged. Plan 2B-1 (frontend skeleton and delivery) is implemented
-on `feat/plan-2b1-frontend-skeleton`; Plan 2B-2 (dashboard, review, stats, settings) is next. Design:
+Status: Plans 1A, 1B, 1C, 2A and 2B-1 are merged. Plan 2B-2 (the study loop: dashboard and review) is
+implemented on `feat/plan-2b2-study-loop`; Plan 2B-3 (statistics and settings screens) is next. Design:
 the specs in `docs/superpowers/specs/`. Plans: `docs/superpowers/plans/`.
 
 ## Now
@@ -116,8 +116,9 @@ Image and platform:
 
 ## Plan 2B-2 and later
 
-- [ ] Dashboard, flip-and-grade review with keyboard shortcuts and furigana, statistics and settings screens (Plan 2B-2)
-- [ ] Code-split the routes: the production JS chunk is about 540 kB (Vite warns above 500 kB)
+- [x] Dashboard and flip-and-grade review with keyboard shortcuts and furigana (Plan 2B-2)
+- [ ] Statistics and settings screens (Plan 2B-3)
+- [x] Code-split the routes: the production main chunk was about 540 kB, now about 388 kB (lazy routes, Plan 2B-2)
 - [ ] Move to TypeScript 7 once `typescript-eslint` and `openapi-typescript` support it (TypeScript is pinned to 6.0.3;
       see the Plan 2B-1 plan). Dependabot's `ignore` rule for TypeScript (and `@types/node`) major versions stops it
       proposing 7, so adopt it by hand: remove the ignore rule and the pin together
@@ -131,6 +132,33 @@ Image and platform:
       responses together with the CSP work
 - [ ] An unmatched WebSocket path under the `/` static mount reaches StaticFiles' `assert scope["type"] == "http"`
       (AssertionError instead of a clean rejection): guard it
+- [ ] `GET /reviews/next` cannot say why no card is offered (daily limit used up vs everything introduced): add a
+      reason field and use it in the finished state
+- [ ] Typed-answer and multiple-choice review modes plug into the `ReviewMode` contract
+      (`features/review/reviewMode.ts`)
+- [ ] Undo of a grade and study-ahead need API support (the review log is append-only, `next` has no look-ahead)
+- [ ] Check Japanese font rendering in real browsers (Hiragino, Yu Gothic, Noto) and self-host Noto Sans JP if the
+      system stack looks poor
+- [ ] Per-level progress on the dashboard (with the statistics screen, Plan 2B-3)
+- [ ] A 503 on `POST /reviews/answer` shows the generic save-failed alert without the Build link (a card on screen
+      implies built content)
+- [ ] Study loop hardening and test follow-ups from the reviews:
+      - `formatDueTime` throws a RangeError on an unparseable string: guard NaN; `formatInterval` rounds after
+        comparing, so 59.6 s shows "60 s", 3599.6 s "60 m" and about 350-364 days "12 mo" (round first, then
+        promote the unit)
+      - `cardFaces`: add a table test that every front has no answer lines (`lines` empty except recall's part of
+        speech, `sentence` null, recognition `segments` null with furigana off); a kana direction other than
+        glyph_to_sound or sound_to_glyph renders as sound_to_glyph instead of the placeholder; an empty main text
+        has no placeholder
+      - `FlipMode`/`useReviewShortcuts` tests: the Shift guard, keys typed in a text field after the flip,
+        `defaultPrevented`, and `lang="ja"` on `ReviewCard` main text and reading lines; the flip button is not
+        disabled while pending
+      - `ReviewPage` tests and polish: a FAILED refetch after a successful grade shows the load-error state with
+        no live grade buttons (correct by reading, untested); after a failed save the status text changes to
+        "Answer shown" while the alert also announces; the lower clamp of `duration_ms`; `refetchOnReconnect` can
+        swap the card mid-view (consider `false`)
+      - Shell tests: the Study nav link's active state and href, a failed lazy chunk reaching the ErrorBoundary
+      - `useAnswerReview` sets no explicit `retry: false` (it relies on the query client default)
 - [ ] Login: map 422 field errors onto the form inputs; tighten `returnPath` (reject backslash) and carry search/hash
       through RequireAuth
 - [ ] Mobile shell: Burger aria-expanded/aria-controls, hide the collapsed drawer from keyboard users, verify header fit

@@ -59,6 +59,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   browser; the server does not revoke tokens yet. The Docker image builds the UI in a Node stage and
   the service serves it (`paths.frontend_dir`), with cache and security headers and a fallback to
   `index.html` for client-side routes.
+- Study screens in the web UI: a dashboard on the Home page (what is due and what is new, per type,
+  and a *Study now* button) and a flip-and-grade review with keyboard shortcuts (Space or Enter to
+  flip, 1 to 4 to grade), the projected interval on every grade button, furigana on the answer side
+  (and on the front with a switch), and a finished state with the next due time. The pages are
+  loaded on demand, so the first screen no longer carries the study and build code.
 - The API's OpenAPI document is committed as `frontend/openapi.json`; a unit test fails when it is
   stale, and the frontend's TypeScript types are generated from it.
 - CI: a `frontend` job (Prettier, ESLint, type-check and build, vitest with coverage, and a check

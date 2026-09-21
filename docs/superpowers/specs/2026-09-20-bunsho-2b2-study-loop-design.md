@@ -193,3 +193,27 @@ One branch (`feat/plan-2b2-study-loop`), draft PR opened early, no stacked PRs.
 - **Browser verification:** the authenticated screens cannot be checked in a browser by the assistant
   (credentials are not typed into login forms); the PR lists what to eyeball (card typography,
   shortcuts, the mobile layout).
+
+## Implementation notes
+
+Decisions taken while building, where the built code refines the text above.
+
+- **One "done for now" state.** `new_remaining` counts only cards that could be introduced right now, so
+  "daily limit used up" and "everything unlocked is already introduced" cannot be told apart from `next`.
+  The screen names both reasons in one message; a reason field on the API would allow two states (see
+  `TODO.md`).
+- **No card is shown twice after a grade.** The answer mutation stays pending until the next card has been
+  fetched (`onSuccess` awaits `invalidateQueries`), and the page treats `answer.isPending || next.isFetching`
+  as busy (grade buttons disabled, keys ignored).
+- **Focus after the flip** goes to the grade group (a `tabIndex=-1` `div`), not to the first grade button:
+  Space activates a button on key-up, so a key still held down from the flip would press "Again".
+- **Shortcut scope.** Keys count only when the event target is the page body or an element inside a container
+  marked `data-review-controls`, so text fields, links and the header switch keep their own keys. Modified
+  keys, held-key repeats and IME composition are ignored.
+- **Dashboard numbers** come from `GET /reviews/next` (`due` and `new_remaining`), the same query the review
+  uses (`['review', 'next']`), so the dashboard and the review share one cache entry.
+- **Status text is static.** The single persistent status region on the review screen announces "Card shown",
+  "Answer shown", "Saving answer" or "Nothing due right now"; nothing that changes every second is announced.
+- **Test fixtures need `segment()`.** The generated types make `RubySegment.highlighted` and `Vocab.tags`
+  required (the API declares defaults as required), so fixtures build segments with the `segment()` helper and
+  include `tags: []`.
