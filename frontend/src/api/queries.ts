@@ -1,12 +1,13 @@
-import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 
-import { endpoints, type BuildStatus } from './endpoints';
+import { endpoints, type BuildStatus, type NextCard } from './endpoints';
 
 /** Query keys, shared by the hooks and by the code that updates the cache from the live stream. */
 export const queryKeys = {
   contentSummary: ['content', 'summary'] as const,
   configCheck: ['admin', 'config-check'] as const,
   latestBuild: ['build', 'latest'] as const,
+  reviewNext: ['review', 'next'] as const,
 };
 
 /** While a build runs and the live stream is down, ask the server this often. */
@@ -68,5 +69,38 @@ export function useLatestBuild(streamConnected: boolean) {
       return next;
     },
     refetchInterval: (query) => pollInterval(query.state.data, streamConnected),
+  });
+}
+
+/**
+ * The next card to study, with the counts. What is due changes with the clock, so opening a screen
+ * always asks the server (`staleTime: 0`); switching windows does not, so a card never changes
+ * under the learner's hands.
+ */
+export function useNextReview() {
+  return useQuery({
+    queryKey: queryKeys.reviewNext,
+    queryFn: endpoints.nextReview,
+    staleTime: 0,
+    refetchOnWindowFocus: false,
+  });
+}
+
+/**
+ * Grade a card. On success the fresh counts go into the cache at once and the next card is
+ * fetched; the mutation stays pending until that fetch settles, so the screen never shows the card
+ * that was just graded. It never retries by itself: a repeated POST would count the review twice.
+ */
+export function useAnswerReview() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: endpoints.answerReview,
+    onSuccess: async (counts) => {
+      queryClient.setQueryData<NextCard>(
+        queryKeys.reviewNext,
+        (previous) => previous && { ...previous, counts },
+      );
+      await queryClient.invalidateQueries({ queryKey: queryKeys.reviewNext });
+    },
   });
 }

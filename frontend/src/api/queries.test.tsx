@@ -4,14 +4,16 @@ import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createTestQueryClient } from '../test/render';
-import { makeBuildStatus } from '../test/fixtures';
+import { makeBuildStatus, makeKanaCard, makeNextCard } from '../test/fixtures';
 import { endpoints } from './endpoints';
 import {
   BUILD_POLL_MS,
   buildJustFinished,
   pollInterval,
   queryKeys,
+  useAnswerReview,
   useLatestBuild,
+  useNextReview,
 } from './queries';
 
 describe('pollInterval', () => {
@@ -93,5 +95,76 @@ describe('useLatestBuild', () => {
       expect(result.current.data?.state).toBe('succeeded');
     });
     expect(invalidated()).toEqual([]);
+  });
+});
+
+function wrapperFor(queryClient: QueryClient) {
+  return ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+}
+
+describe('useNextReview', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('loads the next card under the review key', async () => {
+    const payload = makeNextCard(makeKanaCard());
+    vi.spyOn(endpoints, 'nextReview').mockResolvedValue(payload);
+    const queryClient = createTestQueryClient();
+    const { result } = renderHook(() => useNextReview(), { wrapper: wrapperFor(queryClient) });
+    await waitFor(() => {
+      expect(result.current.data).toEqual(payload);
+    });
+    expect(queryClient.getQueryData(queryKeys.reviewNext)).toEqual(payload);
+  });
+});
+
+describe('useAnswerReview', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('writes the fresh counts into the cache and refetches the next card', async () => {
+    const before = makeNextCard(makeKanaCard());
+    const after = makeNextCard(null);
+    const counts = { ...after.counts, due: { kana: 5, kanji: 0, vocab: 0 } };
+    vi.spyOn(endpoints, 'answerReview').mockResolvedValue(counts);
+    const fetchNext = vi.spyOn(endpoints, 'nextReview').mockResolvedValue(after);
+    const queryClient = createTestQueryClient();
+    queryClient.setQueryData(queryKeys.reviewNext, before);
+    const next = renderHook(() => useNextReview(), { wrapper: wrapperFor(queryClient) });
+    await waitFor(() => {
+      expect(next.result.current.data).toEqual(after);
+    });
+    fetchNext.mockClear();
+    const answer = renderHook(() => useAnswerReview(), { wrapper: wrapperFor(queryClient) });
+    answer.result.current.mutate({
+      item_id: 'kana:あ',
+      direction: 'glyph_to_sound',
+      grade: 3,
+      expected_last_review: null,
+    });
+    await waitFor(() => {
+      expect(answer.result.current.isSuccess).toBe(true);
+    });
+    expect(fetchNext).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retry a failed answer', async () => {
+    const send = vi.spyOn(endpoints, 'answerReview').mockRejectedValue(new Error('network down'));
+    const queryClient = createTestQueryClient();
+    const answer = renderHook(() => useAnswerReview(), { wrapper: wrapperFor(queryClient) });
+    answer.result.current.mutate({
+      item_id: 'kana:あ',
+      direction: 'glyph_to_sound',
+      grade: 3,
+      expected_last_review: null,
+    });
+    await waitFor(() => {
+      expect(answer.result.current.isError).toBe(true);
+    });
+    expect(send).toHaveBeenCalledTimes(1);
   });
 });
