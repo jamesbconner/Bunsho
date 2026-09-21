@@ -5,6 +5,7 @@ import openapi from '../../../openapi.json?raw';
 import { makeSettings } from '../../test/fixtures';
 import {
   RECOMMENDED_SETTINGS,
+  isSettingsDirty,
   placeServerErrors,
   toFormValues,
   toRequest,
@@ -107,6 +108,45 @@ describe('validateSettings', () => {
       'new_limits.kana',
       'new_limits.kanji',
     ]);
+  });
+});
+
+describe('isSettingsDirty', () => {
+  it('is false for identical values', () => {
+    expect(isSettingsDirty(withValues({}), VALID)).toBe(false);
+  });
+
+  const changes: [string, Partial<SettingsFormValues>][] = [
+    ['the policy', { new_card_policy: 'pinned_levels' }],
+    ['the kana limit', { new_limits: { ...VALID.new_limits, kana: 21 } }],
+    ['the kanji limit', { new_limits: { ...VALID.new_limits, kanji: 16 } }],
+    ['the vocabulary limit', { new_limits: { ...VALID.new_limits, vocab: 21 } }],
+    ['the retention', { target_retention_percent: 91 }],
+    ['the rollover hour', { rollover_hour: 5 }],
+    ['the levels (added)', { active_levels: ['N5', 'N4'] }],
+    ['the levels (removed)', { active_levels: [] }],
+    ['the mastery threshold', { mastery_threshold_percent: 81 }],
+  ];
+
+  it.each(changes)('is true when %s changed', (_name, overrides) => {
+    expect(isSettingsDirty(withValues(overrides), VALID)).toBe(true);
+  });
+
+  it('tells a cleared field from 0, and a typed string from the same number', () => {
+    const zero = toFormValues(makeSettings({ new_limits: { kana: 0, kanji: 15, vocab: 20 } }));
+    expect(isSettingsDirty({ ...zero, new_limits: { ...zero.new_limits, kana: '' } }, zero)).toBe(
+      true,
+    );
+    expect(isSettingsDirty({ ...zero, new_limits: { ...zero.new_limits, kana: '0' } }, zero)).toBe(
+      false,
+    );
+    expect(isSettingsDirty(withValues({ mastery_threshold_percent: '80' }), VALID)).toBe(false);
+    expect(isSettingsDirty(withValues({ mastery_threshold_percent: '' }), VALID)).toBe(true);
+  });
+
+  it('ignores the order the levels were ticked in', () => {
+    const saved = toFormValues(makeSettings({ active_levels: ['N5', 'N4'] }));
+    expect(isSettingsDirty({ ...saved, active_levels: ['N4', 'N5'] }, saved)).toBe(false);
   });
 });
 

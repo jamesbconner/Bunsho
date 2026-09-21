@@ -44,7 +44,9 @@ describe('StatsPage', () => {
     expect(retention).toHaveTextContent('87.7%');
 
     expect(screen.getByRole('heading', { name: 'Last 30 days' })).toBeInTheDocument();
-    expect(container.querySelector('.mantine-BarChart-root')).not.toBeNull();
+    const chart = container.querySelector('.mantine-BarChart-root');
+    expect(chart).not.toBeNull();
+    expect(chart?.closest('[aria-hidden="true"]')).not.toBeNull();
     expect(screen.getByRole('heading', { name: 'Your cards' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Progress by level' })).toBeInTheDocument();
   });

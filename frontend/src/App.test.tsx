@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from './App';
 import { REFRESH_TOKEN_KEY, session } from './auth/session';
@@ -51,6 +51,12 @@ function goTo(path: string) {
 }
 
 describe('App', () => {
+  // Pay the cost of transforming the lazy pages (recharts is large) outside the tests' 1 s waits.
+  beforeAll(async () => {
+    await import('./features/stats/StatsPage');
+    await import('./features/settings/SettingsPage');
+  }, 30_000);
+
   beforeEach(() => {
     session.clear();
     TrackedSocket.instances = [];

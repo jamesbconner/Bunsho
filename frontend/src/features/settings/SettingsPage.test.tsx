@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -62,6 +62,10 @@ describe('SettingsPage', () => {
     expect(screen.getByRole('slider', { name: 'Target retention' })).toHaveAttribute(
       'aria-valuenow',
       '85',
+    );
+    expect(screen.getByRole('slider', { name: 'Target retention' })).toHaveAttribute(
+      'aria-valuetext',
+      '85%',
     );
     expect(screen.getByRole('combobox', { name: /A new study day starts at/ })).toHaveValue('6');
     expect(screen.getByRole('checkbox', { name: 'N5' })).toBeChecked();
@@ -307,6 +311,69 @@ describe('SettingsPage', () => {
     expect(screen.getByRole('textbox', { name: 'Kana per day' })).toHaveValue('20');
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument();
+  });
+
+  it('still counts Reset as a change after one field was nudged and put back', async () => {
+    const user = userEvent.setup();
+    serveSettings(makeSettings({ new_limits: { kana: 50, kanji: 15, vocab: 20 } }));
+    await openSettings();
+    await user.click(screen.getByRole('button', { name: 'Reset to recommended values' }));
+    await setNumber(user, 'Kanji per day', '16');
+    await setNumber(user, 'Kanji per day', '15');
+
+    expect(screen.getByRole('textbox', { name: 'Kana per day' })).toHaveValue('20');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+  });
+
+  it('is not changed by unticking and ticking a level again', async () => {
+    const user = userEvent.setup();
+    serveSettings(makeSettings({ new_card_policy: 'pinned_levels', active_levels: ['N5', 'N4'] }));
+    await openSettings();
+    await user.click(screen.getByRole('checkbox', { name: 'N5' }));
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    await user.click(screen.getByRole('checkbox', { name: 'N5' }));
+
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument();
+  });
+
+  it('is clean again when an edit is put back by hand', async () => {
+    const user = userEvent.setup();
+    serveSettings();
+    await openSettings();
+    await setNumber(user, 'Kana per day', '30');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    await setNumber(user, 'Kana per day', '20');
+
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument();
+  });
+
+  it('keeps the form and its edits when a background refetch fails', async () => {
+    const user = userEvent.setup();
+    let failing = false;
+    server.use(
+      http.get('/api/v1/settings', () =>
+        failing
+          ? HttpResponse.json({ detail: 'boom' }, { status: 500 })
+          : HttpResponse.json(makeSettings()),
+      ),
+    );
+    const { queryClient } = await openSettings();
+    await setNumber(user, 'Kana per day', '30');
+
+    failing = true;
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: ['settings'] });
+      // TanStack Query hands its result to React on a timer: let it arrive before asserting.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(queryClient.getQueryState(['settings'])?.status).toBe('error');
+
+    expect(screen.getByRole('textbox', { name: 'Kana per day' })).toHaveValue('30');
+    expect(screen.queryByText("Couldn't load your settings")).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 
   it('names the levels as a group and ties the hint and the error to it', async () => {

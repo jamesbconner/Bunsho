@@ -92,6 +92,29 @@ export function toRequest(values: SettingsFormValues): ReviewSettingsInput {
   };
 }
 
+/** The form values in a shape that compares equal exactly when the documents they describe match. */
+function canonical(values: SettingsFormValues): string {
+  return JSON.stringify([
+    values.new_card_policy,
+    String(values.new_limits.kana),
+    String(values.new_limits.kanji),
+    String(values.new_limits.vocab),
+    values.target_retention_percent,
+    values.rollover_hour,
+    LEVELS.filter((level) => values.active_levels.includes(level)),
+    String(values.mastery_threshold_percent),
+  ]);
+}
+
+/**
+ * Whether `values` differ from `initial`. Mantine's own dirty map goes stale after a reset and
+ * remembers the order chips were ticked in, so the comparison is done on canonical forms: an
+ * empty field differs from 0, and the order of the levels does not matter.
+ */
+export function isSettingsDirty(values: SettingsFormValues, initial: SettingsFormValues): boolean {
+  return canonical(values) !== canonical(initial);
+}
+
 function isWholeNumber(value: number | string, min: number, max: number): boolean {
   if (typeof value === 'string' && value.trim() === '') return false;
   const number = Number(value);

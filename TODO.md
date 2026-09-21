@@ -209,13 +209,16 @@ Image and platform:
         the loading/503/error states of the page render no heading; the cards-by-type row names should be
         `th scope="row"`; `VisuallyHidden` wraps a table in a span (use `component="div"`); the date tests
         assume an English locale; small dimmed text has weak contrast (design-wide)
-      - Settings: the form unmounts and typed edits are lost if a mount-time background refetch fails while
-        cached data exists; Try again re-sends the original request and a success resets the form to it (newer
-        edits are dropped); after Reset changing two or more fields, hand-reverting one wrongly disables Save
-        (derive dirtiness from a deep comparison with the initial values instead of Mantine's per-field map);
-        the 422 test should assert the field's accessible error and that an error clears on edit;
-        `slider.focus()` in a test runs outside `act`; `SettingsPage.tsx` holds the page and a ~230-line form
-        (split it)
+      - Settings: Try again re-sends the original request and a success resets the form to it (newer
+        edits are dropped); the 422 test should assert the field's accessible error and that an error clears
+        on edit; `slider.focus()` in a test runs outside `act`; `SettingsPage.tsx` holds the page and a
+        ~230-line form (split it)
+      - No focus or announcement moves to the first invalid field after a failed client-side submit
+      - The settings form has no test of a second failure or 422 on Try again, and Try again drops edits made
+        after the failed save
+      - `formatCount` is imported from `features/build` by the stats components: move it to a shared utility
+      - `StatsPage` replaces good data with the error alert when a background refetch fails (same shape as the
+        Home follow-up)
 
 ## Later sub-projects
 

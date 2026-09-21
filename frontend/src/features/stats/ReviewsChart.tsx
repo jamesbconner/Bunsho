@@ -25,6 +25,8 @@ export function ReviewsChart({ days }: { days: StatsSummary['daily_reviews'] }) 
           series={[{ name: 'reviews', label: 'Reviews', color: 'indigo.6' }]}
           tickLine="y"
           withLegend={false}
+          accessibilityLayer={false}
+          yAxisProps={{ allowDecimals: false }}
         />
       </div>
       <VisuallyHidden>

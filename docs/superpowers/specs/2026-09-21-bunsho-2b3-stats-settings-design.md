@@ -171,8 +171,9 @@ Details that differ from, or refine, the design above (as built).
   replace what is being typed. After a save the form resets to the server's response.
 - **Percentages keep their precision.** Retention and the mastery threshold are converted with `toFixed`, so a
   stored 0.905 shows as 90.5% and is sent back unchanged.
-- **Reset to recommended values** only refills the form and recomputes the unsaved state (`form.setDirty({})`),
-  so Save follows the refilled values instead of the edits made before the reset.
+- **Reset to recommended values** only refills the form. The unsaved state is computed by
+  `isSettingsDirty` (a canonical comparison of the values with the initial values), not by Mantine's
+  per-field dirty map: that map goes stale after a reset, and re-ticked chips reorder the levels.
 - **Group semantics.** The Levels and Retention controls are `role="group"` wrappers whose accessible name
   and description come from their labels; Mantine does not tie the chips and the slider to their hints
   otherwise.
@@ -180,6 +181,10 @@ Details that differ from, or refine, the design above (as built).
   `resolveJsonModule`) and compares `RECOMMENDED_SETTINGS` with the API's declared defaults.
 - **The statistics chart is `aria-hidden`.** A visually hidden table with the same 30 days sits beside it
   for assistive technology.
+- **The chart is not focusable.** `BarChart` gets `accessibilityLayer={false}`: its SVG must not take
+  focus inside the `aria-hidden` wrapper. The y-axis does not show fractional ticks.
+- **`App.test.tsx` preloads the two page modules** (`StatsPage`, `SettingsPage`) so a cold cache does not
+  exhaust the 1 s wait while the lazy recharts chunk is transformed; the lazy path is still exercised.
 - **Kana has no level rows** in the per-level progress (kana is not levelled); only kanji and vocabulary
   are listed.
 - **Bundle sizes (production build).** Statistics chunk about 411 kB (recharts), settings chunk about 53 kB,

@@ -24,6 +24,7 @@ import {
   LEVELS,
   LIMIT_MAX,
   RECOMMENDED_SETTINGS,
+  isSettingsDirty,
   RETENTION_MAX_PERCENT,
   RETENTION_MIN_PERCENT,
   placeServerErrors,
@@ -72,7 +73,6 @@ function SettingsForm({ initial }: { initial: ReviewSettings }) {
         const values = toFormValues(saved);
         form.setValues(values);
         form.setInitialValues(values);
-        form.resetDirty(values);
         notifications.show({ message: 'Settings saved' });
       },
       onError: (error) => {
@@ -88,7 +88,7 @@ function SettingsForm({ initial }: { initial: ReviewSettings }) {
   };
 
   const values = form.getValues();
-  const dirty = form.isDirty();
+  const dirty = isSettingsDirty(values, form.getInitialValues());
   const pinned = values.new_card_policy === 'pinned_levels';
   const mastery = values.new_card_policy === 'mastery_unlock';
   const levelsError =
@@ -210,6 +210,7 @@ function SettingsForm({ initial }: { initial: ReviewSettings }) {
               }}
               label={(percent) => `${String(percent)}%`}
               thumbLabel="Target retention"
+              thumbValueText={`${String(values.target_retention_percent)}%`}
               marks={[
                 { value: 70, label: '70%' },
                 { value: 80, label: '80%' },
@@ -262,7 +263,6 @@ function SettingsForm({ initial }: { initial: ReviewSettings }) {
             variant="subtle"
             onClick={() => {
               form.setValues(toFormValues(RECOMMENDED_SETTINGS));
-              form.setDirty({});
             }}
           >
             Reset to recommended values
@@ -286,7 +286,7 @@ export function SettingsPage() {
     <Stack gap="lg" maw={720}>
       <Title order={2}>Settings</Title>
       {settings.isPending && <Skeleton height={320} />}
-      {settings.isError && (
+      {settings.isError && settings.data === undefined && (
         <Alert color="red" title="Couldn't load your settings">
           <Text size="sm">{messageFor(settings.error)}</Text>
           <Button
@@ -300,7 +300,7 @@ export function SettingsPage() {
           </Button>
         </Alert>
       )}
-      {settings.data !== undefined && !settings.isError && <SettingsForm initial={settings.data} />}
+      {settings.data !== undefined && <SettingsForm initial={settings.data} />}
     </Stack>
   );
 }
