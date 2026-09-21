@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { makeKanaCard, makeVocabCard } from '../../test/fixtures';
+import { makeKanaCard, makeKanjiCard, makeVocabCard } from '../../test/fixtures';
 import { renderWithProviders } from '../../test/render';
 import { FlipMode } from './FlipMode';
 
@@ -51,6 +51,26 @@ describe('FlipMode', () => {
     await user.keyboard(key);
     expect(onReveal).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('group', { name: 'Grade your answer' })).toBeInTheDocument();
+  });
+
+  it('marks Japanese text runs with lang="ja" and leaves English text unmarked', async () => {
+    const user = userEvent.setup();
+    const { container } = renderMode({ card: makeKanjiCard() });
+    const kanji = screen.getByText('日');
+    expect(kanji).toHaveAttribute('lang', 'ja');
+
+    await user.keyboard(' ');
+    const meanings = screen.getByText('day, sun');
+    expect(meanings.closest('[lang]')).toBeNull();
+    for (const reading of ['ニチ、ジツ', 'ひ、か']) {
+      expect(screen.getByText(reading)).toHaveAttribute('lang', 'ja');
+    }
+    expect(container.querySelectorAll('dd[lang="ja"]')).toHaveLength(2);
+  });
+
+  it('leaves the romaji of a kana card unmarked', () => {
+    renderMode({ card: makeKanaCard({ direction: 'sound_to_glyph' }) });
+    expect(screen.getByText('a').closest('[lang]')).toBeNull();
   });
 
   it('labels each grade with its key and projected interval', async () => {

@@ -1,4 +1,4 @@
-import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
+import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createTestQueryClient } from '../test/render';
 import { makeBuildStatus, makeKanaCard, makeNextCard } from '../test/fixtures';
 import { endpoints, type NextCard } from './endpoints';
+import { ApiError, NetworkError } from './errors';
+import { shouldRetry } from '../queryClient';
 import {
   BUILD_POLL_MS,
   buildJustFinished,
@@ -118,6 +120,62 @@ describe('useNextReview', () => {
       expect(result.current.data).toEqual(payload);
     });
     expect(queryClient.getQueryData(queryKeys.reviewNext)).toEqual(payload);
+  });
+});
+
+describe('useNextReview retries and refetching', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // The application's retry policy, with the delay removed so the test stays fast.
+  function appLikeClient(): QueryClient {
+    return new QueryClient({
+      defaultOptions: { queries: { retry: shouldRetry, retryDelay: 0, staleTime: 30_000 } },
+    });
+  }
+
+  it('asks once when the content is not built (503) instead of retrying', async () => {
+    const fetchNext = vi
+      .spyOn(endpoints, 'nextReview')
+      .mockRejectedValue(new ApiError(503, 'content is not built'));
+    const { result } = renderHook(() => useNextReview(), {
+      wrapper: wrapperFor(appLikeClient()),
+    });
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true);
+    });
+    expect(fetchNext).toHaveBeenCalledTimes(1);
+  });
+
+  it('still retries other server errors and connection failures, twice at most', async () => {
+    const fetchNext = vi
+      .spyOn(endpoints, 'nextReview')
+      .mockRejectedValueOnce(new ApiError(500, 'boom'))
+      .mockRejectedValueOnce(new NetworkError())
+      .mockRejectedValue(new ApiError(500, 'boom'));
+    const { result } = renderHook(() => useNextReview(), {
+      wrapper: wrapperFor(appLikeClient()),
+    });
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true);
+    });
+    expect(fetchNext).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not refetch when the connection comes back', async () => {
+    const fetchNext = vi.spyOn(endpoints, 'nextReview').mockResolvedValue(makeNextCard(null));
+    const { result } = renderHook(() => useNextReview(), {
+      wrapper: wrapperFor(createTestQueryClient()),
+    });
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    onlineManager.setOnline(false);
+    onlineManager.setOnline(true);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(fetchNext).toHaveBeenCalledTimes(1);
   });
 });
 

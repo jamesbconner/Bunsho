@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 
 import { endpoints, type BuildStatus, type NextCard } from './endpoints';
+import { ApiError } from './errors';
 
 /** Query keys, shared by the hooks and by the code that updates the cache from the live stream. */
 export const queryKeys = {
@@ -74,15 +75,24 @@ export function useLatestBuild(streamConnected: boolean) {
 
 /**
  * The next card to study, with the counts. What is due changes with the clock, so opening a screen
- * always asks the server (`staleTime: 0`); switching windows does not, so a card never changes
- * under the learner's hands.
+ * always asks the server (`staleTime: 0`); switching windows or a reconnect does not, so a card
+ * never changes under the learner's hands. A 503 (content not built) is an answer, not a glitch,
+ * so it is never retried and the not-built screen shows at once; any other failure follows the
+ * query client's retry policy (a client without a retry function, such as the tests', never retries).
  */
 export function useNextReview() {
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: queryKeys.reviewNext,
     queryFn: endpoints.nextReview,
     staleTime: 0,
     refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    retry: (failureCount, error) => {
+      if (error instanceof ApiError && error.status === 503) return false;
+      const policy = queryClient.getDefaultOptions().queries?.retry;
+      return typeof policy === 'function' ? policy(failureCount, error) : false;
+    },
   });
 }
 

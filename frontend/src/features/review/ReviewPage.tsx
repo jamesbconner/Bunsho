@@ -39,16 +39,22 @@ function total(counts: ReviewCounts['due']): number {
   return counts.kana + counts.kanji + counts.vocab;
 }
 
-/** The sentence a screen reader hears. Static text only: nothing here changes while it is read. */
+/**
+ * The sentence a screen reader hears. Static text only: nothing here changes while it is read.
+ * Empty while a failed save shows its alert.
+ */
 function announcement(state: {
   hasData: boolean;
   card: CardView | null;
   saving: boolean;
+  failed: boolean;
   revealed: boolean;
 }): string {
   if (!state.hasData) return '';
   if (state.card === null) return 'Nothing due right now';
   if (state.saving) return 'Saving answer';
+  // A failed save is announced by its own alert; "Answer shown" would read like success.
+  if (state.failed) return '';
   return state.revealed ? 'Answer shown' : 'Card shown';
 }
 
@@ -183,6 +189,7 @@ export function ReviewPage() {
           hasData: data !== undefined && !next.isError,
           card,
           saving: answer.isPending,
+          failed: answerFailed,
           revealed: key !== null && revealedKey === key,
         })}
       </VisuallyHidden>

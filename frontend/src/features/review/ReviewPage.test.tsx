@@ -209,6 +209,47 @@ describe('ReviewPage', () => {
     });
   });
 
+  it('shows no live grade buttons when the load after a grade fails, and recovers', async () => {
+    const user = userEvent.setup();
+    let loads = 0;
+    server.use(
+      http.get('/api/v1/reviews/next', () => {
+        loads += 1;
+        if (loads === 1) return HttpResponse.json(makeNextCard(makeKanaCard()));
+        if (loads === 2) return HttpResponse.json({ detail: 'boom' }, { status: 500 });
+        return HttpResponse.json(makeNextCard(makeKanjiCard()));
+      }),
+      http.post('/api/v1/reviews/answer', () => HttpResponse.json(COUNTS)),
+    );
+    renderReview();
+    await screen.findByText('あ');
+    await user.keyboard(' ');
+    await user.keyboard('3');
+
+    // The graded card must not stay on screen with live buttons: grading it again would be a 409.
+    expect(await screen.findByText("Couldn't load the next card")).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Grade your answer' })).toBeNull();
+    expect(screen.queryByText('あ')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByText('日')).toBeInTheDocument();
+  });
+
+  it('leaves the status empty after a failed save, while the alert announces it', async () => {
+    const user = userEvent.setup();
+    serveReviews([makeNextCard(makeKanaCard())], 500);
+    renderReview();
+    const status = screen.getByRole('status');
+    await screen.findByText('あ');
+    await user.keyboard(' ');
+    expect(status).toHaveTextContent('Answer shown');
+    await user.keyboard('3');
+
+    expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't save your answer");
+    expect(status).toBeEmptyDOMElement();
+    expect(screen.getByRole('status')).toBe(status);
+  });
+
   it('treats a 409 on the resend like a 409 on the first send', async () => {
     const user = userEvent.setup();
     const posted: unknown[] = [];
