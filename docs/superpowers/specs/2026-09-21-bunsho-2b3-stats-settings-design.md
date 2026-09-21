@@ -190,6 +190,6 @@ Details that differ from, or refine, the design above (as built).
 - **Bundle sizes (production build).** Statistics chunk about 411 kB (recharts), settings chunk about 53 kB,
   main chunk about 388.6 kB (unchanged); no chunk-size warning. The chart code and its CSS load only on
   `/stats`.
-- **Tests.** About 272 frontend tests in 31 files; no backend change (552 Python tests).
+- **Tests.** About 288 frontend tests in 31 files; no backend change (552 Python tests).
 - **Navigation.** Two lazy pages, `/stats` and `/settings`; the nav order is Home, Study, Statistics,
   Settings, Build content; the review screen's "done for now" state links to Settings.
