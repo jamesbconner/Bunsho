@@ -102,7 +102,13 @@ describe('LoginPage', () => {
     );
     renderApp({ initialEntries: ['/login'] });
     await fillAndSubmit('james', 'secret');
-    expect(await screen.findByRole('alert')).toHaveTextContent(/too many attempts.*42 s left/i);
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/too many attempts/i);
+    // The announced alert must not carry the ticking number; the visible countdown is aria-hidden.
+    expect(alert).not.toHaveTextContent(/\d+ s\b/);
+    const countdown = screen.getByText(/try again in 42 s/i);
+    expect(countdown).toHaveAttribute('aria-hidden', 'true');
+    expect(alert).not.toContainElement(countdown);
     expect(screen.getByRole('button', { name: 'Log in' })).toBeDisabled();
   });
 

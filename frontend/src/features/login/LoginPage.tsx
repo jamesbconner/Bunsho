@@ -5,6 +5,7 @@ import {
   Paper,
   PasswordInput,
   Stack,
+  Text,
   TextInput,
   Title,
 } from '@mantine/core';
@@ -82,8 +83,14 @@ export function LoginPage() {
             )}
             {error !== null && (
               <Alert color="red" role="alert">
-                {remaining > 0 ? `${error} (${String(remaining)} s left)` : error}
+                {error}
               </Alert>
+            )}
+            {remaining > 0 && (
+              // Visual only: the alert above is announced once, a ticking number would repeat.
+              <Text size="sm" c="dimmed" aria-hidden="true">
+                You can try again in {String(remaining)} s.
+              </Text>
             )}
             <TextInput
               label="Username"

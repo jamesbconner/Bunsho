@@ -3,15 +3,16 @@
  * token only in memory. Nothing here ever logs or exposes a token outside this module's API.
  */
 
+import type { components } from '../api/schema';
+
 export const REFRESH_TOKEN_KEY = 'bunsho.refresh_token';
 /** Treat an access token as expired this long before it really is, so requests never race it. */
 const EXPIRY_MARGIN_MS = 30_000;
 
-export interface TokenPair {
-  access_token: string;
-  refresh_token: string;
-  expires_in: number;
-}
+export type TokenPair = Pick<
+  components['schemas']['TokenResponse'],
+  'access_token' | 'refresh_token' | 'expires_in'
+>;
 
 let accessToken: string | null = null;
 let accessExpiresAt = 0;

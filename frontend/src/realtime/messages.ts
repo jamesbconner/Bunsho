@@ -1,15 +1,12 @@
+import type { BuildStatus } from '../api/endpoints';
 import type { components } from '../api/schema';
 
 type Schemas = components['schemas'];
 
-export type BuildStatus = Schemas['BuildStatusResponse'];
 export type BuildEvent = Schemas['BuildEventModel'];
 
 /** What the server sends on `/ws/tasks` after the client authenticated. */
-export type ServerMessage =
-  | { type: 'ready' }
-  | { type: 'snapshot'; task: BuildStatus }
-  | { type: 'event'; event: BuildEvent };
+export type ServerMessage = Schemas['WsReady'] | Schemas['WsSnapshot'] | Schemas['WsEvent'];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;

@@ -121,7 +121,13 @@ describe('ConnectionBadge', () => {
           <ConnectionBadge />
         </RealtimeContext>,
       );
-      expect(screen.getByRole('status')).toHaveTextContent('Reconnecting in 4 s');
+      const badge = screen.getByRole('status');
+      // The announced state is static; the ticking countdown is visual only (aria-hidden).
+      expect(badge).toHaveAccessibleName('Connection: Reconnecting…');
+      expect(badge).toHaveTextContent('Reconnecting… in 4 s');
+      const countdown = screen.getByText('in 4 s');
+      expect(countdown).toHaveAttribute('aria-hidden', 'true');
+      expect(badge).toContainElement(countdown);
     } finally {
       vi.useRealTimers();
     }
