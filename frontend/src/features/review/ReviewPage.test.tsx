@@ -209,6 +209,40 @@ describe('ReviewPage', () => {
     });
   });
 
+  it('treats a 409 on the resend like a 409 on the first send', async () => {
+    const user = userEvent.setup();
+    const posted: unknown[] = [];
+    let index = 0;
+    const queue = [makeNextCard(makeKanaCard()), makeNextCard(makeKanjiCard())];
+    server.use(
+      http.get('/api/v1/reviews/next', () => HttpResponse.json(queue[index])),
+      http.post('/api/v1/reviews/answer', async ({ request }) => {
+        posted.push(await request.json());
+        if (posted.length === 1) return HttpResponse.error();
+        // The first POST was processed but its response was lost: the resend is now stale.
+        index = 1;
+        return HttpResponse.json({ detail: 'stale' }, { status: 409 });
+      }),
+    );
+    renderReview();
+    await screen.findByText('あ');
+    await user.keyboard(' ');
+    await user.keyboard('3');
+
+    const alert = await screen.findByRole('alert');
+    await user.click(within(alert).getByRole('button', { name: 'Try again' }));
+
+    expect(
+      await screen.findByText('That card changed elsewhere: loading the next one.'),
+    ).toBeInTheDocument();
+    expect(await screen.findByText('日')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("Couldn't save your answer")).not.toBeInTheDocument();
+    });
+    expect(posted).toHaveLength(2);
+    expect(posted[1]).toEqual(posted[0]);
+  });
+
   it('sends the person to the Build screen when the content is not built (503)', async () => {
     server.use(
       http.get('/api/v1/reviews/next', () =>

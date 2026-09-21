@@ -12,7 +12,7 @@ import {
 import { notifications } from '@mantine/notifications';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import type { CardView, Grade, ReviewCounts } from '../../api/endpoints';
+import type { AnswerRequest, CardView, Grade, ReviewCounts } from '../../api/endpoints';
 import { ApiError, messageFor } from '../../api/errors';
 import { useAnswerReview, useNextReview } from '../../api/queries';
 import { FlipMode } from './FlipMode';
@@ -76,29 +76,34 @@ export function ReviewPage() {
     setRevealedKey(key);
   }, [key]);
 
+  // One send path for the first grade and the resend, so both handle a 409 the same way.
+  const submit = useCallback(
+    (variables: AnswerRequest) => {
+      sendAnswer(variables, {
+        onError: (error) => {
+          if (!isStale(error)) return;
+          // The card changed elsewhere (another tab or device): drop it and load what is next.
+          notifications.show({ message: 'That card changed elsewhere: loading the next one.' });
+          void refetch().finally(resetAnswer);
+        },
+      });
+    },
+    [sendAnswer, refetch, resetAnswer],
+  );
+
   const grade = useCallback(
     (value: Grade) => {
       if (card === null) return;
       const duration = Math.min(Math.max(Date.now() - shownAt.current, 0), MAX_DURATION_MS);
-      sendAnswer(
-        {
-          item_id: card.item_id,
-          direction: card.direction,
-          grade: value,
-          expected_last_review: card.expected_last_review,
-          duration_ms: duration,
-        },
-        {
-          onError: (error) => {
-            if (!isStale(error)) return;
-            // The card changed elsewhere (another tab or device): drop it and load what is next.
-            notifications.show({ message: 'That card changed elsewhere: loading the next one.' });
-            void refetch().finally(resetAnswer);
-          },
-        },
-      );
+      submit({
+        item_id: card.item_id,
+        direction: card.direction,
+        grade: value,
+        expected_last_review: card.expected_last_review,
+        duration_ms: duration,
+      });
     },
-    [card, sendAnswer, refetch, resetAnswer],
+    [card, submit],
   );
 
   const busy = answer.isPending || next.isFetching;
@@ -145,7 +150,7 @@ export function ReviewPage() {
               size="xs"
               disabled={busy}
               onClick={() => {
-                if (answer.variables !== undefined) sendAnswer(answer.variables);
+                if (answer.variables !== undefined) submit(answer.variables);
               }}
             >
               Try again
