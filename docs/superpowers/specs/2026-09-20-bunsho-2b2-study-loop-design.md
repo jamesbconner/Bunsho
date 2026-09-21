@@ -48,15 +48,15 @@ frontend/src/
     GradeBar.tsx          four buttons with key hints and projected intervals
     useReviewShortcuts.ts keyboard hook (guards below)
     useFuriganaPreference.ts   localStorage-backed switch (try/catch around storage)
-    ReviewFinished.tsx    nothing-due / limit-spent / not-built states
+    ReviewFinished.tsx    the done-for-now and not-built states
     formatInterval.ts     seconds -> "10 m", "4 d" (pure)
     review.module.css     study-surface typography and layout
-  features/home/          HomePage gains the dashboard tiles (StudyTiles.tsx)
+  features/home/          HomePage gains the dashboard panel (StudyPanel.tsx)
   App.tsx                 lazy routes (Home, Review, Build) behind one Suspense fallback
 ```
 
-`ReviewMode` is a small props contract: `{ card: CardView; showFurigana: boolean; onGrade(grade: Grade):
-void; pending: boolean }`. `FlipMode` implements it; `ReviewPage` renders the mode and owns fetching,
+`ReviewMode` is a small props contract: `{ card: CardView; showFurigana: boolean; pending: boolean;
+onReveal(): void; onGrade(grade: Grade): void }`. `FlipMode` implements it; `ReviewPage` renders the mode and owns fetching,
 timing and errors, so a future typed or multiple-choice mode replaces only the mode component.
 
 ## Data flow
@@ -79,14 +79,17 @@ timing and errors, so a future typed or multiple-choice mode replaces only the m
   - **503 (content not built):** a message with a link to the Build screen.
   - **Network error / 5xx:** the current card stays visible, the grade is not lost, and a retry button
     (and the same shortcut key) re-sends it. Grade buttons are disabled while a request is pending.
-  - **422 / 404:** treated as an unexpected error with a generic message and a "Reload card" action.
+  - **422 / 404 and other failures:** the same alert as a network failure (message from `messageFor`,
+    the card stays, Try again re-sends the identical request).
 - **Query defaults** stay as in 2B-1 (retry only network errors and 5xx; never 4xx). The answer
   mutation never auto-retries (a duplicate grade would double-count).
 
 ## The review screen
 
-**State machine** (a discriminated union, not booleans): `loading`, `front`, `back`, `submitting`,
-`empty` (no card), `error`. `next_due_at` and the counts drive the `empty` state.
+**States** are derived from the query and the mutation, not stored: loading (skeleton), error (load failed,
+with Try again; 503 links to Build), done (no card), and card, where the mode holds flipped or not and
+the page shows saving while the answer and the refetch are in flight. `next_due_at` and the counts drive
+the done state.
 
 **Card faces** (from a pure `cardFaces(card, showFurigana)`; everything Japanese carries `lang="ja"`):
 
@@ -100,8 +103,9 @@ timing and errors, so a future typed or multiple-choice mode replaces only the m
 | Vocab, recognition | The word (kanji form) | Reading as furigana over the word; meaning; part of speech; the example sentence with furigana and its English |
 | Vocab, recall | The meaning and part of speech | The word with furigana; the reading; the example sentence as above |
 
-The front shows no furigana unless the header switch is on. A "New" tag marks unseen cards; the JLPT
-level and the card type are a quiet caption on the front. A missing example sentence simply omits that
+The front shows no furigana unless the header switch is on (after the flip the front word shows its
+readings in place). A "New" tag marks unseen cards; the card type and JLPT level are a quiet caption on
+the front. A missing example sentence simply omits that
 block. Furigana renders from the API's `RubySegment` list (`base`, `reading`, `highlighted`) through
 one shared `<Furigana>` component using native `<ruby>`/`<rt>` with `<rp>` fallbacks; the highlighted
 segment is emphasised.
@@ -121,12 +125,12 @@ static sentence such as "Card shown" / "Answer shown" / "Answer saved") announce
 in a live region contains a ticking value (lesson from 2B-1). The furigana switch is a labelled control.
 The screen works with mouse, touch or keyboard alone. Animations respect `prefers-reduced-motion`.
 
-**Session end.**
-- Nothing due and no new card available: "You're done for now", the next due time if any, today's
-  remaining counts, and a Back to dashboard link.
-- New cards remain but every daily limit is spent: says the limit is used up (and, once the settings
-  screen exists in 2B-3, links there; until then it says the limit can be changed in settings later).
-- Content not built (503): the message and a link to Build.
+**Session end.** When no card is available the page shows one finished state, because the API cannot
+say why (`new_remaining` only counts cards that could be introduced right now, so "daily limit used up"
+and "everything unlocked is already introduced" look the same): "You're done for now", a sentence naming
+both possible reasons, the next due time if any, and a Back to the dashboard link. When the content is
+not built (503) the page shows the message and a link to the Build screen. (A later API change could add
+a reason field; it is in `TODO.md`.)
 
 ## The dashboard (Home)
 
