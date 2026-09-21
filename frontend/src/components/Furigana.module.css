@@ -1,0 +1,14 @@
+.text {
+  /* Room for the readings above the line, so lines of ruby text do not touch. */
+  line-height: 2;
+}
+
+.text rt {
+  font-size: 0.5em;
+  font-weight: 400;
+  color: var(--mantine-color-dimmed);
+}
+
+.highlight {
+  font-weight: 700;
+}
