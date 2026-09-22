@@ -25,6 +25,14 @@ class NewCardPolicyName(StrEnum):
     PINNED_LEVELS = "pinned_levels"
 
 
+class ReviewModeName(StrEnum):
+    """How a card is answered."""
+
+    FLIP = "flip"
+    TYPED = "typed"
+    MULTIPLE_CHOICE = "multiple_choice"
+
+
 class NewLimits(BaseModel):
     """Daily new-card limits per item type, counted in cards. ``0`` means unlimited."""
 
@@ -56,7 +64,20 @@ class ReviewSettings(BaseModel):
     rollover_hour: int = Field(default=4, ge=0, le=23)
     active_levels: list[LevelLabel] = Field(default_factory=_default_active_levels, min_length=1)
     mastery_threshold: float = Field(default=0.80, ge=0.0, le=1.0)
+    kana_mode: ReviewModeName = ReviewModeName.FLIP
+    kanji_mode: ReviewModeName = ReviewModeName.FLIP
+    vocab_mode: ReviewModeName = ReviewModeName.FLIP
 
     def levels(self) -> frozenset[JlptLevel]:
         """The active levels as ``JlptLevel`` members (used by ``pinned_levels``)."""
         return frozenset(JlptLevel[label] for label in self.active_levels)
+
+    def mode_for(self, item_type: ItemType) -> ReviewModeName:
+        """Return the configured review mode for ``item_type``."""
+        match item_type:
+            case ItemType.KANA:
+                return self.kana_mode
+            case ItemType.KANJI:
+                return self.kanji_mode
+            case ItemType.VOCAB:
+                return self.vocab_mode
