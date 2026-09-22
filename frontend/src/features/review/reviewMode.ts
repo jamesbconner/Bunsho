@@ -1,9 +1,9 @@
 import type { CardView, Grade } from '../../api/endpoints';
 
 /**
- * What a way of answering a card (flip and self-grade today; typed answer or multiple choice
- * later) receives. A mode shows the card, decides when it is answered, and reports a grade; the
- * page owns fetching, timing and errors.
+ * What a way of answering a card (flip and self-grade; typed answer; multiple choice) receives.
+ * A mode shows the card, decides when it is answered, and reports a grade; the page owns
+ * fetching, timing and errors.
  */
 export interface ReviewModeProps {
   card: CardView;
@@ -13,4 +13,10 @@ export interface ReviewModeProps {
   /** The learner has seen the answer (used for the screen-reader announcement). */
   onReveal: () => void;
   onGrade: (grade: Grade) => void;
+  /**
+   * The learner is ready for the next card, after seeing feedback. Flip mode never calls this
+   * (grading already advances immediately there) but still receives it, since all three modes
+   * share one contract.
+   */
+  onContinue: () => void;
 }
