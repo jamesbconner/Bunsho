@@ -12,6 +12,7 @@ from bunsho.models.content import (
     Kanji,
     kanji_id,
 )
+from bunsho.models.review import ItemType
 from bunsho.services.content_repository import (
     CONTENT_SCHEMA_VERSION,
     ContentCounts,
@@ -21,7 +22,7 @@ from bunsho.services.content_repository import (
     remove_stale_temp_files,
 )
 from bunsho.services.kana_source import KanaSource
-from tests.base import make_kanji_details, make_vocab
+from tests.base import make_kana, make_kanji, make_kanji_details, make_vocab, write_content
 
 
 def _kanji(char: str, level: JlptLevel | None) -> Kanji:
@@ -283,3 +284,12 @@ def test_a_temp_file_that_cannot_be_removed_is_logged_and_skipped(
         removed = remove_stale_temp_files(target, logging.getLogger("bunsho"))
     assert removed == 0
     assert f"content_tmp_remove_failed path={stuck} error=PermissionError" in caplog.text
+
+
+def test_get_item_dispatches_by_item_type(tmp_path: Path) -> None:
+    kana, kanji, vocab = make_kana(), make_kanji(), make_vocab()
+    repo = write_content(tmp_path / "content.db", kana=[kana], kanji=[kanji], vocab=[vocab])
+    assert repo.get_item(ItemType.KANA, kana.id) == kana
+    assert repo.get_item(ItemType.KANJI, kanji.id) == kanji
+    assert repo.get_item(ItemType.VOCAB, vocab.id) == vocab
+    assert repo.get_item(ItemType.VOCAB, "missing") is None

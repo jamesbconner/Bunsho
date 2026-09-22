@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, tzinfo
 
 from bunsho.db.progress_repository import ProgressRepository
-from bunsho.models.content import Kana, Kanji, Vocab
+from bunsho.models.content import Item, Kana, Kanji, Vocab
 from bunsho.models.review import (
     CardKey,
     CardSchedule,
@@ -38,8 +38,6 @@ REVIEW_MODE = "flip"
 _TYPE_ORDER = (ItemType.KANA, ItemType.KANJI, ItemType.VOCAB)
 _ORPHAN_SCAN = 50
 """How many due cards to look through for one whose content item still exists."""
-
-Item = Kana | Kanji | Vocab
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,13 +78,7 @@ class _Plan:
 
 
 def _load_item(repo: ContentRepository, key: CardKey) -> Item | None:
-    match key.item_type:
-        case ItemType.KANA:
-            return repo.get_kana(key.item_id)
-        case ItemType.KANJI:
-            return repo.get_kanji(key.item_id)
-        case ItemType.VOCAB:
-            return repo.get_vocab(key.item_id)
+    return repo.get_item(key.item_type, key.item_id)
 
 
 def _seconds_until(due: CardSchedule, now: datetime) -> int:
