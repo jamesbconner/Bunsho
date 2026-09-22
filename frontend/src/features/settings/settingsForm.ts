@@ -1,4 +1,9 @@
-import type { NewCardPolicyName, ReviewSettings, ReviewSettingsInput } from '../../api/endpoints';
+import type {
+  NewCardPolicyName,
+  ReviewModeName,
+  ReviewSettings,
+  ReviewSettingsInput,
+} from '../../api/endpoints';
 import { ApiError } from '../../api/errors';
 
 export const LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'] as const;
@@ -16,6 +21,9 @@ export interface SettingsFormValues {
   rollover_hour: number;
   active_levels: Level[];
   mastery_threshold_percent: number | string;
+  kana_mode: ReviewModeName;
+  kanji_mode: ReviewModeName;
+  vocab_mode: ReviewModeName;
 }
 
 /**
@@ -29,6 +37,9 @@ export const RECOMMENDED_SETTINGS: ReviewSettings = {
   rollover_hour: 4,
   active_levels: ['N5'],
   mastery_threshold: 0.8,
+  kana_mode: 'flip',
+  kanji_mode: 'flip',
+  vocab_mode: 'flip',
 };
 
 export const POLICIES: readonly { value: NewCardPolicyName; label: string; description: string }[] =
@@ -73,6 +84,9 @@ export function toFormValues(settings: ReviewSettings): SettingsFormValues {
     rollover_hour: settings.rollover_hour,
     active_levels: LEVELS.filter((level) => settings.active_levels.includes(level)),
     mastery_threshold_percent: toPercent(settings.mastery_threshold),
+    kana_mode: settings.kana_mode,
+    kanji_mode: settings.kanji_mode,
+    vocab_mode: settings.vocab_mode,
   };
 }
 
@@ -89,6 +103,9 @@ export function toRequest(values: SettingsFormValues): ReviewSettingsInput {
     rollover_hour: values.rollover_hour,
     active_levels: LEVELS.filter((level) => values.active_levels.includes(level)),
     mastery_threshold: toFraction(Number(values.mastery_threshold_percent)),
+    kana_mode: values.kana_mode,
+    kanji_mode: values.kanji_mode,
+    vocab_mode: values.vocab_mode,
   };
 }
 
