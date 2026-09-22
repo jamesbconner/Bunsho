@@ -9,6 +9,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 from bunsho.models.content import Kana, Kanji, Vocab
 from bunsho.models.review import CardDirection, ItemType, SchedState
+from bunsho.models.review_settings import ReviewModeName
 
 
 class TypeCounts(BaseModel):
@@ -43,7 +44,11 @@ class CardView(BaseModel):
     """A card ready to show: identity, scheduling facts and the content item.
 
     Exactly one of ``kana``, ``kanji`` and ``vocab`` is set, matching ``item_type``. Send
-    ``expected_last_review`` back exactly as received when answering.
+    ``expected_last_review`` back exactly as received when answering. ``accepted_answers`` holds
+    every correct typed answer when ``mode`` is ``typed``, or just the one correct answer (for
+    checking a pick against) when ``mode`` is ``multiple_choice``; ``choices`` is set only when
+    ``mode`` is ``multiple_choice``. A card whose content cannot support the settings' configured
+    mode is served as ``flip`` instead, with both left unset.
     """
 
     item_id: str
@@ -59,6 +64,9 @@ class CardView(BaseModel):
         )
     )
     intervals: GradeIntervals
+    mode: ReviewModeName
+    accepted_answers: list[str] | None = None
+    choices: list[str] | None = None
     kana: Kana | None = None
     kanji: Kanji | None = None
     vocab: Vocab | None = None

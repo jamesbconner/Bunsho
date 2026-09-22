@@ -26,10 +26,12 @@ from bunsho.models.review_session import (
     ReviewCounts,
     TypeCounts,
 )
-from bunsho.models.review_settings import ReviewSettings
+from bunsho.models.review_settings import ReviewModeName, ReviewSettings
+from bunsho.services.answer_key import accepted_answers_for
 from bunsho.services.content_access import ContentGate
 from bunsho.services.content_catalog import ContentCatalog
 from bunsho.services.content_repository import ContentRepository
+from bunsho.services.distractors import choices_for
 from bunsho.services.protocols import NewCardPolicy, Scheduler
 from bunsho.services.review_settings import ReviewSettingsService
 from bunsho.services.study_day import study_day_window
@@ -85,8 +87,37 @@ def _seconds_until(due: CardSchedule, now: datetime) -> int:
     return max(0, round((due.due - now).total_seconds()))
 
 
+async def _answer_fields(
+    key: CardKey, item: Item, settings: ReviewSettings, repo: ContentRepository
+) -> tuple[ReviewModeName, list[str] | None, list[str] | None]:
+    """Resolve the review mode and its supporting data for ``key``.
+
+    Downgrades to ``flip`` when the configured mode has nothing to grade against (for example
+    a kanji with no meanings on file), so a card never ships broken. In ``multiple_choice`` mode,
+    ``accepted_answers`` still carries the single correct answer (``choices`` is shuffled and
+    otherwise gives the client nothing to check a pick against).
+    """
+    mode = settings.mode_for(key.item_type)
+    if mode is ReviewModeName.FLIP:
+        return ReviewModeName.FLIP, None, None
+    answers = accepted_answers_for(key.direction, item)
+    if not answers:
+        return ReviewModeName.FLIP, None, None
+    if mode is ReviewModeName.TYPED:
+        return ReviewModeName.TYPED, answers, None
+    choices = await asyncio.to_thread(choices_for, key, item, settings, repo)
+    return ReviewModeName.MULTIPLE_CHOICE, [answers[0]], choices
+
+
 def _view(
-    key: CardKey, schedule: CardSchedule, item: Item, scheduler: Scheduler, now: datetime
+    key: CardKey,
+    schedule: CardSchedule,
+    item: Item,
+    scheduler: Scheduler,
+    now: datetime,
+    mode: ReviewModeName,
+    accepted_answers: list[str] | None,
+    choices: list[str] | None,
 ) -> CardView:
     previews = scheduler.preview(schedule, now)
     return CardView(
@@ -102,6 +133,9 @@ def _view(
             good=_seconds_until(previews[Grade.GOOD], now),
             easy=_seconds_until(previews[Grade.EASY], now),
         ),
+        mode=mode,
+        accepted_answers=accepted_answers,
+        choices=choices,
         kana=item if isinstance(item, Kana) else None,
         kanji=item if isinstance(item, Kanji) else None,
         vocab=item if isinstance(item, Vocab) else None,
@@ -168,12 +202,15 @@ class ReviewSessionOrchestrator:
         settings = await self._settings.load()
         scheduler = self._scheduler_factory(settings)
         plan = await self._plan(moment, repo, settings)
-        card = await self._due_view(moment, repo, scheduler)
+        card = await self._due_view(moment, repo, scheduler, settings)
         if card is None:
             key = plan.pick_new()
             item = None if key is None else await asyncio.to_thread(_load_item, repo, key)
             if key is not None and item is not None:
-                card = _view(key, scheduler.initial(moment), item, scheduler, moment)
+                mode, answers, choices = await _answer_fields(key, item, settings, repo)
+                card = _view(
+                    key, scheduler.initial(moment), item, scheduler, moment, mode, answers, choices
+                )
         next_due_at = None if card is not None else await self._progress.next_due_after(moment)
         return NextCard(card=card, next_due_at=next_due_at, counts=plan.counts)
 
@@ -236,12 +273,15 @@ class ReviewSessionOrchestrator:
         return (await self._plan(moment, repo, settings)).counts
 
     async def _due_view(
-        self, now: datetime, repo: ContentRepository, scheduler: Scheduler
+        self, now: datetime, repo: ContentRepository, scheduler: Scheduler, settings: ReviewSettings
     ) -> CardView | None:
         for stored in await self._progress.due_cards(now, _ORPHAN_SCAN):
             item = await asyncio.to_thread(_load_item, repo, stored.key)
             if item is not None:
-                return _view(stored.key, stored.schedule, item, scheduler, now)
+                mode, answers, choices = await _answer_fields(stored.key, item, settings, repo)
+                return _view(
+                    stored.key, stored.schedule, item, scheduler, now, mode, answers, choices
+                )
             self._logger.warning(
                 "review_card_orphaned item=%s direction=%s",
                 stored.key.item_id,

@@ -314,8 +314,36 @@
         "type": "string"
       },
       "CardView": {
-        "description": "A card ready to show: identity, scheduling facts and the content item.\n\nExactly one of ``kana``, ``kanji`` and ``vocab`` is set, matching ``item_type``. Send\n``expected_last_review`` back exactly as received when answering.",
+        "description": "A card ready to show: identity, scheduling facts and the content item.\n\nExactly one of ``kana``, ``kanji`` and ``vocab`` is set, matching ``item_type``. Send\n``expected_last_review`` back exactly as received when answering. ``accepted_answers`` holds\nevery correct typed answer when ``mode`` is ``typed``, or just the one correct answer (for\nchecking a pick against) when ``mode`` is ``multiple_choice``; ``choices`` is set only when\n``mode`` is ``multiple_choice``. A card whose content cannot support the settings' configured\nmode is served as ``flip`` instead, with both left unset.",
         "properties": {
+          "accepted_answers": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accepted Answers"
+          },
+          "choices": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Choices"
+          },
           "direction": {
             "$ref": "#/components/schemas/CardDirection"
           },
@@ -366,6 +394,9 @@
               }
             ]
           },
+          "mode": {
+            "$ref": "#/components/schemas/ReviewModeName"
+          },
           "state": {
             "$ref": "#/components/schemas/SchedState"
           },
@@ -387,7 +418,8 @@
           "is_new",
           "state",
           "expected_last_review",
-          "intervals"
+          "intervals",
+          "mode"
         ],
         "title": "CardView",
         "type": "object"
@@ -1022,6 +1054,16 @@
         "title": "ReviewCounts",
         "type": "object"
       },
+      "ReviewModeName": {
+        "description": "How a card is answered.",
+        "enum": [
+          "flip",
+          "typed",
+          "multiple_choice"
+        ],
+        "title": "ReviewModeName",
+        "type": "string"
+      },
       "ReviewSettings-Input": {
         "additionalProperties": false,
         "description": "Every review setting. ``PUT /settings`` replaces the whole document.",
@@ -1040,6 +1082,14 @@
             "minItems": 1,
             "title": "Active Levels",
             "type": "array"
+          },
+          "kana_mode": {
+            "$ref": "#/components/schemas/ReviewModeName",
+            "default": "flip"
+          },
+          "kanji_mode": {
+            "$ref": "#/components/schemas/ReviewModeName",
+            "default": "flip"
           },
           "mastery_threshold": {
             "default": 0.8,
@@ -1068,6 +1118,10 @@
             "minimum": 0.7,
             "title": "Target Retention",
             "type": "number"
+          },
+          "vocab_mode": {
+            "$ref": "#/components/schemas/ReviewModeName",
+            "default": "flip"
           }
         },
         "title": "ReviewSettings",
@@ -1091,6 +1145,14 @@
             "minItems": 1,
             "title": "Active Levels",
             "type": "array"
+          },
+          "kana_mode": {
+            "$ref": "#/components/schemas/ReviewModeName",
+            "default": "flip"
+          },
+          "kanji_mode": {
+            "$ref": "#/components/schemas/ReviewModeName",
+            "default": "flip"
           },
           "mastery_threshold": {
             "default": 0.8,
@@ -1119,6 +1181,10 @@
             "minimum": 0.7,
             "title": "Target Retention",
             "type": "number"
+          },
+          "vocab_mode": {
+            "$ref": "#/components/schemas/ReviewModeName",
+            "default": "flip"
           }
         },
         "required": [
@@ -1127,7 +1193,10 @@
           "target_retention",
           "rollover_hour",
           "active_levels",
-          "mastery_threshold"
+          "mastery_threshold",
+          "kana_mode",
+          "kanji_mode",
+          "vocab_mode"
         ],
         "title": "ReviewSettings",
         "type": "object"
