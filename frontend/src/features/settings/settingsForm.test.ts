@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import type { ReviewSettings } from '../../api/endpoints';
 import { ApiError } from '../../api/errors';
 import openapi from '../../../openapi.json?raw';
 import { makeSettings } from '../../test/fixtures';
@@ -56,6 +57,19 @@ describe('toFormValues and toRequest', () => {
     expect(request.new_limits).toEqual({ kana: 25, kanji: 15, vocab: 0 });
     expect(request.active_levels).toEqual(['N5', 'N3', 'N1']);
     expect(request.mastery_threshold).toBe(0.65);
+  });
+
+  it('round-trips the three review modes through the form', () => {
+    const settings: ReviewSettings = {
+      ...RECOMMENDED_SETTINGS,
+      kana_mode: 'typed',
+      kanji_mode: 'multiple_choice',
+      vocab_mode: 'flip',
+    };
+    const values = toFormValues(settings);
+    expect(values.kana_mode).toBe('typed');
+    expect(values.kanji_mode).toBe('multiple_choice');
+    expect(toRequest(values).kana_mode).toBe('typed');
   });
 });
 
@@ -147,6 +161,12 @@ describe('isSettingsDirty', () => {
   it('ignores the order the levels were ticked in', () => {
     const saved = toFormValues(makeSettings({ active_levels: ['N5', 'N4'] }));
     expect(isSettingsDirty({ ...saved, active_levels: ['N4', 'N5'] }, saved)).toBe(false);
+  });
+
+  it('treats a changed review mode as dirty', () => {
+    const initial = toFormValues(RECOMMENDED_SETTINGS);
+    const changed = { ...initial, kana_mode: 'typed' as const };
+    expect(isSettingsDirty(changed, initial)).toBe(true);
   });
 });
 

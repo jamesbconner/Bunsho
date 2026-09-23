@@ -42,6 +42,12 @@ export const RECOMMENDED_SETTINGS: ReviewSettings = {
   vocab_mode: 'flip',
 };
 
+export const REVIEW_MODES: readonly { value: ReviewModeName; label: string }[] = [
+  { value: 'flip', label: 'Flip and grade yourself' },
+  { value: 'typed', label: 'Typed answer' },
+  { value: 'multiple_choice', label: 'Multiple choice' },
+];
+
 export const POLICIES: readonly { value: NewCardPolicyName; label: string; description: string }[] =
   [
     {
@@ -120,6 +126,9 @@ function canonical(values: SettingsFormValues): string {
     values.rollover_hour,
     LEVELS.filter((level) => values.active_levels.includes(level)),
     String(values.mastery_threshold_percent),
+    values.kana_mode,
+    values.kanji_mode,
+    values.vocab_mode,
   ]);
 }
 
@@ -185,6 +194,9 @@ const SERVER_FIELDS: Readonly<Record<string, string>> = {
   rollover_hour: 'rollover_hour',
   active_levels: 'active_levels',
   mastery_threshold: 'mastery_threshold_percent',
+  kana_mode: 'kana_mode',
+  kanji_mode: 'kanji_mode',
+  vocab_mode: 'vocab_mode',
 };
 
 export interface ServerErrors {

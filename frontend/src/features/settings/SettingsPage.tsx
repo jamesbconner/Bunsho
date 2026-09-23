@@ -24,6 +24,7 @@ import {
   LEVELS,
   LIMIT_MAX,
   RECOMMENDED_SETTINGS,
+  REVIEW_MODES,
   isSettingsDirty,
   RETENTION_MAX_PERCENT,
   RETENTION_MIN_PERCENT,
@@ -234,6 +235,43 @@ function SettingsForm({ initial }: { initial: ReviewSettings }) {
             error={
               typeof form.errors.rollover_hour === 'string' ? form.errors.rollover_hour : undefined
             }
+          />
+        </Stack>
+
+        <Stack gap="md">
+          <Title order={3}>How you answer</Title>
+          <NativeSelect
+            label="Kana review mode"
+            data={REVIEW_MODES.map((mode) => ({ value: mode.value, label: mode.label }))}
+            value={values.kana_mode}
+            onChange={(event) => {
+              form.setFieldValue(
+                'kana_mode',
+                event.currentTarget.value as SettingsFormValues['kana_mode'],
+              );
+            }}
+          />
+          <NativeSelect
+            label="Kanji review mode"
+            data={REVIEW_MODES.map((mode) => ({ value: mode.value, label: mode.label }))}
+            value={values.kanji_mode}
+            onChange={(event) => {
+              form.setFieldValue(
+                'kanji_mode',
+                event.currentTarget.value as SettingsFormValues['kanji_mode'],
+              );
+            }}
+          />
+          <NativeSelect
+            label="Vocabulary review mode"
+            data={REVIEW_MODES.map((mode) => ({ value: mode.value, label: mode.label }))}
+            value={values.vocab_mode}
+            onChange={(event) => {
+              form.setFieldValue(
+                'vocab_mode',
+                event.currentTarget.value as SettingsFormValues['vocab_mode'],
+              );
+            }}
           />
         </Stack>
 
