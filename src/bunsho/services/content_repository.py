@@ -13,7 +13,7 @@ from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-from bunsho.models.content import JlptLevel, Kana, KanaScript, Kanji, Vocab
+from bunsho.models.content import Item, JlptLevel, Kana, KanaScript, Kanji, Vocab
 from bunsho.models.review import ItemType
 
 _SCHEMA = """
@@ -319,6 +319,16 @@ class ContentRepository:
         with self._connect() as con:
             row = con.execute("SELECT data FROM kana WHERE id = ?", (item_id,)).fetchone()
         return Kana.model_validate_json(row[0]) if row else None
+
+    def get_item(self, item_type: ItemType, item_id: str) -> Item | None:
+        """Return the item with this stable ID, dispatching on its type."""
+        match item_type:
+            case ItemType.KANA:
+                return self.get_kana(item_id)
+            case ItemType.KANJI:
+                return self.get_kanji(item_id)
+            case ItemType.VOCAB:
+                return self.get_vocab(item_id)
 
     def catalog(self, item_type: ItemType) -> list[tuple[str, JlptLevel | None]]:
         """List item ids and levels in study order without parsing the item payloads.

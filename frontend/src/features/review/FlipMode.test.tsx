@@ -10,6 +10,7 @@ import { FlipMode } from './FlipMode';
 function renderMode(overrides: Partial<Parameters<typeof FlipMode>[0]> = {}) {
   const onGrade = vi.fn();
   const onReveal = vi.fn();
+  const onContinue = vi.fn();
   const view = renderWithProviders(
     <>
       <input aria-label="Notes" />
@@ -19,11 +20,12 @@ function renderMode(overrides: Partial<Parameters<typeof FlipMode>[0]> = {}) {
         pending={false}
         onReveal={onReveal}
         onGrade={onGrade}
+        onContinue={onContinue}
         {...overrides}
       />
     </>,
   );
-  return { onGrade, onReveal, ...view };
+  return { onGrade, onReveal, onContinue, ...view };
 }
 
 describe('FlipMode', () => {
@@ -167,6 +169,7 @@ describe('FlipMode', () => {
             pending={pending}
             onReveal={vi.fn()}
             onGrade={onGrade}
+            onContinue={vi.fn()}
           />
         </div>
       );

@@ -63,6 +63,9 @@ export function makeKanaCard(overrides: Partial<CardView> = {}): CardView {
     state: 0,
     expected_last_review: null,
     intervals: INTERVALS,
+    mode: 'flip',
+    accepted_answers: null,
+    choices: null,
     kana: { id: 'kana:あ', char: 'あ', romaji: 'a', script: 'hira', kind: 'basic', group: 'a' },
     kanji: null,
     vocab: null,
@@ -80,6 +83,9 @@ export function makeKanjiCard(overrides: Partial<CardView> = {}): CardView {
     state: 2,
     expected_last_review: '2026-09-19T08:00:00Z',
     intervals: INTERVALS,
+    mode: 'flip',
+    accepted_answers: null,
+    choices: null,
     kana: null,
     kanji: {
       id: 'kanji:日',
@@ -104,6 +110,9 @@ export function makeVocabCard(overrides: Partial<CardView> = {}): CardView {
     state: 2,
     expected_last_review: '2026-09-19T09:30:00Z',
     intervals: INTERVALS,
+    mode: 'flip',
+    accepted_answers: null,
+    choices: null,
     kana: null,
     kanji: null,
     vocab: {
@@ -153,6 +162,9 @@ export function makeSettings(overrides: Partial<ReviewSettings> = {}): ReviewSet
     rollover_hour: 4,
     active_levels: ['N5'],
     mastery_threshold: 0.8,
+    kana_mode: 'flip',
+    kanji_mode: 'flip',
+    vocab_mode: 'flip',
     ...overrides,
   };
 }

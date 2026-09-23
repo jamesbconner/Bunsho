@@ -393,9 +393,17 @@ export interface components {
          * @description A card ready to show: identity, scheduling facts and the content item.
          *
          *     Exactly one of ``kana``, ``kanji`` and ``vocab`` is set, matching ``item_type``. Send
-         *     ``expected_last_review`` back exactly as received when answering.
+         *     ``expected_last_review`` back exactly as received when answering. ``accepted_answers`` holds
+         *     every correct typed answer when ``mode`` is ``typed``, or just the one correct answer (for
+         *     checking a pick against) when ``mode`` is ``multiple_choice``; ``choices`` is set only when
+         *     ``mode`` is ``multiple_choice``. A card whose content cannot support the settings' configured
+         *     mode is served as ``flip`` instead, with both left unset.
          */
         CardView: {
+            /** Accepted Answers */
+            accepted_answers?: string[] | null;
+            /** Choices */
+            choices?: string[] | null;
             direction: components["schemas"]["CardDirection"];
             /**
              * Expected Last Review
@@ -410,6 +418,7 @@ export interface components {
             item_type: components["schemas"]["ItemType"];
             kana?: components["schemas"]["Kana"] | null;
             kanji?: components["schemas"]["Kanji"] | null;
+            mode: components["schemas"]["ReviewModeName"];
             state: components["schemas"]["SchedState"];
             vocab?: components["schemas"]["Vocab"] | null;
         };
@@ -733,12 +742,22 @@ export interface components {
             new_remaining: components["schemas"]["TypeCounts"];
         };
         /**
+         * ReviewModeName
+         * @description How a card is answered.
+         * @enum {string}
+         */
+        ReviewModeName: "flip" | "typed" | "multiple_choice";
+        /**
          * ReviewSettings
          * @description Every review setting. ``PUT /settings`` replaces the whole document.
          */
         "ReviewSettings-Input": {
             /** Active Levels */
             active_levels?: ("N1" | "N2" | "N3" | "N4" | "N5")[];
+            /** @default flip */
+            kana_mode: components["schemas"]["ReviewModeName"];
+            /** @default flip */
+            kanji_mode: components["schemas"]["ReviewModeName"];
             /**
              * Mastery Threshold
              * @default 0.8
@@ -757,6 +776,8 @@ export interface components {
              * @default 0.9
              */
             target_retention: number;
+            /** @default flip */
+            vocab_mode: components["schemas"]["ReviewModeName"];
         };
         /**
          * ReviewSettings
@@ -765,6 +786,10 @@ export interface components {
         "ReviewSettings-Output": {
             /** Active Levels */
             active_levels: ("N1" | "N2" | "N3" | "N4" | "N5")[];
+            /** @default flip */
+            kana_mode: components["schemas"]["ReviewModeName"];
+            /** @default flip */
+            kanji_mode: components["schemas"]["ReviewModeName"];
             /**
              * Mastery Threshold
              * @default 0.8
@@ -783,6 +808,8 @@ export interface components {
              * @default 0.9
              */
             target_retention: number;
+            /** @default flip */
+            vocab_mode: components["schemas"]["ReviewModeName"];
         };
         /**
          * RubySegment

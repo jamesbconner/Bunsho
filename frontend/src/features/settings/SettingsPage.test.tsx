@@ -74,6 +74,20 @@ describe('SettingsPage', () => {
     expect(screen.getByRole('textbox', { name: /Mastery needed/ })).toHaveValue('65%');
   });
 
+  it('shows the three review-mode selects and sends the changed modes', async () => {
+    const user = userEvent.setup();
+    const puts = serveSettings();
+    await openSettings();
+    const kanaSelect = await screen.findByLabelText('Kana review mode');
+    await user.selectOptions(kanaSelect, 'Typed answer');
+    await user.selectOptions(screen.getByLabelText('Kanji review mode'), 'Multiple choice');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => {
+      expect(screen.getByText('Settings saved')).toBeInTheDocument();
+    });
+    expect(puts).toEqual([makeSettings({ kana_mode: 'typed', kanji_mode: 'multiple_choice' })]);
+  });
+
   it('keeps Save disabled until something changes, and says when there are unsaved changes', async () => {
     const user = userEvent.setup();
     serveSettings();

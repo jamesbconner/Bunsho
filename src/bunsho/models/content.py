@@ -122,6 +122,10 @@ class Vocab(_Frozen):
         return "usually_kana" in self.tags
 
 
+Item = Kana | Kanji | Vocab
+"""A single piece of study content: one kana character, kanji or vocabulary item."""
+
+
 @dataclass(frozen=True, slots=True)
 class ImportedDeck:
     """Result of importing a vocabulary deck."""

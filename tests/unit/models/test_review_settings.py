@@ -3,7 +3,12 @@ from pydantic import ValidationError
 
 from bunsho.models.content import JlptLevel
 from bunsho.models.review import ItemType
-from bunsho.models.review_settings import NewCardPolicyName, NewLimits, ReviewSettings
+from bunsho.models.review_settings import (
+    NewCardPolicyName,
+    NewLimits,
+    ReviewModeName,
+    ReviewSettings,
+)
 
 
 def test_defaults_match_the_spec() -> None:
@@ -29,6 +34,26 @@ def test_active_levels_map_to_jlpt_levels() -> None:
     assert ReviewSettings(active_levels=["N5", "N3"]).levels() == {JlptLevel.N5, JlptLevel.N3}
 
 
+def test_review_modes_default_to_flip() -> None:
+    settings = ReviewSettings()
+    assert settings.kana_mode is ReviewModeName.FLIP
+    assert settings.kanji_mode is ReviewModeName.FLIP
+    assert settings.vocab_mode is ReviewModeName.FLIP
+
+
+def test_review_modes_are_looked_up_by_item_type() -> None:
+    settings = ReviewSettings(
+        kana_mode=ReviewModeName.TYPED,
+        kanji_mode=ReviewModeName.MULTIPLE_CHOICE,
+        vocab_mode=ReviewModeName.FLIP,
+    )
+    assert [settings.mode_for(t) for t in ItemType] == [
+        ReviewModeName.TYPED,
+        ReviewModeName.MULTIPLE_CHOICE,
+        ReviewModeName.FLIP,
+    ]
+
+
 @pytest.mark.parametrize(
     "bad",
     [
@@ -44,6 +69,7 @@ def test_active_levels_map_to_jlpt_levels() -> None:
         {"new_card_policy": "random"},
         {"unknown_field": 1},
         {"new_limits": {"kana": 1, "extra": 1}},
+        {"kana_mode": "loud"},
     ],
 )
 def test_invalid_settings_are_rejected(bad: dict[str, object]) -> None:

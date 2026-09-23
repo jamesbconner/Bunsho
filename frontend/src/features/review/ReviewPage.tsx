@@ -15,9 +15,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AnswerRequest, CardView, Grade, ReviewCounts } from '../../api/endpoints';
 import { ApiError, messageFor } from '../../api/errors';
 import { useAnswerReview, useNextReview } from '../../api/queries';
+import { ChoiceMode } from './ChoiceMode';
 import { FlipMode } from './FlipMode';
 import { useFuriganaPreference } from './useFuriganaPreference';
 import { ReviewDone, ReviewNotBuilt } from './ReviewFinished';
+import { TypedMode } from './TypedMode';
 
 /** The API accepts a duration up to one hour. */
 const MAX_DURATION_MS = 3_600_000;
@@ -26,6 +28,12 @@ const MAX_DURATION_MS = 3_600_000;
 function cardKey(card: CardView): string {
   return `${card.item_id}|${card.direction}|${card.expected_last_review ?? 'new'}`;
 }
+
+const MODE_COMPONENTS = {
+  flip: FlipMode,
+  typed: TypedMode,
+  multiple_choice: ChoiceMode,
+} as const;
 
 function isStale(error: unknown): boolean {
   return error instanceof ApiError && error.status === 409;
@@ -70,7 +78,9 @@ export function ReviewPage() {
   const { mutate: sendAnswer, reset: resetAnswer } = answer;
 
   const data = next.data;
-  const card = data?.card ?? null;
+  const freshCard = data?.card ?? null;
+  const [heldCard, setHeldCard] = useState<CardView | null>(null);
+  const card = heldCard ?? freshCard;
   const key = card === null ? null : cardKey(card);
 
   // The clock for `duration_ms` starts when a card is put on screen.
@@ -99,19 +109,30 @@ export function ReviewPage() {
 
   const grade = useCallback(
     (value: Grade) => {
-      if (card === null) return;
+      if (freshCard === null) return;
       const duration = Math.min(Math.max(Date.now() - shownAt.current, 0), MAX_DURATION_MS);
+      if (freshCard.mode !== 'flip') setHeldCard(freshCard);
       submit({
-        item_id: card.item_id,
-        direction: card.direction,
+        item_id: freshCard.item_id,
+        direction: freshCard.direction,
         grade: value,
-        expected_last_review: card.expected_last_review,
+        expected_last_review: freshCard.expected_last_review,
         duration_ms: duration,
       });
     },
-    [card, submit],
+    [freshCard, submit],
   );
 
+  const continueToNext = useCallback(() => {
+    setHeldCard(null);
+  }, []);
+
+  // `answer.isPending` alone would let Continue fire as soon as the POST finished, before the
+  // next card's fetch has settled (see `useAnswerReview`'s docstring: the mutation stays pending
+  // through that whole round trip). Folding in `next.isFetching` keeps Continue disabled until the
+  // next card has actually loaded, so pressing it never flashes the stale card that was just
+  // graded. The trade-off: Continue can look disabled for a moment after feedback appears, even
+  // though the answer itself already saved.
   const busy = answer.isPending || next.isFetching;
   const answerFailed = answer.isError && !isStale(answer.error);
 
@@ -138,15 +159,22 @@ export function ReviewPage() {
   } else if (card === null) {
     body = <ReviewDone data={next.data} />;
   } else {
+    const effectiveMode =
+      (card.mode === 'typed' && card.accepted_answers === null) ||
+      (card.mode === 'multiple_choice' && card.choices === null)
+        ? 'flip'
+        : card.mode;
+    const Mode = MODE_COMPONENTS[effectiveMode];
     body = (
       <Stack gap="md">
-        <FlipMode
+        <Mode
           key={key}
           card={card}
           showFurigana={showFurigana}
           pending={busy}
           onReveal={reveal}
           onGrade={grade}
+          onContinue={continueToNext}
         />
         {answerFailed && (
           <Alert color="red" title="Couldn't save your answer">

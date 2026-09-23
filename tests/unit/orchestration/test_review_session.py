@@ -17,7 +17,12 @@ from bunsho.models.review import (
     UnknownItemError,
 )
 from bunsho.models.review_session import CardView, TypeCounts
-from bunsho.models.review_settings import NewCardPolicyName, NewLimits, ReviewSettings
+from bunsho.models.review_settings import (
+    NewCardPolicyName,
+    NewLimits,
+    ReviewModeName,
+    ReviewSettings,
+)
 from bunsho.services.fsrs_scheduler import FSRSScheduler
 from tests.base import make_kana, make_kanji, make_vocab, run_with_database
 from tests.review_stack import LOGGER_NAME, START, ReviewStack, build_review_stack
@@ -242,6 +247,68 @@ def test_a_content_schema_mismatch_means_not_ready(tmp_path: Path) -> None:
         stack = build_review_stack(tmp_path, db, vocab=[A], schema_version="1")
         with pytest.raises(ContentNotReadyError, match="schema_version"):
             await stack.orchestrator.next_card()
+
+    run_with_database(tmp_path, scenario)
+
+
+def test_a_flip_card_ships_no_answer_data(tmp_path: Path) -> None:
+    async def scenario(db: ProgressDatabase) -> None:
+        stack = build_review_stack(tmp_path, db, vocab=[A, B])
+        card = await next_card(stack)
+        assert card.mode is ReviewModeName.FLIP
+        assert card.accepted_answers is None
+        assert card.choices is None
+
+    run_with_database(tmp_path, scenario)
+
+
+def test_a_typed_card_ships_accepted_answers_and_no_choices(tmp_path: Path) -> None:
+    async def scenario(db: ProgressDatabase) -> None:
+        stack = build_review_stack(tmp_path, db, vocab=[A, B])
+        await stack.settings.save(ReviewSettings(vocab_mode=ReviewModeName.TYPED))
+        card = await next_card(stack)
+        assert card.mode is ReviewModeName.TYPED
+        assert card.accepted_answers == ["test meaning"]
+        assert card.choices is None
+
+    run_with_database(tmp_path, scenario)
+
+
+def test_a_multiple_choice_card_ships_choices_and_the_correct_answer(tmp_path: Path) -> None:
+    async def scenario(db: ProgressDatabase) -> None:
+        stack = build_review_stack(tmp_path, db, vocab=[A, B])
+        await stack.settings.save(ReviewSettings(vocab_mode=ReviewModeName.MULTIPLE_CHOICE))
+        card = await next_card(stack)
+        assert card.mode is ReviewModeName.MULTIPLE_CHOICE
+        assert card.accepted_answers == ["test meaning"]
+        assert card.choices is not None
+        assert "test meaning" in card.choices
+
+    run_with_database(tmp_path, scenario)
+
+
+def test_a_card_downgrades_to_flip_when_its_content_has_no_usable_answer(tmp_path: Path) -> None:
+    async def scenario(db: ProgressDatabase) -> None:
+        bare = make_kanji("日").model_copy(update={"meanings": ()})
+        stack = build_review_stack(tmp_path, db, kanji=[bare])
+        await stack.settings.save(ReviewSettings(kanji_mode=ReviewModeName.TYPED))
+        card = await next_card(stack)
+        if card.direction.value == "kanji_to_meaning":
+            assert card.mode is ReviewModeName.FLIP
+            assert card.accepted_answers is None
+
+    run_with_database(tmp_path, scenario)
+
+
+def test_a_due_cards_mode_is_resolved_too(tmp_path: Path) -> None:
+    async def scenario(db: ProgressDatabase) -> None:
+        stack = build_review_stack(tmp_path, db, vocab=[A, B])
+        await answer(stack, await next_card(stack))
+        await stack.settings.save(ReviewSettings(vocab_mode=ReviewModeName.TYPED))
+        stack.clock.advance(minutes=11)
+        due = await next_card(stack)
+        assert due.mode is ReviewModeName.TYPED
+        assert due.accepted_answers is not None
 
     run_with_database(tmp_path, scenario)
 

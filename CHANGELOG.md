@@ -76,6 +76,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - CI: a `frontend` job (Prettier, ESLint, type-check and build, vitest with coverage, and a check
   that the generated API types are current); Dependabot updates the npm dependencies; the
   container smoke test checks that the UI is served.
+- Typed-answer and multiple-choice review modes, alongside the existing flip-and-grade mode,
+  chosen per item type on the Settings page.
 
 ### Changed
 

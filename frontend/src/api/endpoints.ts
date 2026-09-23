@@ -12,6 +12,7 @@ export type CardView = Schemas['CardView'];
 export type ReviewCounts = Schemas['ReviewCounts'];
 export type AnswerRequest = Schemas['AnswerRequest'];
 export type Grade = Schemas['Grade'];
+export type ReviewModeName = Schemas['ReviewModeName'];
 export type GradeIntervals = Schemas['GradeIntervals'];
 export type RubySegment = Schemas['RubySegment'];
 export type StatsSummary = Schemas['StatsSummary'];

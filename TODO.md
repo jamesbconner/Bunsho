@@ -134,8 +134,8 @@ Image and platform:
       (AssertionError instead of a clean rejection): guard it
 - [ ] `GET /reviews/next` cannot say why no card is offered (daily limit used up vs everything introduced): add a
       reason field and use it in the finished state
-- [ ] Typed-answer and multiple-choice review modes plug into the `ReviewMode` contract
-      (`features/review/reviewMode.ts`)
+- [x] Typed-answer and multiple-choice review modes plug into the `ReviewMode` contract
+      (`features/review/reviewMode.ts`) (Plan: typed-mc-review-modes)
 - [ ] Undo of a grade and study-ahead need API support (the review log is append-only, `next` has no look-ahead)
 - [ ] Check Japanese font rendering in real browsers (Hiragino, Yu Gothic, Noto) and self-host Noto Sans JP if the
       system stack looks poor
@@ -155,6 +155,27 @@ Image and platform:
       - `ReviewPage` tests: the lower clamp of `duration_ms`
       - Shell tests: the Study nav link's active state and href, a failed lazy chunk reaching the ErrorBoundary
       - `useAnswerReview` sets no explicit `retry: false` (it relies on the query client default)
+      - No test isolates the "active-level" middle tier of `choices_for`'s distractor ranking (a
+        candidate that is not same-level but is within `settings.active_levels`, ranked ahead of a
+        truly out-of-active candidate) — the 5 shipped tests cover same-level-preferred, thin-pool
+        degradation, target exclusion, and duplicate exclusion, but not this middle band specifically
+      - `TypedMode`'s `accepted[0] ?? ''` fallback for an empty `accepted_answers` list is
+        unexercised by any test; in practice this should be guaranteed non-empty by the backend's
+        downgrade-to-flip logic, but a content-validation edge case upstream could theoretically
+        defeat that guarantee
+      - No regression test exists for a 409 (stale card) or network failure specifically arriving
+        *during* the held-feedback window for a non-flip mode (typed/multiple-choice) — the existing
+        409/failed-save tests all use flip-mode fixtures; the logic was traced by hand during review
+        and found correct, but isn't test-covered for this specific interaction
+      - `ChoiceMode`'s `vocab_mode` select's onChange path (and the third mode selector generally,
+        in `SettingsPage.test.tsx`) isn't directly exercised by a test — `kana_mode` and
+        `kanji_mode` are, `vocab_mode` isn't; low risk since all three are structurally identical
+      - A failed background next-card refetch (`next.isError`) during a typed/multiple-choice
+        card's held feedback replaces the whole `ReviewPage` body with the generic load-failed
+        alert, discarding the still-valid feedback and Continue button; flip mode has no feedback
+        step to lose this way. Gate the `next.isError` branch on `heldCard === null`, or surface
+        the fetch error as a small inline notice alongside the held card instead of replacing the
+        body.
 - [ ] The Show furigana switch keeps focus after it is toggled, so Space then toggles it again instead of
       flipping the card (and digits are ignored until focus moves): decide on blur/refocus after toggling
       (check in a browser)
@@ -222,7 +243,8 @@ Image and platform:
 
 ## Later sub-projects
 
-- [ ] 3. Typed-answer (romaji -> kana; ぢ/じ and づ/ず share romaji, accept both) and multiple-choice modes
+- [x] 3. Typed-answer (romaji -> kana; ぢ/じ and づ/ず share romaji, accept both) and multiple-choice modes
+      (Plan: typed-mc-review-modes)
 - [ ] 4. Stroke order / handwriting (needs a stroke-data source, probably KanjiVG; jamdict has none)
 - [ ] 5. Anki `.apkg` export
 - [ ] 6. Sentence practice and grammar (grammar source still open)
