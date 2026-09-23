@@ -12,8 +12,8 @@ items are kept at the bottom of the file, grouped by the plan that delivered the
 
 ### Security & Auth
 
-- [ ] Logout / revocation for the stateless refresh tokens
-- [ ] Refresh-token logout/revocation on the server (the UI's Log out only clears this browser)
+- [ ] Logout / revocation for the stateless refresh tokens — no denylist/jti store exists server-side;
+      the UI's Log out only clears the browser's local session, the token itself stays valid until it expires
 - [ ] Logout can be undone by a refresh that is in flight (`session.setTokens` after `session.clear()`):
       add a session epoch
 - [ ] Test the logout -> login stream lifecycle (stream closes on logout, a new one opens after login)
@@ -83,7 +83,8 @@ items are kept at the bottom of the file, grouped by the plan that delivered the
       the body and only the status text announces the finish; the nav active state is an exact path
       match (`/review/` is not highlighted)
 - [ ] Mobile shell: Burger aria-expanded/aria-controls, hide the collapsed drawer from keyboard users,
-      verify header fit at 360 px; add a top-level error boundary around the shell
+      verify header fit at 360 px; an `ErrorBoundary` now wraps the routed page content (`AppLayout.tsx`),
+      but not the header/nav/Burger around it — consider one further out if those can throw
 - [ ] Toasts: session-expiry toast plus the inline 'Signed out' alert overlap in meaning; toasts at
       top-right overlap header controls
 - [ ] Ask before leaving the settings page with unsaved changes
@@ -124,8 +125,7 @@ items are kept at the bottom of the file, grouped by the plan that delivered the
       `study_day` itself is DST-tested; every orchestrator and stats test uses UTC)
 - [ ] Coverage gaps below 90 % per file: `db/migrations/env.py` and the `login_throttle` prune branch
       (the `0001` `downgrade()` test is listed under Reliability & Data Integrity)
-- [ ] Browser end-to-end test of the deployed UI
-- [ ] Browser end-to-end tests of the whole UI
+- [ ] Browser end-to-end tests of the whole UI, run against the built/deployed container image
 - [ ] Study loop hardening and test follow-ups from the reviews:
       - `formatDueTime` throws a RangeError on an unparseable string: guard NaN; `formatInterval` rounds after
         comparing, so 59.6 s shows "60 s", 3599.6 s "60 m" and about 350-364 days "12 mo" (round first, then
