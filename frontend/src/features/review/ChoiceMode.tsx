@@ -2,6 +2,7 @@ import { Button, SimpleGrid, Stack, Text } from '@mantine/core';
 import { useEffect, useRef, useState } from 'react';
 
 import { cardFaces } from './cardFaces';
+import classes from './review.module.css';
 import { ReviewCard } from './ReviewCard';
 import type { ReviewModeProps } from './reviewMode';
 import { useChoiceShortcuts } from './useChoiceShortcuts';
@@ -59,6 +60,9 @@ export function ChoiceMode({
               pick(index);
             }}
           >
+            <span className={classes.key} aria-hidden="true">
+              {index + 1}
+            </span>
             {choice}
           </Button>
         ))}
