@@ -1979,4 +1979,30 @@ Then hand back to James for review and merge — never merge to `main` directly.
 
 ## Implementation notes
 
-(Leave this section for decisions taken while building, once the plan is executed — following the pattern the 2B-2 plan's own "Implementation notes" section set. Empty until then.)
+- `answer_key.py`'s `_vocab_answers` imports `Vocab` at module scope alongside `Kana`/`Kanji` and
+  types its parameter directly as `Vocab`, per the brief's own explicit correction — not the
+  `vocab: object` + local import + `assert isinstance` workaround the brief's draft code showed.
+- `distractors.py`'s `_ranked_pool` needs one narrowly-scoped `noqa: S311 # nosec B311` on
+  `random.Random()`: it is shuffling quiz choices, not doing anything security-sensitive.
+- Regenerating the OpenAPI schema in Task 5 made `kana_mode`/`kanji_mode`/`vocab_mode` *required*
+  fields on `ReviewSettings`/`ReviewSettingsInput` — a consequence of Tasks 1-4 that the plan's
+  Task 5 file list and "Produces" section did not anticipate. Fixing only the three card fixtures
+  left `npm run build` and the settings round-trip test broken, so Task 5 also threaded the three
+  fields (all defaulting to `'flip'`, matching the backend default) through
+  `settingsForm.ts`'s `RECOMMENDED_SETTINGS`/`SettingsFormValues`/`toFormValues`/`toRequest` and
+  `fixtures.ts`'s `makeSettings`, with no settings-page UI added yet (that stayed Task 9's job).
+- `ChoiceMode`'s option buttons were built with a plain `{choice}` label, not the brief's
+  numeric-prefixed `"1. {choice}"`: the prefix broke the brief's own anchored accessible-name test
+  regexes (e.g. `getByRole('button', { name: /^a$/ })`). A later fix (`ddd433a`) restored the
+  visible key numbering as an `aria-hidden` `.key` span (the same pattern `GradeBar.tsx` already
+  used), keeping the digit out of the accessible name while showing it to sighted keyboard users —
+  `aria-keyshortcuts` alone is not rendered visually by any browser.
+- `TypedMode` needs no custom keyboard hook (a native `<form onSubmit>` plus a focused Continue
+  button covers Enter-to-submit and Enter/Space-to-continue); `ChoiceMode` gets a small
+  `useChoiceShortcuts` hook for digit-key picking, reusing `useReviewShortcuts`'s exported
+  `isForReview` guard, exactly as the "Refinements to the spec" section anticipated.
+- The romanization-variant table (`ROMAJI_VARIANTS`) and the じ/ぢ・ず/づ homophone table were
+  unit-tested against the fixture kana in Task 2's tests only, not walked against the full real
+  `content.db` kana set by hand; no gap was reported by any task, so none is called out as a
+  follow-up, but this is worth a spot check against the built deck if a learner ever reports a
+  typed kana answer being wrongly marked incorrect.
