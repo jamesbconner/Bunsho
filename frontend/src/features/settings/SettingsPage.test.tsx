@@ -9,6 +9,7 @@ import { makeSettings } from '../../test/fixtures';
 import { renderWithProviders } from '../../test/render';
 import { server } from '../../test/server';
 import { SettingsPage } from './SettingsPage';
+import { KANA_GATE_MESSAGE } from './settingsForm';
 
 /** Serve the settings and record every PUT body; the server echoes the document it was sent. */
 function serveSettings(initial: ReviewSettings = makeSettings()) {
@@ -469,5 +470,159 @@ describe('SettingsPage', () => {
     expect(await screen.findByText("Couldn't load your settings")).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Try again' }));
     expect(await screen.findByRole('button', { name: 'Save' })).toBeInTheDocument();
+  });
+
+  it('fills the type switches and the kana gate from the saved settings', async () => {
+    serveSettings(
+      makeSettings({
+        type_enabled: { kana: true, kanji: false, vocab: true },
+        kana_gate: { kanji: false, vocab: true, threshold: 0.9 },
+      }),
+    );
+    await openSettings();
+
+    expect(screen.getByRole('switch', { name: 'Introduce new kana' })).toBeChecked();
+    expect(screen.getByRole('switch', { name: 'Introduce new kanji' })).not.toBeChecked();
+    expect(screen.getByRole('switch', { name: 'Introduce new vocabulary' })).toBeChecked();
+    expect(
+      screen.getByRole('switch', { name: 'Wait for kana before starting kanji' }),
+    ).not.toBeChecked();
+    expect(
+      screen.getByRole('switch', { name: 'Wait for kana before starting vocabulary' }),
+    ).toBeChecked();
+    expect(screen.getByRole('textbox', { name: 'Kana needed before they start' })).toHaveValue(
+      '90%',
+    );
+  });
+
+  it('disables the daily limit of a type that is switched off and saves the switch', async () => {
+    const user = userEvent.setup();
+    const puts = serveSettings();
+    await openSettings();
+
+    await user.click(screen.getByRole('switch', { name: 'Introduce new kanji' }));
+    expect(screen.getByRole('textbox', { name: 'Kanji per day' })).toBeDisabled();
+    expect(screen.getByRole('textbox', { name: 'Kana per day' })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByText('Settings saved')).toBeInTheDocument();
+    expect(puts).toEqual([
+      makeSettings({ type_enabled: { kana: true, kanji: false, vocab: true } }),
+    ]);
+  });
+
+  it('shows the gate threshold only while a gate is on and sends it as a fraction', async () => {
+    const user = userEvent.setup();
+    const puts = serveSettings();
+    await openSettings();
+    expect(
+      screen.queryByRole('textbox', { name: 'Kana needed before they start' }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('switch', { name: 'Wait for kana before starting kanji' }));
+    const threshold = await screen.findByRole('textbox', { name: 'Kana needed before they start' });
+    expect(threshold).toHaveValue('80%');
+    await setNumber(user, 'Kana needed before they start', '90');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByText('Settings saved')).toBeInTheDocument();
+    expect(puts).toEqual([
+      makeSettings({ kana_gate: { kanji: true, vocab: false, threshold: 0.9 } }),
+    ]);
+  });
+
+  it('will not save a kana gate while kana is switched off, and the message clears once fixed', async () => {
+    const user = userEvent.setup();
+    const puts = serveSettings(
+      makeSettings({ kana_gate: { kanji: true, vocab: false, threshold: 0.8 } }),
+    );
+    await openSettings();
+
+    await user.click(screen.getByRole('switch', { name: 'Introduce new kana' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText(KANA_GATE_MESSAGE)).toBeInTheDocument();
+    expect(puts).toEqual([]);
+
+    await user.click(screen.getByRole('switch', { name: 'Wait for kana before starting kanji' }));
+    expect(screen.queryByText(KANA_GATE_MESSAGE)).not.toBeInTheDocument();
+  });
+
+  it('keeps a switched-on gate operable after kana is switched off', async () => {
+    const user = userEvent.setup();
+    serveSettings(makeSettings({ kana_gate: { kanji: true, vocab: false, threshold: 0.8 } }));
+    await openSettings();
+
+    await user.click(screen.getByRole('switch', { name: 'Introduce new kana' }));
+    expect(
+      screen.getByRole('switch', { name: 'Wait for kana before starting kanji' }),
+    ).toBeEnabled();
+    expect(
+      screen.getByRole('switch', { name: 'Wait for kana before starting vocabulary' }),
+    ).toBeDisabled();
+  });
+
+  it('shows a server 422 on the kana gate group', async () => {
+    const user = userEvent.setup();
+    server.use(
+      http.get('/api/v1/settings', () => HttpResponse.json(makeSettings())),
+      http.put('/api/v1/settings', () =>
+        HttpResponse.json(
+          {
+            detail: [
+              { loc: ['body', 'kana_gate'], msg: 'Server says no', type: 'kana_gate_needs_kana' },
+            ],
+          },
+          { status: 422 },
+        ),
+      ),
+    );
+    await openSettings();
+
+    await user.click(
+      screen.getByRole('switch', { name: 'Wait for kana before starting vocabulary' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByText('Server says no')).toBeInTheDocument();
+    expect(screen.queryByText("Couldn't save your settings")).not.toBeInTheDocument();
+  });
+
+  it('reveals a hidden threshold field that is invalid when Save is pressed', async () => {
+    const user = userEvent.setup();
+    const puts = serveSettings(
+      makeSettings({ kana_gate: { kanji: true, vocab: false, threshold: 0.8 } }),
+    );
+    await openSettings();
+
+    await setNumber(user, 'Kana needed before they start', '');
+    await user.click(screen.getByRole('switch', { name: 'Wait for kana before starting kanji' }));
+    expect(
+      screen.queryByRole('textbox', { name: 'Kana needed before they start' }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('Enter a percentage from 0 to 100.')).toBeInTheDocument();
+    expect(
+      screen.getByRole('textbox', { name: 'Kana needed before they start' }),
+    ).toBeInTheDocument();
+    expect(puts).toEqual([]);
+  });
+
+  it('refills the type switches and the gate with the recommended values on Reset', async () => {
+    const user = userEvent.setup();
+    serveSettings(
+      makeSettings({
+        type_enabled: { kana: true, kanji: false, vocab: false },
+        kana_gate: { kanji: true, vocab: true, threshold: 0.5 },
+      }),
+    );
+    await openSettings();
+
+    await user.click(screen.getByRole('button', { name: 'Reset to recommended values' }));
+    expect(screen.getByRole('switch', { name: 'Introduce new kanji' })).toBeChecked();
+    expect(screen.getByRole('switch', { name: 'Introduce new vocabulary' })).toBeChecked();
+    expect(
+      screen.getByRole('switch', { name: 'Wait for kana before starting kanji' }),
+    ).not.toBeChecked();
   });
 });
