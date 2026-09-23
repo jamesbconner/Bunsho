@@ -254,10 +254,22 @@ describe('BuildPanel', () => {
     expect(await screen.findByText('Dry run: nothing was written.')).toBeInTheDocument();
   });
 
-  it('has its own Build heading and does not repeat the environment checks', async () => {
+  it('has its own Build heading and never asks for the environment checks', async () => {
     serve();
-    renderWithProviders(<BuildPanel />);
-    expect(await screen.findByRole('heading', { name: 'Build' })).toBeInTheDocument();
+    let environmentRequests = 0;
+    server.use(
+      http.get('/api/v1/admin/config-check', () => {
+        environmentRequests += 1;
+        return HttpResponse.json({ ok: true, checks: [] });
+      }),
+    );
+    const { queryClient } = renderWithProviders(<BuildPanel />);
+    await latestBuildLoaded(queryClient);
+    await waitFor(() => {
+      expect(queryClient.getQueryState(queryKeys.contentSummary)?.status).toBe('success');
+    });
+    expect(screen.getByRole('heading', { name: 'Build' })).toBeInTheDocument();
+    expect(environmentRequests).toBe(0);
     expect(screen.queryByText('Environment')).not.toBeInTheDocument();
   });
 });
