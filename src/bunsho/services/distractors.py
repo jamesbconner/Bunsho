@@ -5,7 +5,7 @@ from __future__ import annotations
 import random
 from collections.abc import Sequence
 
-from bunsho.models.content import Item, JlptLevel, Kana
+from bunsho.models.content import Item, JlptLevel, Kana, KanaScript
 from bunsho.models.review import CardKey, CatalogEntry
 from bunsho.models.review_settings import ReviewSettings
 from bunsho.services.answer_key import accepted_answers_for
@@ -20,16 +20,23 @@ def _level_of(item: Item) -> JlptLevel | None:
     return None if isinstance(item, Kana) else item.level
 
 
+def _script_of(item: Item) -> KanaScript | None:
+    return item.script if isinstance(item, Kana) else None
+
+
 def _ranked_pool(
     entries: Sequence[CatalogEntry],
     exclude_item_id: str,
     level: JlptLevel | None,
     active: frozenset[JlptLevel],
+    rng: random.Random,
 ) -> list[CatalogEntry]:
     """``entries`` split into same-level, other-active-level and everything-else bands.
 
-    Kana (``level is None``) always land in the same-level band together, since kana are
-    never leveled; that mirrors how the rest of the app treats kana as one pool.
+    Each band is shuffled with ``rng`` so the choice is not biased toward whatever comes first
+    in study order; the bands themselves stay in preference order. Kana (``level is None``)
+    always land in the same-level band together, since kana are never leveled; that mirrors
+    how the rest of the app treats kana as one pool.
     """
     same_level: list[CatalogEntry] = []
     active_level: list[CatalogEntry] = []
@@ -43,6 +50,8 @@ def _ranked_pool(
             active_level.append(entry)
         else:
             rest.append(entry)
+    for band in (same_level, active_level, rest):
+        rng.shuffle(band)
     return same_level + active_level + rest
 
 
@@ -56,9 +65,11 @@ def choices_for(
     """Shuffled multiple-choice options for ``key``: the correct answer plus up to 3 distractors.
 
     Distractors are other content of the same item type, preferring the same JLPT level, then
-    any level in ``settings.active_levels``, then anything else. Kana have no level and are
-    treated as one pool. A thin content pool is not an error: the result may have fewer than 4
-    entries (a minimum of 1, the correct answer itself).
+    any level in ``settings.active_levels``, then anything else; within each of those tiers
+    they are picked at random. Kana have no level and are treated as one pool, restricted to
+    the card's own script so a hiragana card never offers katakana glyphs (or vice versa). A
+    thin content pool is not an error: the result may have fewer than 4 entries (a minimum of
+    1, the correct answer itself).
 
     Blocking (SQLite via ``ContentCatalog``/``ContentRepository``); call it through
     ``asyncio.to_thread`` from async code.
@@ -78,7 +89,8 @@ def choices_for(
     correct = answers[0]
     catalog = ContentCatalog(repo)
     entries = catalog.entries(key.item_type)
-    pool = _ranked_pool(entries, key.item_id, _level_of(item), settings.levels())
+    pool = _ranked_pool(entries, key.item_id, _level_of(item), settings.levels(), rng)
+    script = _script_of(item)
 
     seen = {correct}
     distractors: list[str] = []
@@ -86,7 +98,7 @@ def choices_for(
         if len(distractors) >= _WANTED:
             break
         candidate = repo.get_item(entry.item_type, entry.item_id)
-        if candidate is None:
+        if candidate is None or _script_of(candidate) != script:
             continue
         candidate_answers = accepted_answers_for(key.direction, candidate)
         if not candidate_answers or candidate_answers[0] in seen:
