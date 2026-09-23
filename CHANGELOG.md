@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-09-23
+
+### Fixed
+
+- Multiple-choice review: the wrong options are now picked at random instead of always being the
+  first items in study order (every kana card used to offer "a, i, u"). They still prefer the card's
+  own JLPT level, then the other active levels, then everything else. Kana options also stay in the
+  card's own script, so hiragana cards no longer offer katakana and the reverse. (#24)
+
 ## [1.1.0] - 2026-09-23
 
 ### Added
