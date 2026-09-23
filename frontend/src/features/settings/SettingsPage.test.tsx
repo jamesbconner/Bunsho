@@ -547,6 +547,36 @@ describe('SettingsPage', () => {
     expect(screen.queryByText(KANA_GATE_MESSAGE)).not.toBeInTheDocument();
   });
 
+  it('clears the kana gate message when Reset to recommended values is pressed', async () => {
+    const user = userEvent.setup();
+    const puts = serveSettings(
+      makeSettings({ kana_gate: { kanji: true, vocab: false, threshold: 0.8 } }),
+    );
+    await openSettings();
+
+    await user.click(screen.getByRole('switch', { name: 'Introduce new kana' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText(KANA_GATE_MESSAGE)).toBeInTheDocument();
+    expect(puts).toEqual([]);
+
+    await user.click(screen.getByRole('button', { name: 'Reset to recommended values' }));
+    expect(screen.queryByText(KANA_GATE_MESSAGE)).not.toBeInTheDocument();
+  });
+
+  it('explains the disabled gate switches only while kana is switched off', async () => {
+    const user = userEvent.setup();
+    serveSettings();
+    await openSettings();
+    const hint = 'Turn on new kana above to use this.';
+    expect(screen.queryByText(hint)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('switch', { name: 'Introduce new kana' }));
+    expect(screen.getByText(hint)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('switch', { name: 'Introduce new kana' }));
+    expect(screen.queryByText(hint)).not.toBeInTheDocument();
+  });
+
   it('keeps a switched-on gate operable after kana is switched off', async () => {
     const user = userEvent.setup();
     serveSettings(makeSettings({ kana_gate: { kanji: true, vocab: false, threshold: 0.8 } }));

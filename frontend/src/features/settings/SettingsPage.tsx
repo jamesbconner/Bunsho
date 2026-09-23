@@ -229,6 +229,11 @@ function SettingsForm({ initial }: { initial: ReviewSettings }) {
                   setSwitch('kana_gate.vocab', event.currentTarget.checked);
                 }}
               />
+              {kanaOff && (
+                <Text size="sm" c="dimmed">
+                  Turn on new kana above to use this.
+                </Text>
+              )}
             </Stack>
           </Input.Wrapper>
           {showThreshold && (
