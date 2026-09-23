@@ -23,14 +23,25 @@ export type ReviewSettingsInput = Schemas['ReviewSettings-Input'];
 export type NewCardPolicyName = Schemas['NewCardPolicyName'];
 export type HealthResponse = Schemas['HealthResponse'];
 
+function isHealthStatus(value: unknown): boolean {
+  return value === 'ok' || value === 'degraded' || value === 'error';
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isComponentHealth(value: unknown): boolean {
+  return isRecord(value) && isHealthStatus(value.status) && typeof value.detail === 'string';
+}
+
 function isHealthResponse(data: unknown): data is HealthResponse {
-  if (typeof data !== 'object' || data === null) return false;
-  const candidate = data as Record<string, unknown>;
   return (
-    typeof candidate.status === 'string' &&
-    typeof candidate.version === 'string' &&
-    typeof candidate.components === 'object' &&
-    candidate.components !== null
+    isRecord(data) &&
+    isHealthStatus(data.status) &&
+    typeof data.version === 'string' &&
+    isRecord(data.components) &&
+    Object.values(data.components).every(isComponentHealth)
   );
 }
 

@@ -57,4 +57,50 @@ describe('endpoints.health', () => {
     server.use(http.get('/api/v1/health', () => HttpResponse.error()));
     await expect(endpoints.health()).rejects.toBeInstanceOf(NetworkError);
   });
+
+  it('does not treat a 200 page that is not JSON (an SPA fallback) as a health report', async () => {
+    server.use(
+      http.get('/api/v1/health', () =>
+        HttpResponse.text('<html>app</html>', { headers: { 'Content-Type': 'text/html' } }),
+      ),
+    );
+    const failure = await endpoints.health().catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(ApiError);
+    expect((failure as ApiError).status).toBe(502);
+  });
+
+  it('does not treat a 200 JSON body of the wrong shape as a health report', async () => {
+    server.use(http.get('/api/v1/health', () => HttpResponse.json({ detail: 'ok' })));
+    await expect(endpoints.health()).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it('does not treat a report whose status is not ok, degraded or error as a report', async () => {
+    server.use(
+      http.get('/api/v1/health', () =>
+        HttpResponse.json({ ...ERROR_BODY, status: 'busy' }, { status: 503 }),
+      ),
+    );
+    await expect(endpoints.health()).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it('does not treat a report whose components is an array as a report', async () => {
+    server.use(http.get('/api/v1/health', () => HttpResponse.json({ ...OK_BODY, components: [] })));
+    await expect(endpoints.health()).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it.each([
+    ['has no detail', { status: 'ok', latency_ms: 1 }],
+    [
+      'has a status that is not ok, degraded or error',
+      { status: 'up', detail: 'x', latency_ms: 1 },
+    ],
+    ['is not an object', 'ok'],
+  ])('does not treat a report with a component that %s as a report', async (_name, component) => {
+    server.use(
+      http.get('/api/v1/health', () =>
+        HttpResponse.json({ ...OK_BODY, components: { database: component } }),
+      ),
+    );
+    await expect(endpoints.health()).rejects.toBeInstanceOf(ApiError);
+  });
 });
