@@ -46,7 +46,10 @@ def test_valid_environment_builds_a_config(tmp_path: Path) -> None:
     assert config.app.data_dir == tmp_path / "data"
 
 
-def test_missing_settings_report_every_problem(tmp_path: Path) -> None:
+def test_missing_settings_report_every_problem(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)  # a developer's real ./.env must not supply the missing settings
     with pytest.raises(ConfigError) as info:
         build_service_config({"BUNSHO_PATHS__DATA_DIR": str(tmp_path)})
     message = str(info.value)
