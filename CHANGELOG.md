@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-09-23
+
 ### Added
 
 - Content pipeline: imports the JLPT N5-N1 vocabulary Anki deck (checksum-verified), and builds a
