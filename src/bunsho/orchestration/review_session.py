@@ -13,6 +13,7 @@ from bunsho.models.content import Item, Kana, Kanji, Vocab
 from bunsho.models.review import (
     CardKey,
     CardSchedule,
+    CatalogEntry,
     Grade,
     ItemType,
     SchedState,
@@ -35,6 +36,7 @@ from bunsho.services.distractors import choices_for
 from bunsho.services.protocols import NewCardPolicy, Scheduler
 from bunsho.services.review_settings import ReviewSettingsService
 from bunsho.services.study_day import study_day_window
+from bunsho.services.type_availability import type_availability
 
 REVIEW_MODE = "flip"
 _TYPE_ORDER = (ItemType.KANA, ItemType.KANJI, ItemType.VOCAB)
@@ -298,13 +300,31 @@ class ReviewSessionOrchestrator:
         due_counts = await self._progress.due_counts(now)
         policy = self._policy_factory(settings)
         catalog = ContentCatalog(repo)
+        kana_entries: list[CatalogEntry] | None = None
+        if settings.kana_gate.kanji or settings.kana_gate.vocab:
+            kana_entries = await asyncio.to_thread(catalog.entries, ItemType.KANA)
+        availability = type_availability(settings, kana_entries or [], states)
         new_keys: dict[ItemType, list[CardKey]] = {}
         for item_type in _TYPE_ORDER:
+            status = availability[item_type]
+            if not status.allowed:
+                self._logger.debug(
+                    "type_blocked type=%s reason=%s kana_share=%s threshold=%s",
+                    item_type.value,
+                    status.reason,
+                    status.kana_share,
+                    settings.kana_gate.threshold,
+                )
+                new_keys[item_type] = []
+                continue
             limit = settings.new_limits.for_type(item_type)
             allowance = None if limit == 0 else max(0, limit - introduced.get(item_type, 0))
             if allowance == 0:
                 new_keys[item_type] = []
                 continue
-            entries = await asyncio.to_thread(catalog.entries, item_type)
+            if item_type is ItemType.KANA and kana_entries is not None:
+                entries = kana_entries
+            else:
+                entries = await asyncio.to_thread(catalog.entries, item_type)
             new_keys[item_type] = policy.select(item_type, entries, states, allowance)
         return _Plan(settings, introduced, due_counts, new_keys)

@@ -9,6 +9,7 @@ import {
   Skeleton,
   Slider,
   Stack,
+  Switch,
   Text,
   Title,
 } from '@mantine/core';
@@ -61,6 +62,7 @@ function SettingsForm({ initial }: { initial: ReviewSettings }) {
   const save = useUpdateSettings();
   const levelsId = useId();
   const retentionId = useId();
+  const gateId = useId();
   const [general, setGeneral] = useState<{ message: string; retryable: boolean } | null>(null);
   const form = useForm<SettingsFormValues>({
     mode: 'controlled',
@@ -90,6 +92,18 @@ function SettingsForm({ initial }: { initial: ReviewSettings }) {
     });
   };
 
+  type SwitchPath =
+    | 'type_enabled.kana'
+    | 'type_enabled.kanji'
+    | 'type_enabled.vocab'
+    | 'kana_gate.kanji'
+    | 'kana_gate.vocab';
+  /** Set a switch and drop the kana-gate message, so a fixed problem stops being shown. */
+  const setSwitch = (path: SwitchPath, checked: boolean) => {
+    form.setFieldValue(path, checked);
+    form.clearFieldError('kana_gate');
+  };
+
   const values = form.getValues();
   const dirty = isSettingsDirty(values, form.getInitialValues());
   const pinned = values.new_card_policy === 'pinned_levels';
@@ -100,6 +114,15 @@ function SettingsForm({ initial }: { initial: ReviewSettings }) {
     typeof form.errors.target_retention_percent === 'string'
       ? form.errors.target_retention_percent
       : undefined;
+  const gate = values.kana_gate;
+  const gateError = typeof form.errors.kana_gate === 'string' ? form.errors.kana_gate : undefined;
+  const thresholdError =
+    typeof form.errors['kana_gate.threshold_percent'] === 'string'
+      ? form.errors['kana_gate.threshold_percent']
+      : undefined;
+  // A hidden threshold that is invalid must still be shown, or Save would fail with no clue why.
+  const showThreshold = gate.kanji || gate.vocab || thresholdError !== undefined;
+  const kanaOff = !values.type_enabled.kana;
 
   return (
     <form
@@ -122,12 +145,40 @@ function SettingsForm({ initial }: { initial: ReviewSettings }) {
                 : undefined
             }
           />
+          <Stack gap="xs">
+            <Switch
+              label="Introduce new kana"
+              checked={values.type_enabled.kana}
+              onChange={(event) => {
+                setSwitch('type_enabled.kana', event.currentTarget.checked);
+              }}
+            />
+            <Switch
+              label="Introduce new kanji"
+              checked={values.type_enabled.kanji}
+              onChange={(event) => {
+                setSwitch('type_enabled.kanji', event.currentTarget.checked);
+              }}
+            />
+            <Switch
+              label="Introduce new vocabulary"
+              checked={values.type_enabled.vocab}
+              onChange={(event) => {
+                setSwitch('type_enabled.vocab', event.currentTarget.checked);
+              }}
+            />
+            <Text size="sm" c="dimmed">
+              A type that is switched off introduces no new cards. Cards you already started stay
+              due, so no progress is lost.
+            </Text>
+          </Stack>
           <Group grow align="flex-start">
             <NumberInput
               label="Kana per day"
               min={0}
               max={LIMIT_MAX}
               allowDecimal={false}
+              disabled={!values.type_enabled.kana}
               {...form.getInputProps('new_limits.kana')}
             />
             <NumberInput
@@ -135,6 +186,7 @@ function SettingsForm({ initial }: { initial: ReviewSettings }) {
               min={0}
               max={LIMIT_MAX}
               allowDecimal={false}
+              disabled={!values.type_enabled.kanji}
               {...form.getInputProps('new_limits.kanji')}
             />
             <NumberInput
@@ -142,12 +194,59 @@ function SettingsForm({ initial }: { initial: ReviewSettings }) {
               min={0}
               max={LIMIT_MAX}
               allowDecimal={false}
+              disabled={!values.type_enabled.vocab}
               {...form.getInputProps('new_limits.vocab')}
             />
           </Group>
           <Text size="sm" c="dimmed">
             The most new cards of each type per day. 0 means no limit.
           </Text>
+        </Stack>
+
+        <Stack gap="md">
+          <Title order={3}>Kana first</Title>
+          <Input.Wrapper
+            id={gateId}
+            label="Start kanji and vocabulary after kana"
+            description="Hold them back until enough kana is learned. Your scheduled reviews are never held back."
+            error={gateError}
+            {...groupAria(gateId, gateError !== undefined)}
+          >
+            <Stack gap="xs" mt="xs">
+              <Switch
+                label="Wait for kana before starting kanji"
+                checked={gate.kanji}
+                disabled={kanaOff && !gate.kanji}
+                onChange={(event) => {
+                  setSwitch('kana_gate.kanji', event.currentTarget.checked);
+                }}
+              />
+              <Switch
+                label="Wait for kana before starting vocabulary"
+                checked={gate.vocab}
+                disabled={kanaOff && !gate.vocab}
+                onChange={(event) => {
+                  setSwitch('kana_gate.vocab', event.currentTarget.checked);
+                }}
+              />
+              {kanaOff && (
+                <Text size="sm" c="dimmed">
+                  Turn on new kana above to use this.
+                </Text>
+              )}
+            </Stack>
+          </Input.Wrapper>
+          {showThreshold && (
+            <NumberInput
+              label="Kana needed before they start"
+              description="Share of all kana cards (both directions, hiragana and katakana) that must be well known (in Review). If it drops below this later, new kanji and vocabulary pause until it recovers."
+              min={0}
+              max={100}
+              allowDecimal={false}
+              suffix="%"
+              {...form.getInputProps('kana_gate.threshold_percent')}
+            />
+          )}
         </Stack>
 
         <Stack gap="md">
@@ -318,7 +417,7 @@ function SettingsForm({ initial }: { initial: ReviewSettings }) {
   );
 }
 
-/** How new cards are chosen, how many, and how sharp your memory should stay. */
+/** How new cards are chosen and gated, how many, and how sharp your memory should stay. */
 export function SettingsPage() {
   const settings = useSettings();
 

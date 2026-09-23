@@ -5,8 +5,9 @@ import type { NextCard } from '../../api/endpoints';
 import { formatDueTime } from './formatInterval';
 
 /**
- * No card to study right now. The API cannot say whether the daily new-card limit is used up or
- * everything unlocked has been introduced, so the message names both.
+ * No card to study right now. The API cannot say whether the daily new-card limit is used up,
+ * everything unlocked has been introduced, kanji and vocabulary are waiting on the kana gate, or a
+ * type is switched off, so the message names all of them.
  */
 export function ReviewDone({ data }: { data: NextCard }) {
   return (
@@ -14,14 +15,15 @@ export function ReviewDone({ data }: { data: NextCard }) {
       <Title order={3}>You&apos;re done for now</Title>
       <Text c="dimmed" maw={460}>
         Nothing is due and no new cards are available today. The daily new-card limit may be used
-        up, or every card that is unlocked has been introduced.
+        up, every card that is unlocked may have been introduced, new kanji and vocabulary may be
+        waiting for kana to be learned, or a type may be switched off in Settings.
       </Text>
       {data.next_due_at !== null && <Text>Next card due {formatDueTime(data.next_due_at)}.</Text>}
       <Button component={Link} to="/" variant="light">
         Back to the dashboard
       </Button>
       <Button component={Link} to="/settings" variant="subtle" size="xs">
-        Change your daily limits in Settings
+        Change your study plan in Settings
       </Button>
     </Stack>
   );

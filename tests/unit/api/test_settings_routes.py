@@ -56,3 +56,33 @@ def test_a_partial_document_takes_defaults_for_the_rest(
         **ReviewSettings().model_dump(mode="json"),
         "target_retention": 0.8,
     }
+
+
+def test_the_type_switches_and_kana_gate_round_trip(
+    review_client: TestClient, review_headers: Headers
+) -> None:
+    document = ReviewSettings().model_dump(mode="json")
+    document["type_enabled"] = {"kana": True, "kanji": False, "vocab": True}
+    document["kana_gate"] = {"kanji": False, "vocab": True, "threshold": 0.9}
+    saved = review_client.put(SETTINGS, json=document, headers=review_headers)
+    assert saved.status_code == 200
+    assert saved.json() == document
+    assert review_client.get(SETTINGS, headers=review_headers).json() == document
+
+
+def test_a_gate_with_kana_disabled_is_rejected_at_the_gate_field(
+    review_client: TestClient, review_headers: Headers
+) -> None:
+    good = ReviewSettings().model_dump(mode="json")
+    assert review_client.put(SETTINGS, json=good, headers=review_headers).status_code == 200
+    bad = {
+        **good,
+        "type_enabled": {"kana": False, "kanji": True, "vocab": True},
+        "kana_gate": {"kanji": True, "vocab": False, "threshold": 0.8},
+    }
+    response = review_client.put(SETTINGS, json=bad, headers=review_headers)
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert [error["loc"] for error in detail] == [["body", "kana_gate"]]
+    assert detail[0]["msg"].startswith("Turn kana on")
+    assert review_client.get(SETTINGS, headers=review_headers).json() == good

@@ -325,8 +325,10 @@ describe('ReviewPage', () => {
       '/',
     );
     expect(
-      screen.getByRole('link', { name: 'Change your daily limits in Settings' }),
+      screen.getByRole('link', { name: 'Change your study plan in Settings' }),
     ).toHaveAttribute('href', '/settings');
+    expect(screen.getByText(/waiting for kana/)).toBeInTheDocument();
+    expect(screen.getByText(/switched off/)).toBeInTheDocument();
   });
 
   it('leaves out the next due time when nothing is scheduled', async () => {

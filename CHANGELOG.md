@@ -7,6 +7,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-23
+
+### Added
+
+- Study plan control (Settings): each of kana, kanji and vocabulary can be switched off for new cards
+  (cards already introduced stay due, so nothing is lost; all three off gives a reviews-only
+  session), and kanji and vocabulary can each be made to wait until a chosen share (default 80%) of
+  all kana cards, both directions, hiragana and katakana together, is in the FSRS Review state. The
+  gate works with every new-card policy and is checked on every plan, so if the kana share later
+  falls below the threshold, new kanji and vocabulary pause until it recovers; scheduled reviews are
+  never held back. The settings document gains `type_enabled` and `kana_gate`; defaults keep the
+  previous behaviour and saved settings from 1.0.0 load unchanged. (#20)
+
 ## [1.0.0] - 2026-09-23
 
 ### Added

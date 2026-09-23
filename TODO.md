@@ -54,7 +54,7 @@ items are kept at the bottom of the file, grouped by the plan that delivered the
 ### API Gaps
 
 - [ ] `GET /reviews/next` cannot say why no card is offered (daily limit used up vs everything
-      introduced): add a reason field and use it in the finished state
+      introduced): add a reason field and use it in the finished state (the new `type_availability` service already returns a per-type block reason, so a blocked type could be reported here)
 - [ ] Undo of a grade and study-ahead need API support (the review log is append-only, `next` has no look-ahead)
 - [ ] Expose the review-setting defaults through the API so the form does not repeat them
       (`RECOMMENDED_SETTINGS` is checked against the OpenAPI snapshot)
@@ -214,6 +214,8 @@ items are kept at the bottom of the file, grouped by the plan that delivered the
 - [ ] 4. Stroke order / handwriting (needs a stroke-data source, probably KanjiVG; jamdict has none)
 - [ ] 5. Anki `.apkg` export
 - [ ] 6. Sentence practice and grammar (grammar source still open)
+- [ ] Study-path presets (for example Beginner: kana first, then kanji and vocabulary together)
+      built on the type switches and the kana gate
 
 ### Deferred Minor Findings (low priority)
 

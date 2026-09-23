@@ -18,10 +18,12 @@ from bunsho.models.review import (
 )
 from bunsho.models.review_session import CardView, TypeCounts
 from bunsho.models.review_settings import (
+    KanaGate,
     NewCardPolicyName,
     NewLimits,
     ReviewModeName,
     ReviewSettings,
+    TypeEnabled,
 )
 from bunsho.services.fsrs_scheduler import FSRSScheduler
 from tests.base import make_kana, make_kanji, make_vocab, run_with_database
@@ -333,3 +335,138 @@ def test_a_due_card_whose_item_disappeared_is_skipped_with_a_warning(
     with caplog.at_level(logging.WARNING, logger=LOGGER_NAME):
         run_with_database(tmp_path, scenario)
     assert "review_card_orphaned" in caplog.text
+
+
+KANA_A, KANA_I = make_kana("あ", "a"), make_kana("い", "i")  # 4 kana cards
+GATED = ReviewSettings(kana_gate=KanaGate(kanji=True, vocab=True, threshold=0.8))
+
+
+async def learn_kana_cards(stack: ReviewStack, count: int) -> None:
+    """Answer ``count`` new kana cards Easy, which puts each straight into the Review state."""
+    for _ in range(count):
+        card = await next_card(stack)
+        assert card.item_type is ItemType.KANA
+        await answer(stack, card, Grade.EASY)
+    states = await stack.progress.card_states()
+    kana_states = [state for key, state in states.items() if key.item_type is ItemType.KANA]
+    assert kana_states == [SchedState.REVIEW] * count
+
+
+def test_a_gated_stack_offers_only_kana_at_first(tmp_path: Path) -> None:
+    async def scenario(db: ProgressDatabase) -> None:
+        stack = build_review_stack(
+            tmp_path, db, kana=[KANA_A, KANA_I], kanji=[make_kanji("日")], vocab=[A]
+        )
+        await stack.settings.save(GATED)
+        result = await stack.orchestrator.next_card()
+        assert result.card is not None
+        assert result.card.item_type is ItemType.KANA
+        assert result.counts.new_remaining == TypeCounts(kana=4, kanji=0, vocab=0)
+
+    run_with_database(tmp_path, scenario)
+
+
+def test_kanji_and_vocab_start_once_the_kana_share_reaches_the_threshold(tmp_path: Path) -> None:
+    async def scenario(db: ProgressDatabase) -> None:
+        stack = build_review_stack(
+            tmp_path, db, kana=[KANA_A, KANA_I], kanji=[make_kanji("日")], vocab=[A]
+        )
+        await stack.settings.save(GATED)
+        await learn_kana_cards(stack, 4)
+        result = await stack.orchestrator.next_card()
+        assert result.card is not None
+        assert result.card.item_type in {ItemType.KANJI, ItemType.VOCAB}
+        assert result.counts.new_remaining == TypeCounts(kana=0, kanji=3, vocab=2)
+
+    run_with_database(tmp_path, scenario)
+
+
+def test_the_gate_stays_shut_below_the_threshold_and_follows_the_setting(tmp_path: Path) -> None:
+    async def scenario(db: ProgressDatabase) -> None:
+        stack = build_review_stack(
+            tmp_path, db, kana=[KANA_A, KANA_I], kanji=[make_kanji("日")], vocab=[A]
+        )
+        await stack.settings.save(GATED)
+        await learn_kana_cards(stack, 3)  # 3 of 4 kana cards = 0.75 < 0.8
+        below = await stack.orchestrator.next_card()
+        assert below.card is not None
+        assert below.card.item_type is ItemType.KANA  # the last kana card, not kanji or vocab
+        assert below.counts.new_remaining == TypeCounts(kana=1, kanji=0, vocab=0)
+        await stack.settings.save(
+            ReviewSettings(kana_gate=KanaGate(kanji=True, vocab=True, threshold=0.75))
+        )
+        at = await stack.orchestrator.next_card()
+        assert at.counts.new_remaining == TypeCounts(kana=1, kanji=3, vocab=2)
+
+    run_with_database(tmp_path, scenario)
+
+
+def test_a_gate_does_not_affect_kana(tmp_path: Path) -> None:
+    async def scenario(db: ProgressDatabase) -> None:
+        stack = build_review_stack(tmp_path, db, kana=[KANA_A, KANA_I])
+        await stack.settings.save(GATED)
+        assert (await stack.orchestrator.next_card()).counts.new_remaining.kana == 4
+
+    run_with_database(tmp_path, scenario)
+
+
+def test_a_disabled_type_offers_no_new_cards(tmp_path: Path) -> None:
+    async def scenario(db: ProgressDatabase) -> None:
+        stack = build_review_stack(tmp_path, db, kana=[KANA_A], vocab=[A])
+        await stack.settings.save(ReviewSettings(type_enabled=TypeEnabled(vocab=False)))
+        result = await stack.orchestrator.next_card()
+        assert result.counts.new_remaining == TypeCounts(kana=2, kanji=0, vocab=0)
+        assert result.card is not None
+        assert result.card.item_type is ItemType.KANA
+
+    run_with_database(tmp_path, scenario)
+
+
+def test_a_disabled_type_still_serves_the_cards_it_already_introduced(tmp_path: Path) -> None:
+    async def scenario(db: ProgressDatabase) -> None:
+        stack = build_review_stack(tmp_path, db, vocab=[A, B])
+        first = await next_card(stack)
+        await answer(stack, first)  # now learning, due in minutes
+        await stack.settings.save(ReviewSettings(type_enabled=TypeEnabled(vocab=False)))
+        stack.clock.advance(minutes=11)
+        result = await stack.orchestrator.next_card()
+        assert result.card is not None
+        assert (result.card.item_id, result.card.direction) == (first.item_id, first.direction)
+        assert result.card.is_new is False
+        assert result.counts.new_remaining.vocab == 0
+        assert result.counts.due.vocab == 1
+
+    run_with_database(tmp_path, scenario)
+
+
+def test_with_every_type_disabled_only_scheduled_cards_remain(tmp_path: Path) -> None:
+    async def scenario(db: ProgressDatabase) -> None:
+        stack = build_review_stack(tmp_path, db, kana=[KANA_A], kanji=[make_kanji("日")], vocab=[A])
+        await stack.settings.save(
+            ReviewSettings(type_enabled=TypeEnabled(kana=False, kanji=False, vocab=False))
+        )
+        result = await stack.orchestrator.next_card()
+        assert result.card is None
+        assert result.counts.new_remaining == TypeCounts()
+
+    run_with_database(tmp_path, scenario)
+
+
+def test_a_blocked_type_is_logged_with_its_reason(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    async def scenario(db: ProgressDatabase) -> None:
+        stack = build_review_stack(tmp_path, db, kana=[KANA_A], vocab=[A])
+        await stack.settings.save(
+            ReviewSettings(
+                type_enabled=TypeEnabled(kanji=False),
+                kana_gate=KanaGate(vocab=True, threshold=0.8),
+            )
+        )
+        await stack.orchestrator.next_card()
+
+    with caplog.at_level(logging.DEBUG, logger=LOGGER_NAME):
+        run_with_database(tmp_path, scenario)
+    assert "type_blocked type=kanji reason=disabled" in caplog.text
+    expected = "type_blocked type=vocab reason=waiting_for_kana kana_share=0.0 threshold=0.8"
+    assert expected in caplog.text

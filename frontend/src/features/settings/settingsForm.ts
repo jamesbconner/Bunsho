@@ -17,6 +17,9 @@ export type Level = (typeof LEVELS)[number];
 export interface SettingsFormValues {
   new_card_policy: NewCardPolicyName;
   new_limits: { kana: number | string; kanji: number | string; vocab: number | string };
+  type_enabled: { kana: boolean; kanji: boolean; vocab: boolean };
+  /** The threshold is a whole percentage here (the API stores a fraction), `string` while cleared. */
+  kana_gate: { kanji: boolean; vocab: boolean; threshold_percent: number | string };
   target_retention_percent: number;
   rollover_hour: number;
   active_levels: Level[];
@@ -33,6 +36,8 @@ export interface SettingsFormValues {
 export const RECOMMENDED_SETTINGS: ReviewSettings = {
   new_card_policy: 'strict_order',
   new_limits: { kana: 20, kanji: 15, vocab: 20 },
+  type_enabled: { kana: true, kanji: true, vocab: true },
+  kana_gate: { kanji: false, vocab: false, threshold: 0.8 },
   target_retention: 0.9,
   rollover_hour: 4,
   active_levels: ['N5'],
@@ -86,6 +91,12 @@ export function toFormValues(settings: ReviewSettings): SettingsFormValues {
   return {
     new_card_policy: settings.new_card_policy,
     new_limits: { ...settings.new_limits },
+    type_enabled: { ...settings.type_enabled },
+    kana_gate: {
+      kanji: settings.kana_gate.kanji,
+      vocab: settings.kana_gate.vocab,
+      threshold_percent: toPercent(settings.kana_gate.threshold),
+    },
     target_retention_percent: toPercent(settings.target_retention),
     rollover_hour: settings.rollover_hour,
     active_levels: LEVELS.filter((level) => settings.active_levels.includes(level)),
@@ -105,6 +116,12 @@ export function toRequest(values: SettingsFormValues): ReviewSettingsInput {
       kanji: Number(values.new_limits.kanji),
       vocab: Number(values.new_limits.vocab),
     },
+    type_enabled: { ...values.type_enabled },
+    kana_gate: {
+      kanji: values.kana_gate.kanji,
+      vocab: values.kana_gate.vocab,
+      threshold: toFraction(Number(values.kana_gate.threshold_percent)),
+    },
     target_retention: toFraction(values.target_retention_percent),
     rollover_hour: values.rollover_hour,
     active_levels: LEVELS.filter((level) => values.active_levels.includes(level)),
@@ -122,6 +139,12 @@ function canonical(values: SettingsFormValues): string {
     String(values.new_limits.kana),
     String(values.new_limits.kanji),
     String(values.new_limits.vocab),
+    values.type_enabled.kana,
+    values.type_enabled.kanji,
+    values.type_enabled.vocab,
+    values.kana_gate.kanji,
+    values.kana_gate.vocab,
+    String(values.kana_gate.threshold_percent),
     values.target_retention_percent,
     values.rollover_hour,
     LEVELS.filter((level) => values.active_levels.includes(level)),
@@ -149,6 +172,18 @@ function isWholeNumber(value: number | string, min: number, max: number): boolea
 
 const LIMIT_MESSAGE = `Enter a whole number from 0 to ${LIMIT_MAX.toLocaleString('en-US')}.`;
 
+/** The same text the API sends when a gate is on while kana is off. */
+export const KANA_GATE_MESSAGE =
+  'Turn kana on, or turn off the kana gate: kanji and vocabulary cannot wait for kana that is never introduced.';
+
+const PERCENTAGE_MESSAGE = 'Enter a percentage from 0 to 100.';
+
+function isPercentage(value: number | string): boolean {
+  if (typeof value === 'string' && value.trim() === '') return false;
+  const number = Number(value);
+  return !Number.isNaN(number) && number >= 0 && number <= 100;
+}
+
 /** The API's rules, checked before anything is sent. Keys are form field paths. */
 export function validateSettings(values: SettingsFormValues): Record<string, string> {
   const errors: Record<string, string> = {};
@@ -171,25 +206,32 @@ export function validateSettings(values: SettingsFormValues): Record<string, str
   if (values.active_levels.length === 0) {
     errors.active_levels = 'Pick at least one level.';
   }
-  const threshold = values.mastery_threshold_percent;
-  const thresholdNumber = Number(threshold);
-  if (
-    (typeof threshold === 'string' && threshold.trim() === '') ||
-    Number.isNaN(thresholdNumber) ||
-    thresholdNumber < 0 ||
-    thresholdNumber > 100
-  ) {
-    errors.mastery_threshold_percent = 'Enter a percentage from 0 to 100.';
+  if (!isPercentage(values.mastery_threshold_percent)) {
+    errors.mastery_threshold_percent = PERCENTAGE_MESSAGE;
+  }
+  const gate = values.kana_gate;
+  if (!values.type_enabled.kana && (gate.kanji || gate.vocab)) {
+    errors.kana_gate = KANA_GATE_MESSAGE;
+  }
+  if (!isPercentage(gate.threshold_percent)) {
+    errors['kana_gate.threshold_percent'] = PERCENTAGE_MESSAGE;
   }
   return errors;
 }
 
-/** Where the server's field names live in the form. */
+/** Where the server's field paths (below `body`) live in the form. */
 const SERVER_FIELDS: Readonly<Record<string, string>> = {
   new_card_policy: 'new_card_policy',
-  kana: 'new_limits.kana',
-  kanji: 'new_limits.kanji',
-  vocab: 'new_limits.vocab',
+  'new_limits.kana': 'new_limits.kana',
+  'new_limits.kanji': 'new_limits.kanji',
+  'new_limits.vocab': 'new_limits.vocab',
+  'type_enabled.kana': 'type_enabled.kana',
+  'type_enabled.kanji': 'type_enabled.kanji',
+  'type_enabled.vocab': 'type_enabled.vocab',
+  kana_gate: 'kana_gate',
+  'kana_gate.kanji': 'kana_gate.kanji',
+  'kana_gate.vocab': 'kana_gate.vocab',
+  'kana_gate.threshold': 'kana_gate.threshold_percent',
   target_retention: 'target_retention_percent',
   rollover_hour: 'rollover_hour',
   active_levels: 'active_levels',

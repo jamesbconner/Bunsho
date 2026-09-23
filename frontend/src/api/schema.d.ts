@@ -594,6 +594,54 @@ export interface components {
             script: components["schemas"]["KanaScript"];
         };
         /**
+         * KanaGate
+         * @description Hold new kanji and/or vocabulary back until enough kana is learned.
+         *
+         *     Kana is one stage: the share counts every kana card (both directions, hiragana and
+         *     katakana together) that is in the FSRS Review state. ``threshold`` is a fraction from 0 to 1.
+         */
+        "KanaGate-Input": {
+            /**
+             * Kanji
+             * @default false
+             */
+            kanji: boolean;
+            /**
+             * Threshold
+             * @default 0.8
+             */
+            threshold: number;
+            /**
+             * Vocab
+             * @default false
+             */
+            vocab: boolean;
+        };
+        /**
+         * KanaGate
+         * @description Hold new kanji and/or vocabulary back until enough kana is learned.
+         *
+         *     Kana is one stage: the share counts every kana card (both directions, hiragana and
+         *     katakana together) that is in the FSRS Review state. ``threshold`` is a fraction from 0 to 1.
+         */
+        "KanaGate-Output": {
+            /**
+             * Kanji
+             * @default false
+             */
+            kanji: boolean;
+            /**
+             * Threshold
+             * @default 0.8
+             */
+            threshold: number;
+            /**
+             * Vocab
+             * @default false
+             */
+            vocab: boolean;
+        };
+        /**
          * KanaKind
          * @description Kana category.
          * @enum {string}
@@ -754,6 +802,7 @@ export interface components {
         "ReviewSettings-Input": {
             /** Active Levels */
             active_levels?: ("N1" | "N2" | "N3" | "N4" | "N5")[];
+            kana_gate?: components["schemas"]["KanaGate-Input"];
             /** @default flip */
             kana_mode: components["schemas"]["ReviewModeName"];
             /** @default flip */
@@ -776,6 +825,7 @@ export interface components {
              * @default 0.9
              */
             target_retention: number;
+            type_enabled?: components["schemas"]["TypeEnabled-Input"];
             /** @default flip */
             vocab_mode: components["schemas"]["ReviewModeName"];
         };
@@ -786,6 +836,7 @@ export interface components {
         "ReviewSettings-Output": {
             /** Active Levels */
             active_levels: ("N1" | "N2" | "N3" | "N4" | "N5")[];
+            kana_gate: components["schemas"]["KanaGate-Output"];
             /** @default flip */
             kana_mode: components["schemas"]["ReviewModeName"];
             /** @default flip */
@@ -808,6 +859,7 @@ export interface components {
              * @default 0.9
              */
             target_retention: number;
+            type_enabled: components["schemas"]["TypeEnabled-Output"];
             /** @default flip */
             vocab_mode: components["schemas"]["ReviewModeName"];
         };
@@ -895,6 +947,48 @@ export interface components {
              * @default 0
              */
             vocab: number;
+        };
+        /**
+         * TypeEnabled
+         * @description Which item types may introduce new cards. Cards already introduced stay due either way.
+         */
+        "TypeEnabled-Input": {
+            /**
+             * Kana
+             * @default true
+             */
+            kana: boolean;
+            /**
+             * Kanji
+             * @default true
+             */
+            kanji: boolean;
+            /**
+             * Vocab
+             * @default true
+             */
+            vocab: boolean;
+        };
+        /**
+         * TypeEnabled
+         * @description Which item types may introduce new cards. Cards already introduced stay due either way.
+         */
+        "TypeEnabled-Output": {
+            /**
+             * Kana
+             * @default true
+             */
+            kana: boolean;
+            /**
+             * Kanji
+             * @default true
+             */
+            kanji: boolean;
+            /**
+             * Vocab
+             * @default true
+             */
+            vocab: boolean;
         };
         /**
          * TypeProgress

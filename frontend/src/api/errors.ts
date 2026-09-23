@@ -4,7 +4,7 @@ import { FetchError } from 'ofetch';
 export class ApiError extends Error {
   readonly status: number;
   readonly detail: string;
-  /** For 422 responses: the first message per field name. */
+  /** For 422 responses: the first message per field path below the request body (`new_limits.kana`). */
   readonly fieldErrors: Readonly<Record<string, string>>;
   /** For 429 responses: seconds to wait, from the Retry-After header. */
   readonly retryAfterSeconds: number | null;
@@ -36,13 +36,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
+/** A field's dotted path below the request body (`new_limits.kana`); null when it has none. */
+function fieldPath(location: unknown[]): string | null {
+  const parts = location.slice(location[0] === 'body' ? 1 : 0);
+  if (parts.length === 0) return null;
+  if (!parts.every((part) => typeof part === 'string' || typeof part === 'number')) return null;
+  return parts.join('.');
+}
+
 function fieldErrorsOf(detail: unknown[]): Record<string, string> {
   const result: Record<string, string> = {};
   for (const item of detail) {
     if (!isRecord(item) || !Array.isArray(item.loc) || typeof item.msg !== 'string') continue;
-    const location: unknown[] = item.loc;
-    const name = location.at(-1);
-    if (typeof name === 'string' && !(name in result)) result[name] = item.msg;
+    const path = fieldPath(item.loc);
+    if (path !== null && !(path in result)) result[path] = item.msg;
   }
   return result;
 }
