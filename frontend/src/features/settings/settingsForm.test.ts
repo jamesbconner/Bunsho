@@ -5,6 +5,7 @@ import { ApiError } from '../../api/errors';
 import openapi from '../../../openapi.json?raw';
 import { makeSettings } from '../../test/fixtures';
 import {
+  KANA_GATE_MESSAGE,
   RECOMMENDED_SETTINGS,
   isSettingsDirty,
   placeServerErrors,
@@ -138,6 +139,42 @@ describe('validateSettings', () => {
       'new_limits.kanji',
     ]);
   });
+
+  it('asks for kana to be on when a gate is on', () => {
+    const errors = validateSettings(
+      withValues({
+        type_enabled: { kana: false, kanji: true, vocab: true },
+        kana_gate: { kanji: true, vocab: false, threshold_percent: 80 },
+      }),
+    );
+    expect(errors).toEqual({ kana_gate: KANA_GATE_MESSAGE });
+  });
+
+  it('allows kana off with no gate, and every type off', () => {
+    expect(
+      validateSettings(withValues({ type_enabled: { kana: false, kanji: true, vocab: true } })),
+    ).toEqual({});
+    expect(
+      validateSettings(withValues({ type_enabled: { kana: false, kanji: false, vocab: false } })),
+    ).toEqual({});
+  });
+
+  it('accepts the edges of the gate threshold and rejects anything else', () => {
+    for (const threshold of [0, 100, 80.5, '65']) {
+      expect(
+        validateSettings(
+          withValues({ kana_gate: { ...VALID.kana_gate, threshold_percent: threshold } }),
+        ),
+      ).toEqual({});
+    }
+    for (const threshold of ['', ' ', -1, 101, 'abc']) {
+      expect(
+        validateSettings(
+          withValues({ kana_gate: { ...VALID.kana_gate, threshold_percent: threshold } }),
+        ),
+      ).toEqual({ 'kana_gate.threshold_percent': 'Enter a percentage from 0 to 100.' });
+    }
+  });
 });
 
 describe('isSettingsDirty', () => {
@@ -207,14 +244,18 @@ describe('placeServerErrors', () => {
   it('puts the server messages on the matching fields', () => {
     const placed = placeServerErrors(
       new ApiError(422, 'Request failed', {
-        kana: 'Input should be less than or equal to 10000',
+        'new_limits.kana': 'Input should be less than or equal to 10000',
         target_retention: 'Input should be greater than or equal to 0.7',
         mastery_threshold: 'Input should be less than or equal to 1',
         rollover_hour: 'Input should be less than or equal to 23',
         active_levels: 'List should have at least 1 item',
         new_card_policy: 'Input should be a valid policy',
-        kanji: 'bad',
-        vocab: 'bad',
+        'new_limits.kanji': 'bad',
+        'new_limits.vocab': 'bad',
+        kana_gate: 'Turn kana on',
+        'kana_gate.threshold': 'Input should be less than or equal to 1',
+        'kana_gate.kanji': 'not a boolean',
+        'type_enabled.kana': 'not a boolean either',
       }),
     );
     expect(placed.fields).toEqual({
@@ -226,13 +267,35 @@ describe('placeServerErrors', () => {
       new_card_policy: 'Input should be a valid policy',
       'new_limits.kanji': 'bad',
       'new_limits.vocab': 'bad',
+      kana_gate: 'Turn kana on',
+      'kana_gate.threshold_percent': 'Input should be less than or equal to 1',
+      'kana_gate.kanji': 'not a boolean',
+      'type_enabled.kana': 'not a boolean either',
     });
     expect(placed.general).toBeNull();
   });
 
+  it('keeps kana, kanji and vocab under different groups apart', () => {
+    const placed = placeServerErrors(
+      new ApiError(422, 'Request failed', {
+        'new_limits.kana': 'limit',
+        'type_enabled.kana': 'switch',
+        'kana_gate.kanji': 'gate',
+      }),
+    );
+    expect(placed.fields).toEqual({
+      'new_limits.kana': 'limit',
+      'type_enabled.kana': 'switch',
+      'kana_gate.kanji': 'gate',
+    });
+  });
+
   it('keeps messages for unknown fields for the general alert', () => {
     const placed = placeServerErrors(
-      new ApiError(422, 'Request failed', { kana: 'too big', surprise: 'unexpected field' }),
+      new ApiError(422, 'Request failed', {
+        'new_limits.kana': 'too big',
+        surprise: 'unexpected field',
+      }),
     );
     expect(placed.fields).toEqual({ 'new_limits.kana': 'too big' });
     expect(placed.general).toBe('surprise: unexpected field');

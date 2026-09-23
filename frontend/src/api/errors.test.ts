@@ -37,6 +37,36 @@ describe('error normalization', () => {
     expect(error.fieldErrors).toEqual({ username: 'Field required', password: 'Too short' });
   });
 
+  it('keys a 422 message by its dotted path below the request body', async () => {
+    server.use(
+      http.post('/api/v1/x', () =>
+        HttpResponse.json(
+          {
+            detail: [
+              { loc: ['body', 'new_limits', 'kana'], msg: 'too big', type: 'a' },
+              { loc: ['body', 'type_enabled', 'kana'], msg: 'not a boolean', type: 'b' },
+              { loc: ['body', 'active_levels', 0], msg: 'bad level', type: 'c' },
+              { loc: ['body', 'kana_gate'], msg: 'needs kana', type: 'd' },
+              { loc: ['body'], msg: 'no field', type: 'e' },
+              { loc: ['query', 'page'], msg: 'bad page', type: 'f' },
+            ],
+          },
+          { status: 422 },
+        ),
+      ),
+    );
+    const error = (await rawRequest('/x', { method: 'POST', body: {} }).catch(
+      (caught: unknown) => caught,
+    )) as ApiError;
+    expect(error.fieldErrors).toEqual({
+      'new_limits.kana': 'too big',
+      'type_enabled.kana': 'not a boolean',
+      'active_levels.0': 'bad level',
+      kana_gate: 'needs kana',
+      'query.page': 'bad page',
+    });
+  });
+
   it('reads Retry-After from a 429', async () => {
     server.use(
       http.post('/api/v1/x', () =>

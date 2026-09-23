@@ -172,6 +172,18 @@ function isWholeNumber(value: number | string, min: number, max: number): boolea
 
 const LIMIT_MESSAGE = `Enter a whole number from 0 to ${LIMIT_MAX.toLocaleString('en-US')}.`;
 
+/** The same text the API sends when a gate is on while kana is off. */
+export const KANA_GATE_MESSAGE =
+  'Turn kana on, or turn off the kana gate: kanji and vocabulary cannot wait for kana that is never introduced.';
+
+const PERCENTAGE_MESSAGE = 'Enter a percentage from 0 to 100.';
+
+function isPercentage(value: number | string): boolean {
+  if (typeof value === 'string' && value.trim() === '') return false;
+  const number = Number(value);
+  return !Number.isNaN(number) && number >= 0 && number <= 100;
+}
+
 /** The API's rules, checked before anything is sent. Keys are form field paths. */
 export function validateSettings(values: SettingsFormValues): Record<string, string> {
   const errors: Record<string, string> = {};
@@ -194,25 +206,32 @@ export function validateSettings(values: SettingsFormValues): Record<string, str
   if (values.active_levels.length === 0) {
     errors.active_levels = 'Pick at least one level.';
   }
-  const threshold = values.mastery_threshold_percent;
-  const thresholdNumber = Number(threshold);
-  if (
-    (typeof threshold === 'string' && threshold.trim() === '') ||
-    Number.isNaN(thresholdNumber) ||
-    thresholdNumber < 0 ||
-    thresholdNumber > 100
-  ) {
-    errors.mastery_threshold_percent = 'Enter a percentage from 0 to 100.';
+  if (!isPercentage(values.mastery_threshold_percent)) {
+    errors.mastery_threshold_percent = PERCENTAGE_MESSAGE;
+  }
+  const gate = values.kana_gate;
+  if (!values.type_enabled.kana && (gate.kanji || gate.vocab)) {
+    errors.kana_gate = KANA_GATE_MESSAGE;
+  }
+  if (!isPercentage(gate.threshold_percent)) {
+    errors['kana_gate.threshold_percent'] = PERCENTAGE_MESSAGE;
   }
   return errors;
 }
 
-/** Where the server's field names live in the form. */
+/** Where the server's field paths (below `body`) live in the form. */
 const SERVER_FIELDS: Readonly<Record<string, string>> = {
   new_card_policy: 'new_card_policy',
-  kana: 'new_limits.kana',
-  kanji: 'new_limits.kanji',
-  vocab: 'new_limits.vocab',
+  'new_limits.kana': 'new_limits.kana',
+  'new_limits.kanji': 'new_limits.kanji',
+  'new_limits.vocab': 'new_limits.vocab',
+  'type_enabled.kana': 'type_enabled.kana',
+  'type_enabled.kanji': 'type_enabled.kanji',
+  'type_enabled.vocab': 'type_enabled.vocab',
+  kana_gate: 'kana_gate',
+  'kana_gate.kanji': 'kana_gate.kanji',
+  'kana_gate.vocab': 'kana_gate.vocab',
+  'kana_gate.threshold': 'kana_gate.threshold_percent',
   target_retention: 'target_retention_percent',
   rollover_hour: 'rollover_hour',
   active_levels: 'active_levels',
