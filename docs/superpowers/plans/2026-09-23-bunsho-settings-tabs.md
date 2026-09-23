@@ -603,6 +603,8 @@ describe('ServerStatus', () => {
     );
     renderWithProviders(<ServerStatus />);
     expect(await screen.findByText("Couldn't check the server")).toBeInTheDocument();
+    expect(screen.getByText('The server answered, but not with a health report.')).toBeInTheDocument();
+    expect(screen.queryByText(/isn't built/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(await screen.findByText('Version 1.2.0')).toBeInTheDocument();
   });
@@ -683,11 +685,19 @@ Expected: FAIL (modules not found).
 ```tsx
 import { Alert, Badge, Button, Group, Paper, Skeleton, Stack, Text, Title } from '@mantine/core';
 
-import { messageFor } from '../../api/errors';
+import { ApiError, messageFor } from '../../api/errors';
 import { useHealth } from '../../api/queries';
 
 const STATUS_COLOR = { ok: 'green', degraded: 'yellow', error: 'red' } as const;
 const STATUS_LABEL = { ok: 'OK', degraded: 'Degraded', error: 'Problem' } as const;
+
+/** `messageFor` reads a 503 as "content isn't built", which is wrong for the health check. */
+function healthFailureMessage(error: unknown): string {
+  if (error instanceof ApiError && error.status === 503) {
+    return 'The server answered, but not with a health report.';
+  }
+  return messageFor(error);
+}
 
 /** The service's version and what its own health check says about each dependency. */
 export function ServerStatus() {
@@ -697,7 +707,7 @@ export function ServerStatus() {
   if (health.isError) {
     return (
       <Alert color="red" title="Couldn't check the server">
-        <Text size="sm">{messageFor(health.error)}</Text>
+        <Text size="sm">{healthFailureMessage(health.error)}</Text>
         <Button
           mt="sm"
           size="xs"
@@ -827,6 +837,7 @@ git commit -m "feat(settings): add the server and content status blocks" -m "Co-
 - Rename: `frontend/src/features/build/BuildPage.tsx` → `BuildPanel.tsx`; `BuildPage.test.tsx` → `BuildPanel.test.tsx` (use `git mv`)
 - Modify: both renamed files; `frontend/src/features/build/EnvironmentChecks.tsx`
 - Modify: `frontend/src/App.tsx` (keep the app building: point the old `build` route at `BuildPanel` for now)
+- Modify: `frontend/src/App.test.tsx` (two heading assertions, see Step 4)
 
 **Interfaces:**
 - Consumes: nothing new.
@@ -876,7 +887,7 @@ const BuildPage = lazy(() =>
 - [ ] **Step 4: Run to verify it passes**
 
 Run: `npx vitest run src/features/build src/App.test.tsx && npx tsc -b`
-Expected: PASS except `App.test.tsx`'s build-page tests, which still find the heading "Content"; they are rewritten in Task 9. If they fail only on that heading, that is expected: note the failing test names and continue (they are fixed in Task 9). Do not weaken them here.
+Expected: PASS. `App.test.tsx` has two tests that look for the page heading "Content" (`navigates to the build page and back` and `serves a deep link after the login is restored`); the panel's heading is now "Build", so change those two `findByRole('heading', { name: 'Content' })` calls to `{ name: 'Build' }` in this task. Task 9 rewrites both tests; this edit only keeps the suite green at this commit.
 
 - [ ] **Step 5: Commit**
 
@@ -965,7 +976,10 @@ describe('SystemTab', () => {
   it('shows the server, content, environment and build blocks in that order', async () => {
     serve();
     renderWithProviders(<SystemTab />);
+    // Every block shows a skeleton until its request answers; wait for all of them.
     await screen.findByRole('region', { name: 'Server' });
+    await screen.findByRole('region', { name: 'Content' });
+    await screen.findByRole('region', { name: 'Environment' });
     const headings = screen
       .getAllByRole('heading', { level: 3 })
       .map((heading) => heading.textContent);
@@ -1895,7 +1909,10 @@ describe('Settings tabs', () => {
     expect(
       screen.queryByRole('button', { name: /Reset all tabs to recommended values/ }),
     ).not.toBeInTheDocument();
-    await user.click(await screen.findByRole('button', { name: 'Build content' }));
+    // Content is built, so the button reads "Rebuild content" and opens a confirmation; either way
+    // it must not submit the settings form.
+    await user.click(await screen.findByRole('button', { name: 'Rebuild content' }));
+    expect(await screen.findByText('Rebuild content?')).toBeInTheDocument();
     expect(puts).toEqual([]);
   });
 
