@@ -158,6 +158,8 @@ export function makeSettings(overrides: Partial<ReviewSettings> = {}): ReviewSet
   return {
     new_card_policy: 'strict_order',
     new_limits: { kana: 20, kanji: 15, vocab: 20 },
+    type_enabled: { kana: true, kanji: true, vocab: true },
+    kana_gate: { kanji: false, vocab: false, threshold: 0.8 },
     target_retention: 0.9,
     rollover_hour: 4,
     active_levels: ['N5'],

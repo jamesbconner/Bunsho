@@ -17,6 +17,9 @@ export type Level = (typeof LEVELS)[number];
 export interface SettingsFormValues {
   new_card_policy: NewCardPolicyName;
   new_limits: { kana: number | string; kanji: number | string; vocab: number | string };
+  type_enabled: { kana: boolean; kanji: boolean; vocab: boolean };
+  /** The threshold is a whole percentage here (the API stores a fraction), `string` while cleared. */
+  kana_gate: { kanji: boolean; vocab: boolean; threshold_percent: number | string };
   target_retention_percent: number;
   rollover_hour: number;
   active_levels: Level[];
@@ -33,6 +36,8 @@ export interface SettingsFormValues {
 export const RECOMMENDED_SETTINGS: ReviewSettings = {
   new_card_policy: 'strict_order',
   new_limits: { kana: 20, kanji: 15, vocab: 20 },
+  type_enabled: { kana: true, kanji: true, vocab: true },
+  kana_gate: { kanji: false, vocab: false, threshold: 0.8 },
   target_retention: 0.9,
   rollover_hour: 4,
   active_levels: ['N5'],
@@ -86,6 +91,12 @@ export function toFormValues(settings: ReviewSettings): SettingsFormValues {
   return {
     new_card_policy: settings.new_card_policy,
     new_limits: { ...settings.new_limits },
+    type_enabled: { ...settings.type_enabled },
+    kana_gate: {
+      kanji: settings.kana_gate.kanji,
+      vocab: settings.kana_gate.vocab,
+      threshold_percent: toPercent(settings.kana_gate.threshold),
+    },
     target_retention_percent: toPercent(settings.target_retention),
     rollover_hour: settings.rollover_hour,
     active_levels: LEVELS.filter((level) => settings.active_levels.includes(level)),
@@ -105,6 +116,12 @@ export function toRequest(values: SettingsFormValues): ReviewSettingsInput {
       kanji: Number(values.new_limits.kanji),
       vocab: Number(values.new_limits.vocab),
     },
+    type_enabled: { ...values.type_enabled },
+    kana_gate: {
+      kanji: values.kana_gate.kanji,
+      vocab: values.kana_gate.vocab,
+      threshold: toFraction(Number(values.kana_gate.threshold_percent)),
+    },
     target_retention: toFraction(values.target_retention_percent),
     rollover_hour: values.rollover_hour,
     active_levels: LEVELS.filter((level) => values.active_levels.includes(level)),
@@ -122,6 +139,12 @@ function canonical(values: SettingsFormValues): string {
     String(values.new_limits.kana),
     String(values.new_limits.kanji),
     String(values.new_limits.vocab),
+    values.type_enabled.kana,
+    values.type_enabled.kanji,
+    values.type_enabled.vocab,
+    values.kana_gate.kanji,
+    values.kana_gate.vocab,
+    String(values.kana_gate.threshold_percent),
     values.target_retention_percent,
     values.rollover_hour,
     LEVELS.filter((level) => values.active_levels.includes(level)),

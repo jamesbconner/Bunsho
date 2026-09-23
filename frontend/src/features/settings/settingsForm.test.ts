@@ -42,8 +42,23 @@ describe('toFormValues and toRequest', () => {
       new_limits: { kana: 0, kanji: 7, vocab: 10_000 },
       rollover_hour: 23,
       active_levels: ['N5', 'N3'],
+      type_enabled: { kana: true, kanji: false, vocab: true },
+      kana_gate: { kanji: false, vocab: true, threshold: 0.9 },
     });
     expect(toRequest(toFormValues(settings))).toEqual(settings);
+  });
+
+  it('shows the kana gate threshold as a whole percentage and sends it back as a fraction', () => {
+    const values = toFormValues(
+      makeSettings({ kana_gate: { kanji: true, vocab: false, threshold: 0.85 } }),
+    );
+    expect(values.kana_gate.threshold_percent).toBe(85);
+    expect(values.type_enabled).toEqual({ kana: true, kanji: true, vocab: true });
+    const request = toRequest({
+      ...values,
+      kana_gate: { ...values.kana_gate, threshold_percent: '65' },
+    });
+    expect(request.kana_gate).toEqual({ kanji: true, vocab: false, threshold: 0.65 });
   });
 
   it('sends numbers as numbers and levels in study order', () => {
@@ -163,6 +178,24 @@ describe('isSettingsDirty', () => {
     expect(isSettingsDirty({ ...saved, active_levels: ['N4', 'N5'] }, saved)).toBe(false);
   });
 
+  it('treats a changed type switch or gate field as dirty', () => {
+    expect(
+      isSettingsDirty(
+        withValues({ type_enabled: { kana: true, kanji: false, vocab: true } }),
+        VALID,
+      ),
+    ).toBe(true);
+    expect(
+      isSettingsDirty(withValues({ kana_gate: { ...VALID.kana_gate, kanji: true } }), VALID),
+    ).toBe(true);
+    expect(
+      isSettingsDirty(
+        withValues({ kana_gate: { ...VALID.kana_gate, threshold_percent: '' } }),
+        VALID,
+      ),
+    ).toBe(true);
+  });
+
   it('treats a changed review mode as dirty', () => {
     const initial = toFormValues(RECOMMENDED_SETTINGS);
     const changed = { ...initial, kana_mode: 'typed' as const };
@@ -221,6 +254,8 @@ describe('RECOMMENDED_SETTINGS', () => {
     .components.schemas;
   const settings = schemas['ReviewSettings-Input']?.properties ?? {};
   const limits = schemas['NewLimits-Input']?.properties ?? {};
+  const enabled = schemas['TypeEnabled-Input']?.properties ?? {};
+  const gate = schemas['KanaGate-Input']?.properties ?? {};
 
   it('matches the defaults the API declares', () => {
     expect(RECOMMENDED_SETTINGS.new_card_policy).toBe(settings.new_card_policy?.default);
@@ -230,6 +265,15 @@ describe('RECOMMENDED_SETTINGS', () => {
     expect(RECOMMENDED_SETTINGS.new_limits.kana).toBe(limits.kana?.default);
     expect(RECOMMENDED_SETTINGS.new_limits.kanji).toBe(limits.kanji?.default);
     expect(RECOMMENDED_SETTINGS.new_limits.vocab).toBe(limits.vocab?.default);
+  });
+
+  it('matches the type switches and kana gate the API declares', () => {
+    expect(RECOMMENDED_SETTINGS.type_enabled.kana).toBe(enabled.kana?.default);
+    expect(RECOMMENDED_SETTINGS.type_enabled.kanji).toBe(enabled.kanji?.default);
+    expect(RECOMMENDED_SETTINGS.type_enabled.vocab).toBe(enabled.vocab?.default);
+    expect(RECOMMENDED_SETTINGS.kana_gate.kanji).toBe(gate.kanji?.default);
+    expect(RECOMMENDED_SETTINGS.kana_gate.vocab).toBe(gate.vocab?.default);
+    expect(RECOMMENDED_SETTINGS.kana_gate.threshold).toBe(gate.threshold?.default);
   });
 
   it('is a document the API would accept', () => {

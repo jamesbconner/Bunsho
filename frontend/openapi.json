@@ -739,6 +739,61 @@
         "title": "Kana",
         "type": "object"
       },
+      "KanaGate-Input": {
+        "additionalProperties": false,
+        "description": "Hold new kanji and/or vocabulary back until enough kana is learned.\n\nKana is one stage: the share counts every kana card (both directions, hiragana and\nkatakana together) that is in the FSRS Review state. ``threshold`` is a fraction from 0 to 1.",
+        "properties": {
+          "kanji": {
+            "default": false,
+            "title": "Kanji",
+            "type": "boolean"
+          },
+          "threshold": {
+            "default": 0.8,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Threshold",
+            "type": "number"
+          },
+          "vocab": {
+            "default": false,
+            "title": "Vocab",
+            "type": "boolean"
+          }
+        },
+        "title": "KanaGate",
+        "type": "object"
+      },
+      "KanaGate-Output": {
+        "additionalProperties": false,
+        "description": "Hold new kanji and/or vocabulary back until enough kana is learned.\n\nKana is one stage: the share counts every kana card (both directions, hiragana and\nkatakana together) that is in the FSRS Review state. ``threshold`` is a fraction from 0 to 1.",
+        "properties": {
+          "kanji": {
+            "default": false,
+            "title": "Kanji",
+            "type": "boolean"
+          },
+          "threshold": {
+            "default": 0.8,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Threshold",
+            "type": "number"
+          },
+          "vocab": {
+            "default": false,
+            "title": "Vocab",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kanji",
+          "vocab",
+          "threshold"
+        ],
+        "title": "KanaGate",
+        "type": "object"
+      },
       "KanaKind": {
         "description": "Kana category.",
         "enum": [
@@ -1083,6 +1138,9 @@
             "title": "Active Levels",
             "type": "array"
           },
+          "kana_gate": {
+            "$ref": "#/components/schemas/KanaGate-Input"
+          },
           "kana_mode": {
             "$ref": "#/components/schemas/ReviewModeName",
             "default": "flip"
@@ -1119,6 +1177,9 @@
             "title": "Target Retention",
             "type": "number"
           },
+          "type_enabled": {
+            "$ref": "#/components/schemas/TypeEnabled-Input"
+          },
           "vocab_mode": {
             "$ref": "#/components/schemas/ReviewModeName",
             "default": "flip"
@@ -1145,6 +1206,9 @@
             "minItems": 1,
             "title": "Active Levels",
             "type": "array"
+          },
+          "kana_gate": {
+            "$ref": "#/components/schemas/KanaGate-Output"
           },
           "kana_mode": {
             "$ref": "#/components/schemas/ReviewModeName",
@@ -1182,6 +1246,9 @@
             "title": "Target Retention",
             "type": "number"
           },
+          "type_enabled": {
+            "$ref": "#/components/schemas/TypeEnabled-Output"
+          },
           "vocab_mode": {
             "$ref": "#/components/schemas/ReviewModeName",
             "default": "flip"
@@ -1190,6 +1257,8 @@
         "required": [
           "new_card_policy",
           "new_limits",
+          "type_enabled",
+          "kana_gate",
           "target_retention",
           "rollover_hour",
           "active_levels",
@@ -1375,6 +1444,57 @@
           "vocab"
         ],
         "title": "TypeCounts",
+        "type": "object"
+      },
+      "TypeEnabled-Input": {
+        "additionalProperties": false,
+        "description": "Which item types may introduce new cards. Cards already introduced stay due either way.",
+        "properties": {
+          "kana": {
+            "default": true,
+            "title": "Kana",
+            "type": "boolean"
+          },
+          "kanji": {
+            "default": true,
+            "title": "Kanji",
+            "type": "boolean"
+          },
+          "vocab": {
+            "default": true,
+            "title": "Vocab",
+            "type": "boolean"
+          }
+        },
+        "title": "TypeEnabled",
+        "type": "object"
+      },
+      "TypeEnabled-Output": {
+        "additionalProperties": false,
+        "description": "Which item types may introduce new cards. Cards already introduced stay due either way.",
+        "properties": {
+          "kana": {
+            "default": true,
+            "title": "Kana",
+            "type": "boolean"
+          },
+          "kanji": {
+            "default": true,
+            "title": "Kanji",
+            "type": "boolean"
+          },
+          "vocab": {
+            "default": true,
+            "title": "Vocab",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kana",
+          "kanji",
+          "vocab"
+        ],
+        "title": "TypeEnabled",
         "type": "object"
       },
       "TypeProgress": {
