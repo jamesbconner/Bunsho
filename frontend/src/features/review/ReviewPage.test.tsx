@@ -348,6 +348,42 @@ describe('ReviewPage', () => {
     expect(window.localStorage.getItem(FURIGANA_KEY)).toBe('true');
   });
 
+  it('renders TypedMode for a typed card and ChoiceMode for a multiple-choice card', async () => {
+    server.use(
+      http.get('/api/v1/reviews/next', () =>
+        HttpResponse.json(makeNextCard(makeKanaCard({ mode: 'typed', accepted_answers: ['a'] }))),
+      ),
+    );
+    renderWithProviders(<ReviewPage />);
+    expect(await screen.findByRole('textbox', { name: 'Your answer' })).toBeInTheDocument();
+  });
+
+  it('holds the answered card on screen with feedback until Continue is pressed', async () => {
+    const user = userEvent.setup();
+    let call = 0;
+    server.use(
+      http.get('/api/v1/reviews/next', () => {
+        call += 1;
+        const card = call === 1 ? makeKanaCard({ mode: 'typed', accepted_answers: ['a'] }) : null;
+        return HttpResponse.json(makeNextCard(card));
+      }),
+      http.post('/api/v1/reviews/answer', () =>
+        HttpResponse.json({
+          due: { kana: 0, kanji: 0, vocab: 0 },
+          new_remaining: { kana: 0, kanji: 0, vocab: 0 },
+        }),
+      ),
+    );
+    renderWithProviders(<ReviewPage />);
+    await user.type(await screen.findByRole('textbox', { name: 'Your answer' }), 'a{Enter}');
+    // Feedback is showing; the next fetch (call 2, resolving to "nothing due") has already
+    // happened in the background, but the answered card's feedback must still be on screen.
+    expect(await screen.findByText(/Correct/i)).toBeInTheDocument();
+    expect(screen.queryByText(/you're done/i)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(await screen.findByText(/you're done/i)).toBeInTheDocument();
+  });
+
   it('announces the state through one persistent status region', async () => {
     const user = userEvent.setup();
     serveReviews([makeNextCard(makeKanaCard()), makeNextCard(null)]);
