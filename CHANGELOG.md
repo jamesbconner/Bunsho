@@ -7,6 +7,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-09-23
+
+### Fixed
+
+- Tests: `test_missing_settings_report_every_problem` no longer picks up a developer's own `./.env`
+  (which supplied the required login settings and made the test fail on any machine with one). No
+  change to the service itself.
+
 ## [1.1.1] - 2026-09-23
 
 ### Fixed
