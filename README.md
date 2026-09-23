@@ -136,8 +136,9 @@ Some behaviours to know about:
 
 Typed-answer and multiple-choice are two more ways to answer, chosen per item type (kana,
 kanji, vocabulary) on the Settings page. Both grade automatically — correct is graded Good,
-wrong is graded Again — and show what the right answer was before you continue to the next
-card.
+wrong is graded Again — and show whether you were right before you continue to the next card;
+a wrong typed answer also shows the correct one, and multiple-choice always highlights the
+correct option regardless of your pick.
 
 **Statistics and settings.** *Statistics* shows today's reviews and new cards, your 30-day retention, a chart of the last 30 days, the number of cards by state and your progress through each JLPT level. *Settings* holds every review setting in one form: how new cards are chosen (strict order, mastery unlock or pinned levels), the daily new-card limits (0 means unlimited), the levels used by *Pinned levels*, the mastery threshold used by *Mastery unlock*, your target retention and the hour a new study day starts (in the server's timezone). Nothing is saved until you press *Save*; the new settings apply from the next card. *Reset to recommended values* only refills the form.
 

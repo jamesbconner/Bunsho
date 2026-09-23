@@ -127,6 +127,12 @@ export function ReviewPage() {
     setHeldCard(null);
   }, []);
 
+  // `answer.isPending` alone would let Continue fire as soon as the POST finished, before the
+  // next card's fetch has settled (see `useAnswerReview`'s docstring: the mutation stays pending
+  // through that whole round trip). Folding in `next.isFetching` keeps Continue disabled until the
+  // next card has actually loaded, so pressing it never flashes the stale card that was just
+  // graded. The trade-off: Continue can look disabled for a moment after feedback appears, even
+  // though the answer itself already saved.
   const busy = answer.isPending || next.isFetching;
   const answerFailed = answer.isError && !isStale(answer.error);
 

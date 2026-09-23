@@ -170,6 +170,12 @@ Image and platform:
       - `ChoiceMode`'s `vocab_mode` select's onChange path (and the third mode selector generally,
         in `SettingsPage.test.tsx`) isn't directly exercised by a test — `kana_mode` and
         `kanji_mode` are, `vocab_mode` isn't; low risk since all three are structurally identical
+      - A failed background next-card refetch (`next.isError`) during a typed/multiple-choice
+        card's held feedback replaces the whole `ReviewPage` body with the generic load-failed
+        alert, discarding the still-valid feedback and Continue button; flip mode has no feedback
+        step to lose this way. Gate the `next.isError` branch on `heldCard === null`, or surface
+        the fetch error as a small inline notice alongside the held card instead of replacing the
+        body.
 - [ ] The Show furigana switch keeps focus after it is toggled, so Space then toggles it again instead of
       flipping the card (and digits are ignored until focus moves): decide on blur/refocus after toggling
       (check in a browser)
