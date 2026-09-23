@@ -85,7 +85,7 @@ describe('App', () => {
     render(<App />);
     const user = userEvent.setup();
     await user.click(await screen.findByRole('link', { name: 'Build content' }));
-    expect(await screen.findByRole('heading', { name: 'Content' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Build' })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/build');
     await user.click(screen.getByRole('link', { name: 'Home' }));
     expect(await screen.findByRole('heading', { name: 'Your content' })).toBeInTheDocument();
@@ -129,7 +129,7 @@ describe('App', () => {
     rememberLogin();
     goTo('/build');
     render(<App />);
-    expect(await screen.findByRole('heading', { name: 'Content' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Build' })).toBeInTheDocument();
   });
 
   it('answers an unknown address with a not-found page', async () => {

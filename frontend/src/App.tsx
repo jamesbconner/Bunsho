@@ -30,7 +30,7 @@ const SettingsPage = lazy(() =>
   import('./features/settings/SettingsPage').then((module) => ({ default: module.SettingsPage })),
 );
 const BuildPage = lazy(() =>
-  import('./features/build/BuildPage').then((module) => ({ default: module.BuildPage })),
+  import('./features/build/BuildPanel').then((module) => ({ default: module.BuildPanel })),
 );
 
 export function App() {

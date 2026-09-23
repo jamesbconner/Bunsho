@@ -23,8 +23,8 @@ export function EnvironmentChecks() {
     );
   }
   return (
-    <Paper withBorder p="md">
-      <Title order={4} mb="xs">
+    <Paper component="section" aria-label="Environment" withBorder p="md">
+      <Title order={3} mb="xs">
         Environment
       </Title>
       <Stack gap={6}>

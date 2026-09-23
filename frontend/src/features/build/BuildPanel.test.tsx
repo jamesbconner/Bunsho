@@ -10,7 +10,7 @@ import { session } from '../../auth/session';
 import { makeBuildStatus, makeReport } from '../../test/fixtures';
 import { renderWithProviders } from '../../test/render';
 import { server } from '../../test/server';
-import { BuildPage } from './BuildPage';
+import { BuildPanel } from './BuildPanel';
 
 const BUILD = '/api/v1/admin/content/build';
 
@@ -69,33 +69,15 @@ async function latestBuildLoaded(queryClient: QueryClient) {
   });
 }
 
-describe('BuildPage', () => {
+describe('BuildPanel', () => {
   beforeEach(() => {
     session.clear();
     session.setTokens({ access_token: 'a1', refresh_token: 'r1', expires_in: 900 });
   });
 
-  it('shows what the server found in the environment, problems included', async () => {
-    serve({
-      checks: {
-        ok: false,
-        checks: [
-          { name: 'deck_present', ok: false, detail: 'deck not found' },
-          { name: 'jamdict_available', ok: true, detail: 'jamdict-data-fix' },
-        ],
-      },
-    });
-    renderWithProviders(<BuildPage />);
-    expect(await screen.findByText('deck not found')).toBeInTheDocument();
-    expect(screen.getByText('Vocabulary deck')).toBeInTheDocument();
-    expect(screen.getByText('Problem')).toBeInTheDocument();
-    expect(screen.getByText('OK')).toBeInTheDocument();
-  });
-
-  it('welcomes a first run and starts the first build without asking', async () => {
+  it('starts the first build without asking', async () => {
     const posted = serve({ built: false });
-    renderWithProviders(<BuildPage />);
-    expect(await screen.findByText('First run')).toBeInTheDocument();
+    renderWithProviders(<BuildPanel />);
     await userEvent.click(await screen.findByRole('button', { name: 'Build content' }));
     await waitFor(() => {
       expect(posted).toEqual([{ dry_run: false }]);
@@ -106,7 +88,7 @@ describe('BuildPage', () => {
 
   it('asks before replacing built content, and does nothing on Cancel', async () => {
     const posted = serve({ built: true });
-    renderWithProviders(<BuildPage />);
+    renderWithProviders(<BuildPanel />);
     const user = userEvent.setup();
     await user.click(await screen.findByRole('button', { name: 'Rebuild content' }));
     const dialog = await screen.findByRole('dialog');
@@ -125,7 +107,7 @@ describe('BuildPage', () => {
 
   it('starts a dry run without asking, even when content is built', async () => {
     const posted = serve({ built: true });
-    renderWithProviders(<BuildPage />);
+    renderWithProviders(<BuildPanel />);
     const user = userEvent.setup();
     await user.click(await screen.findByRole('switch', { name: /dry run/i }));
     await user.click(screen.getByRole('button', { name: 'Start dry run' }));
@@ -145,7 +127,7 @@ describe('BuildPage', () => {
         ),
       ),
     );
-    renderWithProviders(<BuildPage />);
+    renderWithProviders(<BuildPanel />);
     await userEvent.click(await screen.findByRole('button', { name: 'Build content' }));
     expect(await screen.findByText('A build is already running.')).toBeInTheDocument();
     expect(screen.getByText('Could not start the build')).toBeInTheDocument();
@@ -157,7 +139,7 @@ describe('BuildPage', () => {
       built: true,
       latest: makeBuildStatus({ progress: { stage: 'enrich_kanji', current: 1200, total: 3088 } }),
     });
-    renderWithProviders(<BuildPage />);
+    renderWithProviders(<BuildPanel />);
     expect(await screen.findByText(/Looking up kanji details \(/)).toHaveTextContent(
       '1,200 of 3,088',
     );
@@ -168,7 +150,7 @@ describe('BuildPage', () => {
     serve({
       latest: makeBuildStatus({ state: 'failed', progress: null, error: 'the deck is missing' }),
     });
-    renderWithProviders(<BuildPage />);
+    renderWithProviders(<BuildPanel />);
     expect(await screen.findByText('The build failed')).toBeInTheDocument();
     expect(screen.getByText('the deck is missing')).toBeInTheDocument();
   });
@@ -178,7 +160,7 @@ describe('BuildPage', () => {
       built: true,
       latest: makeBuildStatus({ state: 'succeeded', progress: null, report: makeReport() }),
     });
-    renderWithProviders(<BuildPage />);
+    renderWithProviders(<BuildPanel />);
     expect(await screen.findByText('Finished')).toBeInTheDocument();
     const table = screen.getByRole('table', { name: 'Items per JLPT level' });
     expect(within(table).getByText('3,053')).toBeInTheDocument(); // N1 vocabulary
@@ -189,14 +171,14 @@ describe('BuildPage', () => {
   it('keeps other start failures on the shared readable message', async () => {
     serve({ built: false });
     server.use(http.post(BUILD, () => HttpResponse.error()));
-    renderWithProviders(<BuildPage />);
+    renderWithProviders(<BuildPanel />);
     await userEvent.click(await screen.findByRole('button', { name: 'Build content' }));
     expect(await screen.findByText(/Can't reach the server/)).toBeInTheDocument();
   });
 
   it('announces the build state in one live region that is always on the page', async () => {
     serve({ built: true });
-    const { queryClient } = renderWithProviders(<BuildPage />);
+    const { queryClient } = renderWithProviders(<BuildPanel />);
     await latestBuildLoaded(queryClient);
     const status = screen.getByRole('status');
     expect(status).toHaveAttribute('aria-live', 'polite');
@@ -224,7 +206,7 @@ describe('BuildPage', () => {
 
   it('announces a failure once, with its message, in the same live region', async () => {
     serve({ built: true });
-    const { queryClient } = renderWithProviders(<BuildPage />);
+    const { queryClient } = renderWithProviders(<BuildPanel />);
     await latestBuildLoaded(queryClient);
     const status = screen.getByRole('status');
     act(() => {
@@ -241,7 +223,7 @@ describe('BuildPage', () => {
 
   it('announces a dry run as such', async () => {
     serve({ built: true });
-    const { queryClient } = renderWithProviders(<BuildPage />);
+    const { queryClient } = renderWithProviders(<BuildPanel />);
     await latestBuildLoaded(queryClient);
     act(() => {
       queryClient.setQueryData(
@@ -268,7 +250,14 @@ describe('BuildPage', () => {
         report: makeReport({ dry_run: true }),
       }),
     });
-    renderWithProviders(<BuildPage />);
+    renderWithProviders(<BuildPanel />);
     expect(await screen.findByText('Dry run: nothing was written.')).toBeInTheDocument();
+  });
+
+  it('has its own Build heading and does not repeat the environment checks', async () => {
+    serve();
+    renderWithProviders(<BuildPanel />);
+    expect(await screen.findByRole('heading', { name: 'Build' })).toBeInTheDocument();
+    expect(screen.queryByText('Environment')).not.toBeInTheDocument();
   });
 });
