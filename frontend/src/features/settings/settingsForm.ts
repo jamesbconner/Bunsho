@@ -5,6 +5,9 @@ import type {
   ReviewSettingsInput,
 } from '../../api/endpoints';
 import { ApiError } from '../../api/errors';
+import type { UseFormReturnType } from '@mantine/form';
+
+export type SettingsFormApi = UseFormReturnType<SettingsFormValues>;
 
 export const LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'] as const;
 export type Level = (typeof LEVELS)[number];
@@ -261,4 +264,76 @@ export function placeServerErrors(error: ApiError): ServerErrors {
     leftovers.push('The server did not accept these settings.');
   }
   return { fields, general: leftovers.length === 0 ? null : leftovers.join(' ') };
+}
+
+export type SettingsTab = 'learning' | 'pace' | 'reviewing' | 'system';
+/** A tab that edits the settings form (System does not). */
+export type FormTab = Exclude<SettingsTab, 'system'>;
+
+export const SETTINGS_TABS: readonly { value: SettingsTab; label: string }[] = [
+  { value: 'learning', label: 'Learning path' },
+  { value: 'pace', label: 'Pace' },
+  { value: 'reviewing', label: 'Reviewing' },
+  { value: 'system', label: 'System' },
+];
+
+export const DEFAULT_TAB: SettingsTab = 'learning';
+
+export function isSettingsTab(value: string | null | undefined): value is SettingsTab {
+  return SETTINGS_TABS.some((tab) => tab.value === value);
+}
+
+/** Which tab each top-level form field lives on; a new field will not compile until placed. */
+export const TAB_OF_FIELD: Readonly<Record<keyof SettingsFormValues, FormTab>> = {
+  new_card_policy: 'learning',
+  active_levels: 'learning',
+  mastery_threshold_percent: 'learning',
+  type_enabled: 'learning',
+  kana_gate: 'learning',
+  new_limits: 'pace',
+  rollover_hour: 'pace',
+  target_retention_percent: 'pace',
+  kana_mode: 'reviewing',
+  kanji_mode: 'reviewing',
+  vocab_mode: 'reviewing',
+};
+
+const FORM_TABS: readonly FormTab[] = ['learning', 'pace', 'reviewing'];
+
+/** The tab of a form field path (`new_limits.kana`); an unknown path counts as the first tab. */
+export function tabOfField(path: string): FormTab {
+  const root = path.split('.')[0] ?? '';
+  return Object.hasOwn(TAB_OF_FIELD, root)
+    ? TAB_OF_FIELD[root as keyof SettingsFormValues]
+    : 'learning';
+}
+
+function hasMessage(value: unknown): boolean {
+  return value !== null && value !== undefined && value !== false && value !== '';
+}
+
+/** The tabs holding at least one error (form errors are keyed by field path). */
+export function tabsWithErrors(errors: Readonly<Record<string, unknown>>): ReadonlySet<FormTab> {
+  const tabs = new Set<FormTab>();
+  for (const [path, message] of Object.entries(errors)) {
+    if (hasMessage(message)) tabs.add(tabOfField(path));
+  }
+  return tabs;
+}
+
+/** The first tab, in display order, that holds an error; null when there is none. */
+export function firstTabWithErrors(errors: Readonly<Record<string, unknown>>): FormTab | null {
+  const tabs = tabsWithErrors(errors);
+  return FORM_TABS.find((tab) => tabs.has(tab)) ?? null;
+}
+
+/** The first errored field path on `tab`, in the order the errors were recorded. */
+export function firstErrorPathIn(
+  errors: Readonly<Record<string, unknown>>,
+  tab: FormTab,
+): string | null {
+  for (const [path, message] of Object.entries(errors)) {
+    if (hasMessage(message) && tabOfField(path) === tab) return path;
+  }
+  return null;
 }
