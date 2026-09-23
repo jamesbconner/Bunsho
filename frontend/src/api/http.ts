@@ -1,4 +1,4 @@
-import { ofetch } from 'ofetch';
+import { FetchError, ofetch } from 'ofetch';
 
 import { toClientError } from './errors';
 
@@ -25,6 +25,32 @@ export async function rawRequest<T>(path: string, options: RequestOptions = {}):
   try {
     return await ofetch<T>(apiUrl(path), { ...options, retry: 0 });
   } catch (error) {
+    throw toClientError(error);
+  }
+}
+
+/**
+ * Like `rawRequest`, but an error response with one of `statuses` whose body passes `isBody` is
+ * returned as data. `GET /health` answers 503 with its full report when a dependency is down; that
+ * report is what the caller wants. A body that fails `isBody` (a proxy's HTML error page, say) is
+ * still an error.
+ */
+export async function rawRequestAllowing<T>(
+  path: string,
+  statuses: readonly number[],
+  isBody: (data: unknown) => data is T,
+): Promise<T> {
+  try {
+    return await ofetch<T>(apiUrl(path), { retry: 0 });
+  } catch (error) {
+    if (
+      error instanceof FetchError &&
+      error.response !== undefined &&
+      statuses.includes(error.response.status)
+    ) {
+      const data: unknown = error.data;
+      if (isBody(data)) return data;
+    }
     throw toClientError(error);
   }
 }

@@ -11,6 +11,7 @@ export const queryKeys = {
   reviewNext: ['review', 'next'] as const,
   statsSummary: ['stats', 'summary'] as const,
   settings: ['settings'] as const,
+  health: ['health'] as const,
 };
 
 /** While a build runs and the live stream is down, ask the server this often. */
@@ -45,6 +46,10 @@ export function buildJustFinished(
 export function invalidateBuildDependents(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: queryKeys.contentSummary });
   void queryClient.invalidateQueries({ queryKey: queryKeys.configCheck });
+}
+
+export function useHealth() {
+  return useQuery({ queryKey: queryKeys.health, queryFn: endpoints.health });
 }
 
 export function useContentSummary() {
