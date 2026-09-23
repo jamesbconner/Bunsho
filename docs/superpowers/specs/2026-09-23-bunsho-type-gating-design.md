@@ -151,9 +151,11 @@ A 422 for the gate rule carries `loc: ["body", "kana_gate"]`.
 - **UI.** In the "New cards" section, a switch per type ("Introduce new kana / kanji / vocabulary"); a
   disabled type's daily-limit input is disabled, not hidden. Beneath it a "Kana first" group: two
   switches ("Wait for kana before starting kanji" / "...vocabulary") and one threshold input (percent,
-  same control style as the mastery threshold) shown only while a gate is on, with helper text saying the
-  share counts every kana card in both directions. The gate switches are disabled while kana is off, and
-  the form shows the validation message on the group.
+  same control style as the mastery threshold) shown while a gate is on (and also when it has a
+  validation error, so an invalid value hidden by turning the gates off cannot make Save fail silently),
+  with helper text saying the share counts every kana card in both directions. A gate switch that is off
+  is disabled while kana is off (it cannot be turned on without kana); one that is already on stays
+  operable so it can be turned off. The form shows the validation message on the group.
 
 ## Error handling
 
