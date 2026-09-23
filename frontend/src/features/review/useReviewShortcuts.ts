@@ -8,7 +8,7 @@ const GRADE_KEYS: Readonly<Record<string, Grade>> = { '1': 1, '2': 2, '3': 3, '4
  * Whether a key press belongs to the review: it happened on the page itself or inside the review
  * controls, not in a text field, a link, or the header switch (which keep their own keys).
  */
-function isForReview(target: EventTarget | null): boolean {
+export function isForReview(target: EventTarget | null): boolean {
   if (target === document.body || target === document.documentElement) return true;
   return target instanceof Element && target.closest('[data-review-controls]') !== null;
 }
