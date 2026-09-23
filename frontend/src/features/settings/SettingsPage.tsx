@@ -41,6 +41,8 @@ const HOURS = Array.from({ length: 24 }, (_, hour) => ({
   label: `${hour}:00`,
 }));
 
+const REVIEW_MODE_OPTIONS = REVIEW_MODES.map((mode) => ({ value: mode.value, label: mode.label }));
+
 /** The ids of a `Input.Wrapper`'s label, description and (when shown) error, for a group's aria. */
 function groupAria(id: string, hasError: boolean) {
   return {
@@ -242,7 +244,7 @@ function SettingsForm({ initial }: { initial: ReviewSettings }) {
           <Title order={3}>How you answer</Title>
           <NativeSelect
             label="Kana review mode"
-            data={REVIEW_MODES.map((mode) => ({ value: mode.value, label: mode.label }))}
+            data={REVIEW_MODE_OPTIONS}
             value={values.kana_mode}
             onChange={(event) => {
               form.setFieldValue(
@@ -253,7 +255,7 @@ function SettingsForm({ initial }: { initial: ReviewSettings }) {
           />
           <NativeSelect
             label="Kanji review mode"
-            data={REVIEW_MODES.map((mode) => ({ value: mode.value, label: mode.label }))}
+            data={REVIEW_MODE_OPTIONS}
             value={values.kanji_mode}
             onChange={(event) => {
               form.setFieldValue(
@@ -264,7 +266,7 @@ function SettingsForm({ initial }: { initial: ReviewSettings }) {
           />
           <NativeSelect
             label="Vocabulary review mode"
-            data={REVIEW_MODES.map((mode) => ({ value: mode.value, label: mode.label }))}
+            data={REVIEW_MODE_OPTIONS}
             value={values.vocab_mode}
             onChange={(event) => {
               form.setFieldValue(
