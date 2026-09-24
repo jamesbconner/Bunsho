@@ -77,7 +77,7 @@ from it; none of them owns state. `PolicyField`, `placeServerErrors`, `validateS
 ## Using Mantine Tabs
 
 ```tsx
-<Tabs value={tab} onChange={setTab}>            {/* controlled from ?tab= */}
+<Tabs value={tab} onChange={setTab} keepMounted={false}>  {/* controlled from ?tab= */}
   <Tabs.List aria-label="Settings sections">     {/* announced on first focus */}
     <Tabs.Tab value="learning" color={errors.learning ? 'red' : undefined}
               rightSection={errors.learning ? <ErrorDot /> : null}>Learning path</Tabs.Tab>
@@ -86,13 +86,13 @@ from it; none of them owns state. `PolicyField`, `placeServerErrors`, `validateS
   </Tabs.List>
 
   <form onSubmit={...} noValidate>               {/* only the three settings panels */}
-    <Tabs.Panel value="learning" pt="md"><LearningPathTab form={form} /></Tabs.Panel>
-    <Tabs.Panel value="pace" pt="md"><PaceTab form={form} /></Tabs.Panel>
-    <Tabs.Panel value="reviewing" pt="md"><ReviewingTab form={form} /></Tabs.Panel>
+    <Tabs.Panel value="learning" pt="md" keepMounted><LearningPathTab form={form} /></Tabs.Panel>
+    <Tabs.Panel value="pace" pt="md" keepMounted><PaceTab form={form} /></Tabs.Panel>
+    <Tabs.Panel value="reviewing" pt="md" keepMounted><ReviewingTab form={form} /></Tabs.Panel>
     {tab !== 'system' && <SaveBar ... />}
   </form>
 
-  <Tabs.Panel value="system" pt="md" keepMounted={false}><SystemTab /></Tabs.Panel>
+  <Tabs.Panel value="system" pt="md"><SystemTab /></Tabs.Panel>
 </Tabs>
 ```
 
@@ -101,13 +101,11 @@ Constructs used and why (Mantine 9):
 - **Controlled `value` / `onChange`.** The selection is owned by the URL; this is the pattern Mantine
   documents for react-router. `onChange` passes `string | null`; `useSettingsTab` narrows it to a known
   tab and ignores anything else.
-- **Default `keepMounted` (with `keepMountedMode: 'activity'`) on the three form panels.** Hidden panels
-  stay mounted, so field state, error placement and the `aria-describedby` wiring of the group controls
-  do not depend on which tab is showing. The single `useForm` would keep values either way; keeping the
-  panels mounted keeps the DOM, focus targets and tests honest too.
-- **`keepMounted={false}` on the System panel only.** The per-panel prop overrides the root, so the
-  health, content-summary, config-check and build-status queries run only while System is open, and the
-  live build stream is not polled from a hidden tab.
+- **Root `keepMounted={false}`, and `keepMounted` on the three settings panels.** The settings panels
+  stay mounted (Mantine's default `activity` mode hides them and pauses their effects), so field
+  state, error placement and the `aria-describedby` wiring of the group controls do not depend on
+  which tab is showing. The System panel inherits the root value and unmounts when hidden, so its
+  health, content-summary, config-check and build-status queries run only while System is open.
 - **`Tabs.Tab` `color` and `rightSection`** carry the error mark: a red tab plus a small dot, with
   visually hidden text ("has errors") because colour alone must not carry meaning. The mark is not an
   ARIA state; `aria-invalid` is not valid on the `tab` role.
