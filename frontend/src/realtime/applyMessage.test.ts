@@ -72,7 +72,7 @@ describe('applyMessage', () => {
     expect(invalidatedKeys()).toEqual([queryKeys.latestBuild]);
   });
 
-  it('a build that ended refreshes the build, the content summary and the checks', () => {
+  it('a build that ended refreshes the build, the content summary, the checks and the health report', () => {
     queryClient.setQueryData(queryKeys.latestBuild, makeBuildStatus());
     applyMessage(queryClient, event({ kind: 'state', state: 'succeeded', progress: null }));
     expect(queryClient.getQueryData<BuildStatus>(queryKeys.latestBuild)?.state).toBe('succeeded');
@@ -80,6 +80,7 @@ describe('applyMessage', () => {
       queryKeys.latestBuild,
       queryKeys.contentSummary,
       queryKeys.configCheck,
+      queryKeys.health,
     ]);
   });
 
@@ -95,7 +96,12 @@ describe('applyMessage', () => {
   });
 
   describe('a snapshot after a reconnect', () => {
-    const dependents = [queryKeys.latestBuild, queryKeys.contentSummary, queryKeys.configCheck];
+    const dependents = [
+      queryKeys.latestBuild,
+      queryKeys.contentSummary,
+      queryKeys.configCheck,
+      queryKeys.health,
+    ];
 
     it('refreshes the dependents when the build we saw running has finished meanwhile', () => {
       queryClient.setQueryData(queryKeys.latestBuild, makeBuildStatus());

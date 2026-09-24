@@ -42,12 +42,17 @@ export function buildJustFinished(
   return previous.task_id !== next.task_id || !isFinished(previous);
 }
 
-/** A finished build changes the content and the environment checks: refetch what shows them. */
+/**
+ * A finished build changes the content, the environment checks and the health report (which says
+ * "content.db not built yet" until a build has run): refetch what shows them.
+ */
 export function invalidateBuildDependents(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: queryKeys.contentSummary });
   void queryClient.invalidateQueries({ queryKey: queryKeys.configCheck });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.health });
 }
 
+/** The service health report; a 503 (a component is down) is still data, not an error. */
 export function useHealth() {
   return useQuery({ queryKey: queryKeys.health, queryFn: endpoints.health });
 }
