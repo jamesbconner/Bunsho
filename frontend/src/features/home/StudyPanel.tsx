@@ -53,7 +53,7 @@ export function StudyPanel() {
         ))}
       </SimpleGrid>
       {card !== null ? (
-        <Button component={Link} to="/review" size="md">
+        <Button component={Link} to="/review" size="lg">
           Study now
         </Button>
       ) : (

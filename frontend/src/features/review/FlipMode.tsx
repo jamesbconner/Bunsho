@@ -43,7 +43,7 @@ export function FlipMode({ card, showFurigana, pending, onReveal, onGrade }: Rev
           />
         </>
       ) : (
-        <Button ref={flipRef} fullWidth size="md" onClick={flip} aria-keyshortcuts="Space Enter">
+        <Button ref={flipRef} fullWidth size="lg" onClick={flip} aria-keyshortcuts="Space Enter">
           Show answer
         </Button>
       )}

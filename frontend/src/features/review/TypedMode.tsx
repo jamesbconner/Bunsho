@@ -58,7 +58,7 @@ export function TypedMode({
             autoComplete="off"
           />
           {outcome === null && (
-            <Button type="submit" fullWidth size="md" disabled={pending}>
+            <Button type="submit" fullWidth size="lg" disabled={pending}>
               Submit
             </Button>
           )}
@@ -77,7 +77,7 @@ export function TypedMode({
               </Text>
             </Text>
           )}
-          <Button ref={continueRef} fullWidth size="md" onClick={onContinue} disabled={pending}>
+          <Button ref={continueRef} fullWidth size="lg" onClick={onContinue} disabled={pending}>
             Continue
           </Button>
         </Stack>
