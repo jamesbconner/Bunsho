@@ -1,7 +1,7 @@
 import { Box, Skeleton, Tabs, VisuallyHidden } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 
 import type { ReviewSettings, ReviewSettingsInput } from '../../api/endpoints';
 import { ApiError, messageFor } from '../../api/errors';
@@ -42,17 +42,28 @@ export function SettingsTabs({ initial }: { initial: ReviewSettings }) {
   });
   const { mutate: sendSettings } = save;
 
+  // The field to focus once its tab is the one shown. It is state, and each request a fresh object, so
+  // the effect runs again even when the target tab is already the current one; `focused` remembers
+  // which request was served, so a later visit to that tab does not steal focus again.
+  const [focusRequest, setFocusRequest] = useState<{ tab: string; path: string } | null>(null);
+  const focused = useRef<object | null>(null);
+  const { getInputNode } = form;
+
+  useEffect(() => {
+    if (focusRequest === null || focusRequest.tab !== tab || focused.current === focusRequest)
+      return;
+    focused.current = focusRequest;
+    // Not every control is one the form tracks; a missing node is simply not focused.
+    getInputNode(focusRequest.path)?.focus();
+  }, [tab, focusRequest, getInputNode]);
+
   /** After a failed Save or a placed 422: show the first tab with an error, and focus its field. */
   const showFirstError = (errors: Readonly<Record<string, unknown>>) => {
     const target = firstTabWithErrors(errors);
     if (target === null) return;
-    setTab(target);
     const path = firstErrorPathIn(errors, target);
-    if (path === null) return;
-    // The panel is shown on the next render; focus what the form tracks (not every control is one).
-    window.setTimeout(() => {
-      form.getInputNode(path)?.focus();
-    }, 0);
+    setTab(target);
+    setFocusRequest(path === null ? null : { tab: target, path });
   };
 
   const submit = (request: ReviewSettingsInput) => {

@@ -209,6 +209,22 @@ describe('Settings tabs: errors on another tab', () => {
     expect(puts).toEqual([]);
   });
 
+  it('focuses the invalid field when Save is pressed on the tab that holds it', async () => {
+    const user = userEvent.setup();
+    const puts = serveSettings();
+    await openSettings();
+    await openTab(user, 'Pace');
+    await setNumber(user, 'Kana per day', '');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByText(/^Enter/)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('textbox', { name: 'Kana per day' })).toHaveFocus();
+    });
+    expect(tabNamed('Pace (has errors)')).toHaveAttribute('aria-selected', 'true');
+    expect(puts).toEqual([]);
+  });
+
   it('marks a tab while the person is on another one, and clears the mark once fixed', async () => {
     const user = userEvent.setup();
     serveSettings();
@@ -239,6 +255,8 @@ describe('Settings tabs: errors on another tab', () => {
     await waitFor(() => {
       expect(tabNamed(/^Learning path/)).toHaveAttribute('aria-selected', 'true');
     });
+    expect(tabNamed('Learning path (has errors)')).toBeInTheDocument();
+    expect(tabNamed('Pace (has errors)')).toBeInTheDocument();
   });
 
   it('shows the message of a server 422 on a review-mode field and jumps to its tab', async () => {
@@ -269,7 +287,7 @@ describe('Settings tabs: errors on another tab', () => {
     expect(screen.getByText('Not an allowed mode')).toBeInTheDocument();
   });
 
-  it('clears every tab mark when Reset refills the form', async () => {
+  it('clears the mark of a single tab when Reset refills the form', async () => {
     const user = userEvent.setup();
     serveSettings();
     await openSettings();
@@ -281,5 +299,39 @@ describe('Settings tabs: errors on another tab', () => {
     await user.click(screen.getByRole('button', { name: 'Reset all tabs to recommended values' }));
     expect(tabNamed('Pace')).toBeInTheDocument();
     expect(within(screen.getByRole('tablist')).queryByText(/has errors/)).not.toBeInTheDocument();
+  });
+
+  it('clears every tab mark and refills every tab when Reset is pressed on a third tab', async () => {
+    const user = userEvent.setup();
+    serveSettings();
+    await openSettings();
+    // The Pace error first: turning kana off disables the Kana per day field.
+    await openTab(user, 'Pace');
+    await setNumber(user, 'Kana per day', '');
+    // Gate on first (its switch is disabled once kana is off), then kana off: the Learning-path error.
+    await openTab(user, 'Learning path');
+    await user.click(screen.getByRole('switch', { name: 'Wait for kana before starting kanji' }));
+    await user.click(screen.getByRole('switch', { name: 'Introduce new kana' }));
+    await openTab(user, 'Reviewing');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => {
+      expect(tabNamed(/^Learning path/)).toHaveAttribute('aria-selected', 'true');
+    });
+    expect(tabNamed('Learning path (has errors)')).toBeInTheDocument();
+    expect(tabNamed('Pace (has errors)')).toBeInTheDocument();
+
+    await openTab(user, 'Reviewing');
+    await user.click(screen.getByRole('button', { name: 'Reset all tabs to recommended values' }));
+
+    expect(tabNamed('Learning path')).toBeInTheDocument();
+    expect(tabNamed('Pace')).toBeInTheDocument();
+    expect(within(screen.getByRole('tablist')).queryByText(/has errors/)).not.toBeInTheDocument();
+    await openTab(user, 'Pace');
+    expect(screen.getByRole('textbox', { name: 'Kana per day' })).toHaveValue('20');
+    await openTab(user, 'Learning path');
+    expect(screen.getByRole('switch', { name: 'Introduce new kana' })).toBeChecked();
+    expect(
+      screen.getByRole('switch', { name: 'Wait for kana before starting kanji' }),
+    ).not.toBeChecked();
   });
 });
