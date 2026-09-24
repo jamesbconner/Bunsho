@@ -7,6 +7,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-23
+
+### Added
+
+- Settings, System tab: the service version and the health of each component (`GET /health`), whether
+  the study content is built with its kana, kanji and vocabulary counts, the environment checks and
+  the content build, all in one place.
+
+### Changed
+
+- The Settings page is now four tabs instead of one long form: **Learning path** (new-card policy,
+  levels, the type switches and Kana first), **Pace** (daily limits, when the study day starts,
+  target retention), **Reviewing** (review modes) and **System**. There is still one form and one
+  Save for the first three; a tab that holds a problem is marked, and Save opens the first one. The
+  selected tab is in the address (`/settings?tab=pace`).
+- "Build content" moved from its own page into Settings, System. `/build` redirects there, and the
+  "Build your content" buttons on Home, Statistics and the finished-review screen open it directly.
+- "Reset to recommended values" is now "Reset all tabs to recommended values".
+- A greyed-out daily limit now says it is switched off in Learning path, and a server error on a
+  review-mode field is shown on that field.
+
 ## [1.1.2] - 2026-09-23
 
 ### Fixed

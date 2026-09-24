@@ -1,6 +1,6 @@
 [project]
 name = "bunsho"
-version = "1.1.2"
+version = "1.2.0"
 description = "Bunshō (文章): a Japanese learning tool with kana, JLPT kanji and vocabulary, and spaced-repetition flashcards."
 readme = "README.md"
 license = "MIT"
