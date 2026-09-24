@@ -1,4 +1,4 @@
-import { Group, Input, NativeSelect, NumberInput, Slider, Stack, Text, Title } from '@mantine/core';
+import { Group, Input, NativeSelect, NumberInput, Slider, Stack } from '@mantine/core';
 import { useId } from 'react';
 
 import { groupAria } from './fieldAria';
@@ -8,6 +8,7 @@ import {
   RETENTION_MIN_PERCENT,
   type SettingsFormApi,
 } from './settingsForm';
+import { SettingsSection } from './SettingsSection';
 
 const HOURS = Array.from({ length: 24 }, (_, hour) => ({
   value: String(hour),
@@ -26,9 +27,11 @@ export function PaceTab({ form }: { form: SettingsFormApi }) {
       : undefined;
 
   return (
-    <Stack gap="xl">
-      <Stack gap="md">
-        <Title order={3}>Daily limits</Title>
+    <Stack gap="lg">
+      <SettingsSection
+        title="Daily limits"
+        hint="The most new cards of each type per day. 0 means no limit."
+      >
         <Group grow align="flex-start">
           <NumberInput
             label="Kana per day"
@@ -58,13 +61,9 @@ export function PaceTab({ form }: { form: SettingsFormApi }) {
             {...form.getInputProps('new_limits.vocab')}
           />
         </Group>
-        <Text size="sm" c="dimmed">
-          The most new cards of each type per day. 0 means no limit.
-        </Text>
-      </Stack>
+      </SettingsSection>
 
-      <Stack gap="md">
-        <Title order={3}>Study day</Title>
+      <SettingsSection title="Study day">
         <NativeSelect
           label="A new study day starts at"
           description="In the server's timezone (the TZ setting). Daily limits reset then."
@@ -78,10 +77,9 @@ export function PaceTab({ form }: { form: SettingsFormApi }) {
             typeof form.errors.rollover_hour === 'string' ? form.errors.rollover_hour : undefined
           }
         />
-      </Stack>
+      </SettingsSection>
 
-      <Stack gap="md">
-        <Title order={3}>Scheduling</Title>
+      <SettingsSection title="Scheduling">
         <Input.Wrapper
           id={retentionId}
           label={`Target retention: ${String(values.target_retention_percent)}%`}
@@ -91,6 +89,7 @@ export function PaceTab({ form }: { form: SettingsFormApi }) {
         >
           <Slider
             mt="sm"
+            mb="lg"
             min={RETENTION_MIN_PERCENT}
             max={RETENTION_MAX_PERCENT}
             step={1}
@@ -109,7 +108,7 @@ export function PaceTab({ form }: { form: SettingsFormApi }) {
             ]}
           />
         </Input.Wrapper>
-      </Stack>
+      </SettingsSection>
     </Stack>
   );
 }

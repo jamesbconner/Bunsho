@@ -9,7 +9,7 @@ import { makeBuildStatus, makeSettings } from '../../test/fixtures';
 import { renderWithProviders } from '../../test/render';
 import { server } from '../../test/server';
 import { SettingsPage } from './SettingsPage';
-import { openSettings, openTab, serveSettings, setNumber } from './settingsTestUtils';
+import { chooseMode, openSettings, openTab, serveSettings, setNumber } from './settingsTestUtils';
 
 function tabNamed(name: string | RegExp) {
   return screen.getByRole('tab', { name });
@@ -120,7 +120,7 @@ describe('Settings tabs', () => {
     await openTab(user, 'Pace');
     await setNumber(user, 'Kana per day', '30');
     await openTab(user, 'Reviewing');
-    await user.selectOptions(screen.getByLabelText('Kana review mode'), 'Typed answer');
+    await chooseMode(user, 'Kana', 'Typed');
     await user.click(screen.getByRole('button', { name: 'Save' }));
     await screen.findByText('Settings saved');
     expect(puts).toEqual([
@@ -276,7 +276,7 @@ describe('Settings tabs: errors on another tab', () => {
     );
     await openSettings();
     await openTab(user, 'Reviewing');
-    await user.selectOptions(screen.getByLabelText('Kana review mode'), 'Typed answer');
+    await chooseMode(user, 'Kana', 'Typed');
     await openTab(user, 'Learning path');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
@@ -286,7 +286,7 @@ describe('Settings tabs: errors on another tab', () => {
     expect(tabNamed('Reviewing (has errors)')).toBeInTheDocument();
     expect(screen.getByText('Not an allowed mode')).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.getByLabelText('Kana review mode')).toHaveFocus();
+      expect(screen.getByRole('radiogroup', { name: 'Kana review mode' })).toHaveFocus();
     });
   });
 

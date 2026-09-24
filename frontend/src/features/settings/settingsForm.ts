@@ -50,10 +50,18 @@ export const RECOMMENDED_SETTINGS: ReviewSettings = {
   vocab_mode: 'flip',
 };
 
-export const REVIEW_MODES: readonly { value: ReviewModeName; label: string }[] = [
-  { value: 'flip', label: 'Flip and grade yourself' },
-  { value: 'typed', label: 'Typed answer' },
-  { value: 'multiple_choice', label: 'Multiple choice' },
+export const REVIEW_MODES: readonly {
+  value: ReviewModeName;
+  label: string;
+  description: string;
+}[] = [
+  { value: 'flip', label: 'Flip', description: 'You see the card, flip it, then grade yourself.' },
+  { value: 'typed', label: 'Typed', description: 'You type the answer and it is checked for you.' },
+  {
+    value: 'multiple_choice',
+    label: 'Multiple choice',
+    description: 'You pick the answer from four options.',
+  },
 ];
 
 export const POLICIES: readonly { value: NewCardPolicyName; label: string; description: string }[] =

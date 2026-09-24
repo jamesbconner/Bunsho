@@ -1,4 +1,4 @@
-import { Box, Skeleton, Tabs, VisuallyHidden } from '@mantine/core';
+import { Box, Fieldset, LoadingOverlay, Skeleton, Tabs, VisuallyHidden } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
@@ -24,6 +24,7 @@ import {
   validateSettings,
   type SettingsFormValues,
 } from './settingsForm';
+import { useRestoreFocus } from './useRestoreFocus';
 import { useSettingsTab } from './useSettingsTab';
 
 // The System tab carries the build UI; load it only when somebody opens it.
@@ -42,6 +43,10 @@ export function SettingsTabs({ initial }: { initial: ReviewSettings }) {
     validate: validateSettings,
   });
   const { mutate: sendSettings } = save;
+
+  // Locking the form during a save disables the focused field; it gets its focus back afterwards.
+  const saving = save.isPending;
+  const rememberFocus = useRestoreFocus(saving);
 
   // The errored fields to try, in order, once their tab is the one shown. It is state, and each
   // request a fresh object, so the effect runs again even when the target tab is already the current
@@ -76,6 +81,7 @@ export function SettingsTabs({ initial }: { initial: ReviewSettings }) {
 
   const submit = (request: ReviewSettingsInput) => {
     setGeneral(null);
+    rememberFocus();
     sendSettings(request, {
       onSuccess: (saved) => {
         const values = toFormValues(saved);
@@ -141,22 +147,37 @@ export function SettingsTabs({ initial }: { initial: ReviewSettings }) {
         )}
         noValidate
       >
-        <Tabs.Panel value="learning" pt="md" keepMounted>
-          <LearningPathTab form={form} />
-        </Tabs.Panel>
-        <Tabs.Panel value="pace" pt="md" keepMounted>
-          <PaceTab form={form} />
-        </Tabs.Panel>
-        <Tabs.Panel value="reviewing" pt="md" keepMounted>
-          <ReviewingTab form={form} />
-        </Tabs.Panel>
+        {/* No edits while a save is in flight: the response replaces the form's values. */}
+        <Box pos="relative">
+          <LoadingOverlay
+            visible={saving}
+            zIndex={5}
+            overlayProps={{ radius: 'md', blur: 1 }}
+            loaderProps={{ size: 'sm' }}
+          />
+          <Fieldset disabled={saving} variant="unstyled" p={0} m={0} miw={0}>
+            <Tabs.Panel value="learning" pt="md" keepMounted>
+              <LearningPathTab form={form} />
+            </Tabs.Panel>
+            <Tabs.Panel value="pace" pt="md" keepMounted>
+              <PaceTab form={form} />
+            </Tabs.Panel>
+            <Tabs.Panel value="reviewing" pt="md" keepMounted>
+              <ReviewingTab form={form} />
+            </Tabs.Panel>
+          </Fieldset>
+        </Box>
         {tab !== 'system' && (
           <SaveBar
             dirty={dirty}
-            saving={save.isPending}
+            saving={saving}
             general={general}
             onRetry={() => {
               if (save.variables !== undefined) submit(save.variables);
+            }}
+            onDiscard={() => {
+              form.reset();
+              setGeneral(null);
             }}
             onReset={() => {
               form.setValues(toFormValues(RECOMMENDED_SETTINGS));

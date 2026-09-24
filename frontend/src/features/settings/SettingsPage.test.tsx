@@ -9,7 +9,7 @@ import { renderWithProviders } from '../../test/render';
 import { server } from '../../test/server';
 import { SettingsPage } from './SettingsPage';
 import { KANA_GATE_MESSAGE } from './settingsForm';
-import { openSettings, openTab, serveSettings, setNumber } from './settingsTestUtils';
+import { chooseMode, openSettings, openTab, serveSettings, setNumber } from './settingsTestUtils';
 
 describe('SettingsPage', () => {
   beforeEach(() => {
@@ -52,14 +52,18 @@ describe('SettingsPage', () => {
     expect(screen.getByRole('textbox', { name: /Mastery needed/ })).toHaveValue('65%');
   });
 
-  it('shows the three review-mode selects and sends the changed modes', async () => {
+  it('shows a segmented control per card type, explains the mode, and sends the changed modes', async () => {
     const user = userEvent.setup();
     const puts = serveSettings();
     await openSettings();
     await openTab(user, 'Reviewing');
-    const kanaSelect = await screen.findByLabelText('Kana review mode');
-    await user.selectOptions(kanaSelect, 'Typed answer');
-    await user.selectOptions(screen.getByLabelText('Kanji review mode'), 'Multiple choice');
+    await screen.findByRole('radiogroup', { name: 'Kana review mode' });
+    expect(screen.getAllByRole('radio', { name: 'Flip' })).toHaveLength(3);
+    expect(screen.getAllByText('You see the card, flip it, then grade yourself.')).toHaveLength(3);
+    await chooseMode(user, 'Kana', 'Typed');
+    await chooseMode(user, 'Kanji', 'Multiple choice');
+    expect(screen.getByText('You type the answer and it is checked for you.')).toBeInTheDocument();
+    expect(screen.getByText('You pick the answer from four options.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => {
       expect(screen.getByText('Settings saved')).toBeInTheDocument();
