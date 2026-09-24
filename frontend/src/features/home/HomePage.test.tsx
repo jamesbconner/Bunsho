@@ -25,7 +25,7 @@ function renderHome() {
   return renderWithProviders(
     <Routes>
       <Route index element={<HomePage />} />
-      <Route path="build" element={<p>Build page</p>} />
+      <Route path="settings" element={<p>Settings page</p>} />
     </Routes>,
   );
 }
@@ -70,8 +70,10 @@ describe('HomePage', () => {
     );
     renderHome();
     expect(await screen.findByText('Welcome to Bunshō')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('link', { name: 'Build your content' }));
-    expect(screen.getByText('Build page')).toBeInTheDocument();
+    const build = screen.getByRole('link', { name: 'Build your content' });
+    expect(build).toHaveAttribute('href', '/settings?tab=system');
+    await userEvent.click(build);
+    expect(screen.getByText('Settings page')).toBeInTheDocument();
   });
 
   it('says what went wrong and lets the user try again', async () => {

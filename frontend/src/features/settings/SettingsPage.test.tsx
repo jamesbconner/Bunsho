@@ -3,39 +3,13 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ReviewSettings } from '../../api/endpoints';
 import { session } from '../../auth/session';
 import { makeSettings } from '../../test/fixtures';
 import { renderWithProviders } from '../../test/render';
 import { server } from '../../test/server';
 import { SettingsPage } from './SettingsPage';
 import { KANA_GATE_MESSAGE } from './settingsForm';
-
-/** Serve the settings and record every PUT body; the server echoes the document it was sent. */
-function serveSettings(initial: ReviewSettings = makeSettings()) {
-  const puts: unknown[] = [];
-  server.use(
-    http.get('/api/v1/settings', () => HttpResponse.json(initial)),
-    http.put('/api/v1/settings', async ({ request }) => {
-      const body = await request.json();
-      puts.push(body);
-      return HttpResponse.json(body);
-    }),
-  );
-  return puts;
-}
-
-async function openSettings() {
-  const view = renderWithProviders(<SettingsPage />);
-  await screen.findByRole('button', { name: 'Save' });
-  return view;
-}
-
-async function setNumber(user: ReturnType<typeof userEvent.setup>, name: string, value: string) {
-  const input = screen.getByRole('textbox', { name });
-  await user.clear(input);
-  if (value !== '') await user.type(input, value);
-}
+import { openSettings, openTab, serveSettings, setNumber } from './settingsTestUtils';
 
 describe('SettingsPage', () => {
   beforeEach(() => {
@@ -44,6 +18,7 @@ describe('SettingsPage', () => {
   });
 
   it('fills the form from the saved settings', async () => {
+    const user = userEvent.setup();
     serveSettings(
       makeSettings({
         new_card_policy: 'mastery_unlock',
@@ -57,6 +32,7 @@ describe('SettingsPage', () => {
     await openSettings();
 
     expect(screen.getByRole('radio', { name: /Mastery unlock/ })).toBeChecked();
+    await openTab(user, 'Pace');
     expect(screen.getByRole('textbox', { name: 'Kana per day' })).toHaveValue('5');
     expect(screen.getByRole('textbox', { name: 'Kanji per day' })).toHaveValue('6');
     expect(screen.getByRole('textbox', { name: 'Vocabulary per day' })).toHaveValue('7');
@@ -69,6 +45,7 @@ describe('SettingsPage', () => {
       '85%',
     );
     expect(screen.getByRole('combobox', { name: /A new study day starts at/ })).toHaveValue('6');
+    await openTab(user, 'Learning path');
     expect(screen.getByRole('checkbox', { name: 'N5' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'N4' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'N3' })).not.toBeChecked();
@@ -79,6 +56,7 @@ describe('SettingsPage', () => {
     const user = userEvent.setup();
     const puts = serveSettings();
     await openSettings();
+    await openTab(user, 'Reviewing');
     const kanaSelect = await screen.findByLabelText('Kana review mode');
     await user.selectOptions(kanaSelect, 'Typed answer');
     await user.selectOptions(screen.getByLabelText('Kanji review mode'), 'Multiple choice');
@@ -93,6 +71,7 @@ describe('SettingsPage', () => {
     const user = userEvent.setup();
     serveSettings();
     await openSettings();
+    await openTab(user, 'Pace');
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument();
 
@@ -105,6 +84,7 @@ describe('SettingsPage', () => {
     const user = userEvent.setup();
     const puts = serveSettings();
     await openSettings();
+    await openTab(user, 'Pace');
 
     await setNumber(user, 'Kana per day', '30');
     await user.click(screen.getByRole('button', { name: 'Save' }));
@@ -125,6 +105,7 @@ describe('SettingsPage', () => {
 
     await user.click(screen.getByRole('radio', { name: /Pinned levels/ }));
     await user.click(screen.getByRole('checkbox', { name: 'N4' }));
+    await openTab(user, 'Pace');
     await user.selectOptions(
       screen.getByRole('combobox', { name: /A new study day starts at/ }),
       '6:00',
@@ -148,6 +129,7 @@ describe('SettingsPage', () => {
     const user = userEvent.setup();
     const puts = serveSettings();
     await openSettings();
+    await openTab(user, 'Pace');
 
     await setNumber(user, 'Kana per day', '');
     await setNumber(user, 'Kanji per day', '');
@@ -196,6 +178,7 @@ describe('SettingsPage', () => {
       makeSettings({ active_levels: ['N5', 'N3'], mastery_threshold: 0.7 }),
     );
     await openSettings();
+    await openTab(user, 'Pace');
     await setNumber(user, 'Kana per day', '21');
     await user.click(screen.getByRole('button', { name: 'Save' }));
     await screen.findByText('Settings saved');
@@ -229,6 +212,7 @@ describe('SettingsPage', () => {
       ),
     );
     await openSettings();
+    await openTab(user, 'Pace');
     await setNumber(user, 'Kana per day', '30');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
@@ -252,6 +236,7 @@ describe('SettingsPage', () => {
       }),
     );
     await openSettings();
+    await openTab(user, 'Pace');
     await setNumber(user, 'Kana per day', '30');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
@@ -282,9 +267,10 @@ describe('SettingsPage', () => {
     await openSettings();
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
 
-    await user.click(screen.getByRole('button', { name: 'Reset to recommended values' }));
+    await user.click(screen.getByRole('button', { name: 'Reset all tabs to recommended values' }));
 
     expect(screen.getByRole('radio', { name: /Strict order/ })).toBeChecked();
+    await openTab(user, 'Pace');
     expect(screen.getByRole('textbox', { name: 'Kana per day' })).toHaveValue('20');
     expect(screen.getByRole('textbox', { name: 'Kanji per day' })).toHaveValue('15');
     expect(screen.getByRole('textbox', { name: 'Vocabulary per day' })).toHaveValue('20');
@@ -293,6 +279,7 @@ describe('SettingsPage', () => {
       '90',
     );
     expect(screen.getByRole('combobox', { name: /A new study day starts at/ })).toHaveValue('4');
+    await openTab(user, 'Learning path');
     expect(screen.getByRole('checkbox', { name: 'N5' })).toBeChecked();
     expect(puts).toEqual([]);
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
@@ -307,8 +294,9 @@ describe('SettingsPage', () => {
     await user.click(screen.getByRole('radio', { name: /Strict order/ }));
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
 
-    await user.click(screen.getByRole('button', { name: 'Reset to recommended values' }));
+    await user.click(screen.getByRole('button', { name: 'Reset all tabs to recommended values' }));
 
+    await openTab(user, 'Pace');
     expect(screen.getByRole('textbox', { name: 'Kana per day' })).toHaveValue('20');
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
     expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
@@ -318,10 +306,11 @@ describe('SettingsPage', () => {
     const user = userEvent.setup();
     serveSettings();
     await openSettings();
+    await openTab(user, 'Pace');
     await setNumber(user, 'Kana per day', '30');
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
 
-    await user.click(screen.getByRole('button', { name: 'Reset to recommended values' }));
+    await user.click(screen.getByRole('button', { name: 'Reset all tabs to recommended values' }));
 
     expect(screen.getByRole('textbox', { name: 'Kana per day' })).toHaveValue('20');
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
@@ -332,7 +321,8 @@ describe('SettingsPage', () => {
     const user = userEvent.setup();
     serveSettings(makeSettings({ new_limits: { kana: 50, kanji: 15, vocab: 20 } }));
     await openSettings();
-    await user.click(screen.getByRole('button', { name: 'Reset to recommended values' }));
+    await user.click(screen.getByRole('button', { name: 'Reset all tabs to recommended values' }));
+    await openTab(user, 'Pace');
     await setNumber(user, 'Kanji per day', '16');
     await setNumber(user, 'Kanji per day', '15');
 
@@ -357,6 +347,7 @@ describe('SettingsPage', () => {
     const user = userEvent.setup();
     serveSettings();
     await openSettings();
+    await openTab(user, 'Pace');
     await setNumber(user, 'Kana per day', '30');
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
     await setNumber(user, 'Kana per day', '20');
@@ -376,6 +367,7 @@ describe('SettingsPage', () => {
       ),
     );
     const { queryClient } = await openSettings();
+    await openTab(user, 'Pace');
     await setNumber(user, 'Kana per day', '30');
 
     failing = true;
@@ -430,6 +422,7 @@ describe('SettingsPage', () => {
       ),
     );
     await openSettings();
+    await openTab(user, 'Pace');
     const retention = screen.getByRole('group', { name: /Target retention/ });
     expect(retention).toHaveAccessibleName('Target retention: 90%');
     expect(retention).toHaveAccessibleDescription(/How often you want to remember a card/);
@@ -444,6 +437,7 @@ describe('SettingsPage', () => {
     const user = userEvent.setup();
     serveSettings();
     const { queryClient } = await openSettings();
+    await openTab(user, 'Pace');
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
     await setNumber(user, 'Kana per day', '30');
     await user.click(screen.getByRole('button', { name: 'Save' }));
@@ -501,6 +495,7 @@ describe('SettingsPage', () => {
     await openSettings();
 
     await user.click(screen.getByRole('switch', { name: 'Introduce new kanji' }));
+    await openTab(user, 'Pace');
     expect(screen.getByRole('textbox', { name: 'Kanji per day' })).toBeDisabled();
     expect(screen.getByRole('textbox', { name: 'Kana per day' })).toBeEnabled();
     await user.click(screen.getByRole('button', { name: 'Save' }));
@@ -547,7 +542,7 @@ describe('SettingsPage', () => {
     expect(screen.queryByText(KANA_GATE_MESSAGE)).not.toBeInTheDocument();
   });
 
-  it('clears the kana gate message when Reset to recommended values is pressed', async () => {
+  it('clears the kana gate message when Reset all tabs to recommended values is pressed', async () => {
     const user = userEvent.setup();
     const puts = serveSettings(
       makeSettings({ kana_gate: { kanji: true, vocab: false, threshold: 0.8 } }),
@@ -559,7 +554,7 @@ describe('SettingsPage', () => {
     expect(await screen.findByText(KANA_GATE_MESSAGE)).toBeInTheDocument();
     expect(puts).toEqual([]);
 
-    await user.click(screen.getByRole('button', { name: 'Reset to recommended values' }));
+    await user.click(screen.getByRole('button', { name: 'Reset all tabs to recommended values' }));
     expect(screen.queryByText(KANA_GATE_MESSAGE)).not.toBeInTheDocument();
   });
 
@@ -648,7 +643,7 @@ describe('SettingsPage', () => {
     );
     await openSettings();
 
-    await user.click(screen.getByRole('button', { name: 'Reset to recommended values' }));
+    await user.click(screen.getByRole('button', { name: 'Reset all tabs to recommended values' }));
     expect(screen.getByRole('switch', { name: 'Introduce new kanji' })).toBeChecked();
     expect(screen.getByRole('switch', { name: 'Introduce new vocabulary' })).toBeChecked();
     expect(

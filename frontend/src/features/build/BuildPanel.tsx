@@ -1,14 +1,4 @@
-import {
-  Alert,
-  Button,
-  Group,
-  Modal,
-  Stack,
-  Switch,
-  Text,
-  Title,
-  VisuallyHidden,
-} from '@mantine/core';
+import { Button, Group, Modal, Stack, Switch, Text, Title, VisuallyHidden } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -18,12 +8,11 @@ import { endpoints } from '../../api/endpoints';
 import { queryKeys, useContentSummary, useLatestBuild } from '../../api/queries';
 import { useConnectionState } from '../../realtime/realtimeContext';
 import { BuildProgressCard } from './BuildProgressCard';
-import { EnvironmentChecks } from './EnvironmentChecks';
 import { startFailureMessage } from './startFailure';
 import { announcementFor } from './status';
 
 /** Start a content build (or a dry run) and follow it live. */
-export function BuildPage() {
+export function BuildPanel() {
   const queryClient = useQueryClient();
   const connection = useConnectionState();
   const summary = useContentSummary();
@@ -60,14 +49,7 @@ export function BuildPage() {
 
   return (
     <Stack gap="md">
-      <Title order={2}>Content</Title>
-      {!alreadyBuilt && summary.isSuccess && (
-        <Alert color="blue" title="First run">
-          The study content has not been built yet. Build it once from the vocabulary deck; it takes
-          about half a minute.
-        </Alert>
-      )}
-      <EnvironmentChecks />
+      <Title order={3}>Build</Title>
       <Group>
         <Button onClick={onBuild} loading={start.isPending} disabled={running || summary.isPending}>
           {buildLabel}

@@ -39,6 +39,9 @@ function rememberLogin() {
     http.get('/api/v1/reviews/next', () => HttpResponse.json(makeNextCard(makeKanaCard()))),
     http.get('/api/v1/stats/summary', () => HttpResponse.json(makeStatsSummary())),
     http.get('/api/v1/settings', () => HttpResponse.json(makeSettings())),
+    http.get('/api/v1/health', () =>
+      HttpResponse.json({ status: 'ok', version: '1.2.0', components: {} }),
+    ),
     http.get('/api/v1/admin/config-check', () => HttpResponse.json({ ok: true, checks: [] })),
     http.get('/api/v1/admin/content/build', () =>
       HttpResponse.json({ detail: 'no build has run yet' }, { status: 404 }),
@@ -55,6 +58,7 @@ describe('App', () => {
   beforeAll(async () => {
     await import('./features/stats/StatsPage');
     await import('./features/settings/SettingsPage');
+    await import('./features/settings/SystemTab');
   }, 30_000);
 
   beforeEach(() => {
@@ -80,15 +84,30 @@ describe('App', () => {
     expect(screen.getByRole('heading', { name: /Bunshō/ })).toBeInTheDocument();
   });
 
-  it('navigates to the build page and back', async () => {
+  it('reaches the build tools through Settings, System', async () => {
     rememberLogin();
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole('link', { name: 'Build content' }));
-    expect(await screen.findByRole('heading', { name: 'Content' })).toBeInTheDocument();
-    expect(window.location.pathname).toBe('/build');
+    const settingsLink = await screen.findByRole('link', { name: 'Settings' });
+    // The navigation has rendered by now, so the absent link is a real absence.
+    expect(screen.queryByRole('link', { name: 'Build content' })).not.toBeInTheDocument();
+    await user.click(settingsLink);
+    await user.click(await screen.findByRole('tab', { name: 'System' }));
+    expect(await screen.findByRole('heading', { name: 'Build' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/settings');
+    expect(window.location.search).toBe('?tab=system');
     await user.click(screen.getByRole('link', { name: 'Home' }));
     expect(await screen.findByRole('heading', { name: 'Your content' })).toBeInTheDocument();
+  });
+
+  it('sends an old /build link to the System tab', async () => {
+    rememberLogin();
+    goTo('/build');
+    render(<App />);
+    expect(await screen.findByRole('heading', { name: 'Build' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/settings');
+    expect(window.location.search).toBe('?tab=system');
+    expect(screen.getByRole('tab', { name: 'System' })).toHaveAttribute('aria-selected', 'true');
   });
 
   it('starts a study session from the dashboard and finds its way back', async () => {
@@ -121,15 +140,8 @@ describe('App', () => {
     goTo('/settings');
     render(<App />);
     expect(
-      await screen.findByRole('button', { name: 'Reset to recommended values' }),
+      await screen.findByRole('button', { name: 'Reset all tabs to recommended values' }),
     ).toBeInTheDocument();
-  });
-
-  it('serves a deep link after the login is restored', async () => {
-    rememberLogin();
-    goTo('/build');
-    render(<App />);
-    expect(await screen.findByRole('heading', { name: 'Content' })).toBeInTheDocument();
   });
 
   it('answers an unknown address with a not-found page', async () => {

@@ -5,10 +5,19 @@ import { ApiError } from '../../api/errors';
 import openapi from '../../../openapi.json?raw';
 import { makeSettings } from '../../test/fixtures';
 import {
+  DEFAULT_TAB,
   KANA_GATE_MESSAGE,
   RECOMMENDED_SETTINGS,
+  SETTINGS_TABS,
+  TAB_OF_FIELD,
+  errorPathsIn,
+  firstErrorPathIn,
+  firstTabWithErrors,
   isSettingsDirty,
+  isSettingsTab,
   placeServerErrors,
+  tabOfField,
+  tabsWithErrors,
   toFormValues,
   toRequest,
   validateSettings,
@@ -342,5 +351,101 @@ describe('RECOMMENDED_SETTINGS', () => {
   it('is a document the API would accept', () => {
     expect(validateSettings(toFormValues(RECOMMENDED_SETTINGS))).toEqual({});
     expect(RECOMMENDED_SETTINGS.active_levels).toEqual(['N5']);
+  });
+});
+
+describe('settings tabs', () => {
+  it('lists the tabs in display order with their labels', () => {
+    expect(SETTINGS_TABS.map((tab) => tab.value)).toEqual([
+      'learning',
+      'pace',
+      'reviewing',
+      'system',
+    ]);
+    expect(SETTINGS_TABS.map((tab) => tab.label)).toEqual([
+      'Learning path',
+      'Pace',
+      'Reviewing',
+      'System',
+    ]);
+    expect(DEFAULT_TAB).toBe('learning');
+  });
+
+  it.each([
+    ['learning', true],
+    ['system', true],
+    ['admin', false],
+    ['', false],
+    [null, false],
+    [undefined, false],
+  ])('isSettingsTab(%j) is %s', (value, expected) => {
+    expect(isSettingsTab(value)).toBe(expected);
+  });
+
+  it('places every field of the form on a tab', () => {
+    for (const field of Object.keys(toFormValues(RECOMMENDED_SETTINGS))) {
+      expect(Object.hasOwn(TAB_OF_FIELD, field), field).toBe(true);
+    }
+  });
+
+  it.each([
+    ['new_card_policy', 'learning'],
+    ['active_levels', 'learning'],
+    ['mastery_threshold_percent', 'learning'],
+    ['type_enabled.kana', 'learning'],
+    ['kana_gate', 'learning'],
+    ['kana_gate.threshold_percent', 'learning'],
+    ['new_limits', 'pace'],
+    ['new_limits.kana', 'pace'],
+    ['rollover_hour', 'pace'],
+    ['target_retention_percent', 'pace'],
+    ['kana_mode', 'reviewing'],
+    ['vocab_mode', 'reviewing'],
+    ['not_a_field', 'learning'],
+    ['', 'learning'],
+  ])('puts %s on the %s tab', (path, tab) => {
+    expect(tabOfField(path)).toBe(tab);
+  });
+
+  it('finds the tabs that hold an error, whatever the nesting', () => {
+    expect([...tabsWithErrors({})]).toEqual([]);
+    expect([...tabsWithErrors({ 'new_limits.kana': 'Too big', kana_gate: 'Needs kana' })]).toEqual(
+      expect.arrayContaining(['pace', 'learning']),
+    );
+    expect(tabsWithErrors({ kana_mode: 'Bad' }).has('reviewing')).toBe(true);
+  });
+
+  it('ignores an entry that holds no message', () => {
+    expect([
+      ...tabsWithErrors({ rollover_hour: null, kana_mode: undefined, x: false, y: '' }),
+    ]).toEqual([]);
+  });
+
+  it('picks the first tab in tab order, not in key order', () => {
+    expect(firstTabWithErrors({})).toBeNull();
+    expect(firstTabWithErrors({ kana_mode: 'Bad', rollover_hour: 'Bad' })).toBe('pace');
+    expect(firstTabWithErrors({ kana_mode: 'Bad', new_card_policy: 'Bad' })).toBe('learning');
+  });
+
+  it('picks the first errored field of a tab', () => {
+    const errors = { kana_mode: 'Bad', rollover_hour: 'Bad', 'new_limits.kanji': 'Bad' };
+    expect(firstErrorPathIn(errors, 'pace')).toBe('rollover_hour');
+    expect(firstErrorPathIn(errors, 'reviewing')).toBe('kana_mode');
+    expect(firstErrorPathIn(errors, 'learning')).toBeNull();
+  });
+
+  it('lists every errored field of a tab in the order recorded, skipping empty messages', () => {
+    const errors = {
+      active_levels: 'Bad',
+      kana_mode: 'Bad',
+      mastery_threshold_percent: 'Bad',
+      kana_gate: '',
+      new_card_policy: undefined,
+    };
+    expect(errorPathsIn(errors, 'learning')).toEqual([
+      'active_levels',
+      'mastery_threshold_percent',
+    ]);
+    expect(errorPathsIn(errors, 'pace')).toEqual([]);
   });
 });

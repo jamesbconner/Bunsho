@@ -76,7 +76,7 @@ describe('useLatestBuild', () => {
     return { wrapper, invalidated };
   }
 
-  it('refreshes the summary and the checks once when a polled build finished', async () => {
+  it('refreshes the summary, the checks and the health report once when a polled build finished', async () => {
     const queryClient = createTestQueryClient();
     queryClient.setQueryData(queryKeys.latestBuild, makeBuildStatus());
     const latest = vi
@@ -88,12 +88,20 @@ describe('useLatestBuild', () => {
     await waitFor(() => {
       expect(result.current.data?.state).toBe('succeeded');
     });
-    expect(invalidated()).toEqual([queryKeys.contentSummary, queryKeys.configCheck]);
+    expect(invalidated()).toEqual([
+      queryKeys.contentSummary,
+      queryKeys.configCheck,
+      queryKeys.health,
+    ]);
 
     // Fetching the same finished build again is not a new completion.
     await queryClient.refetchQueries({ queryKey: queryKeys.latestBuild });
     expect(latest).toHaveBeenCalledTimes(2);
-    expect(invalidated()).toEqual([queryKeys.contentSummary, queryKeys.configCheck]);
+    expect(invalidated()).toEqual([
+      queryKeys.contentSummary,
+      queryKeys.configCheck,
+      queryKeys.health,
+    ]);
   });
 
   it('invalidates nothing on the first load of a finished build', async () => {

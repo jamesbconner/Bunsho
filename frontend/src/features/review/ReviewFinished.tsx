@@ -34,7 +34,7 @@ export function ReviewNotBuilt() {
   return (
     <Alert color="blue" title="Nothing to study yet">
       <Text size="sm">The study content has not been built yet.</Text>
-      <Button component={Link} to="/build" mt="sm" size="xs">
+      <Button component={Link} to="/settings?tab=system" mt="sm" size="xs">
         Build your content
       </Button>
     </Alert>

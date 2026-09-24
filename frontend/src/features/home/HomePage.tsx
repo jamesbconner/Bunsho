@@ -72,7 +72,7 @@ export function HomePage() {
         <Text size="sm">
           There is no study content yet. Build it once from the vocabulary deck and it will be here.
         </Text>
-        <Button component={Link} to="/build" mt="sm" size="xs">
+        <Button component={Link} to="/settings?tab=system" mt="sm" size="xs">
           Build your content
         </Button>
       </Alert>

@@ -1,5 +1,6 @@
 import { request } from './client';
 import { ApiError } from './errors';
+import { rawRequestAllowing } from './http';
 import type { components } from './schema';
 
 type Schemas = components['schemas'];
@@ -20,9 +21,35 @@ export type LevelProgress = Schemas['LevelProgress'];
 export type ReviewSettings = Schemas['ReviewSettings-Output'];
 export type ReviewSettingsInput = Schemas['ReviewSettings-Input'];
 export type NewCardPolicyName = Schemas['NewCardPolicyName'];
+export type HealthResponse = Schemas['HealthResponse'];
+
+function isHealthStatus(value: unknown): boolean {
+  return value === 'ok' || value === 'degraded' || value === 'error';
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isComponentHealth(value: unknown): boolean {
+  return isRecord(value) && isHealthStatus(value.status) && typeof value.detail === 'string';
+}
+
+function isHealthResponse(data: unknown): data is HealthResponse {
+  return (
+    isRecord(data) &&
+    isHealthStatus(data.status) &&
+    typeof data.version === 'string' &&
+    isRecord(data.components) &&
+    Object.values(data.components).every(isComponentHealth)
+  );
+}
 
 /** Every authenticated API call the screens make, typed from the generated schema. */
 export const endpoints = {
+  /** Component health and the version. Unauthenticated; a 503 still carries the full report. */
+  health: () => rawRequestAllowing<HealthResponse>('/health', [503], isHealthResponse),
+
   contentSummary: () => request<ContentSummary>('/content/summary'),
 
   configCheck: () => request<ConfigCheck>('/admin/config-check'),

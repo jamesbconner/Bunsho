@@ -33,7 +33,7 @@ function renderLayout(logout = vi.fn(), initialEntries: string[] = ['/']) {
         <Routes>
           <Route element={<AppLayout />}>
             <Route index element={<p>Home content</p>} />
-            <Route path="build" element={<p>Build content page</p>} />
+            <Route path="settings" element={<p>Settings page</p>} />
             <Route path="slow" element={<SlowPage />} />
           </Route>
         </Routes>
@@ -53,15 +53,15 @@ describe('AppLayout', () => {
     expect(screen.getByRole('link', { name: 'Study' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Statistics' })).toHaveAttribute('href', '/stats');
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings');
-    expect(screen.getByRole('link', { name: 'Build content' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Build content' })).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Live');
     expect(screen.getByText('Home content')).toBeInTheDocument();
   });
 
   it('navigates between pages', async () => {
     renderLayout();
-    await userEvent.click(screen.getByRole('link', { name: 'Build content' }));
-    expect(screen.getByText('Build content page')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('link', { name: 'Settings' }));
+    expect(screen.getByText('Settings page')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('link', { name: 'Home' }));
     expect(screen.getByText('Home content')).toBeInTheDocument();
   });
