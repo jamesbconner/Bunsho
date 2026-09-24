@@ -6,6 +6,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import type { ReviewSettings, ReviewSettingsInput } from '../../api/endpoints';
 import { ApiError, messageFor } from '../../api/errors';
 import { useUpdateSettings } from '../../api/queries';
+import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { LearningPathTab } from './LearningPathTab';
 import { PaceTab } from './PaceTab';
 import { ReviewingTab } from './ReviewingTab';
@@ -165,9 +166,12 @@ export function SettingsTabs({ initial }: { initial: ReviewSettings }) {
       </form>
 
       <Tabs.Panel value="system" pt="md">
-        <Suspense fallback={<Skeleton height={240} />}>
-          <SystemTab />
-        </Suspense>
+        {/* A chunk that fails to load stays in this panel; the form and the other tabs keep working. */}
+        <ErrorBoundary>
+          <Suspense fallback={<Skeleton height={240} />}>
+            <SystemTab />
+          </Suspense>
+        </ErrorBoundary>
       </Tabs.Panel>
     </Tabs>
   );
