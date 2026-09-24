@@ -11,9 +11,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- Settings, System tab: the service version and the health of each component (`GET /health`), whether
-  the study content is built with its kana, kanji and vocabulary counts, the environment checks and
-  the content build, all in one place.
+- Settings, System tab: the service version and the health of each component (`GET /health`), and
+  whether the study content is built with its kana, kanji and vocabulary counts.
 
 ### Changed
 
