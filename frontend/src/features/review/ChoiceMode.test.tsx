@@ -2,7 +2,7 @@ import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
-import { makeKanaCard } from '../../test/fixtures';
+import { makeKanaCard, makeKanjiCard } from '../../test/fixtures';
 import { renderWithProviders } from '../../test/render';
 import { ChoiceMode } from './ChoiceMode';
 
@@ -73,5 +73,26 @@ describe('ChoiceMode', () => {
     await user.click(screen.getByRole('button', { name: /^a$/ }));
     await user.keyboard('{Enter}');
     expect(onContinue).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks the options as Japanese when the answer is Japanese', () => {
+    renderMode({
+      card: makeKanjiCard({
+        direction: 'meaning_to_kanji',
+        mode: 'multiple_choice',
+        accepted_answers: ['日'],
+        choices: ['日', '月', '火', '水'],
+      }),
+    });
+    for (const glyph of ['日', '月', '火', '水']) {
+      expect(screen.getByText(glyph)).toHaveAttribute('lang', 'ja');
+    }
+  });
+
+  it('leaves the options unmarked when the answer is English or romaji', () => {
+    renderMode();
+    for (const sound of ['a', 'i', 'u', 'e']) {
+      expect(screen.getByText(sound)).not.toHaveAttribute('lang');
+    }
   });
 });

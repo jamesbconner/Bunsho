@@ -82,10 +82,20 @@
 .key {
   margin-inline-end: var(--mantine-spacing-xs);
   font-family: var(--mantine-font-family-monospace);
-  font-size: var(--mantine-font-size-xs);
-  opacity: 0.7;
+  font-size: var(--mantine-font-size-sm);
+  opacity: 0.8;
 }
 
 .grades:focus {
   outline: none;
+}
+
+/* Japanese answer options: a glyph at button-text size is too small to tell apart, and a Mantine
+   button has a fixed height, so let it grow. The doubled class beats Mantine's `.root` rule. */
+.choiceJapanese.choiceJapanese {
+  height: auto;
+  min-height: var(--button-height);
+  padding-block: var(--mantine-spacing-xs);
+  font-size: 1.75rem;
+  line-height: 1.4;
 }

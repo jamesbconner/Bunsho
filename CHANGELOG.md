@@ -7,6 +7,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-09-24
+
+### Fixed
+
+- Study screen: the button text was too small to read comfortably. The grade buttons, the
+  multiple-choice options, Show answer, Submit, Continue and Home's "Study now" are larger, and so
+  are the number-key hints on them. Multiple-choice options whose answer is Japanese (a kana, a
+  kanji or a reading) are set at a much larger size so the glyphs are easy to tell apart, and the
+  option buttons grow to fit them.
+
 ## [1.2.0] - 2026-09-23
 
 ### Added

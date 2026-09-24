@@ -47,7 +47,7 @@ export function GradeBar({ intervals, disabled, onGrade, groupRef }: GradeBarPro
             key={grade}
             variant={grade === 3 ? 'filled' : 'light'}
             color={grade === 1 ? 'red' : undefined}
-            size="md"
+            size="lg"
             disabled={disabled}
             aria-keyshortcuts={key}
             onClick={() => {
