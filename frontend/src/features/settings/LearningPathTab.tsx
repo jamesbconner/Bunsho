@@ -98,6 +98,7 @@ export function LearningPathTab({ form }: { form: SettingsFormApi }) {
           <Stack gap="xs" mt="xs">
             <Switch
               label="Wait for kana before starting kanji"
+              data-path="kana_gate"
               checked={gate.kanji}
               disabled={kanaOff && !gate.kanji}
               onChange={(event) => {

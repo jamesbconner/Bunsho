@@ -10,6 +10,7 @@ import {
   RECOMMENDED_SETTINGS,
   SETTINGS_TABS,
   TAB_OF_FIELD,
+  errorPathsIn,
   firstErrorPathIn,
   firstTabWithErrors,
   isSettingsDirty,
@@ -431,5 +432,20 @@ describe('settings tabs', () => {
     expect(firstErrorPathIn(errors, 'pace')).toBe('rollover_hour');
     expect(firstErrorPathIn(errors, 'reviewing')).toBe('kana_mode');
     expect(firstErrorPathIn(errors, 'learning')).toBeNull();
+  });
+
+  it('lists every errored field of a tab in the order recorded, skipping empty messages', () => {
+    const errors = {
+      active_levels: 'Bad',
+      kana_mode: 'Bad',
+      mastery_threshold_percent: 'Bad',
+      kana_gate: '',
+      new_card_policy: undefined,
+    };
+    expect(errorPathsIn(errors, 'learning')).toEqual([
+      'active_levels',
+      'mastery_threshold_percent',
+    ]);
+    expect(errorPathsIn(errors, 'pace')).toEqual([]);
   });
 });

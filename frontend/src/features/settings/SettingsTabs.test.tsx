@@ -285,6 +285,108 @@ describe('Settings tabs: errors on another tab', () => {
     });
     expect(tabNamed('Reviewing (has errors)')).toBeInTheDocument();
     expect(screen.getByText('Not an allowed mode')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByLabelText('Kana review mode')).toHaveFocus();
+    });
+  });
+
+  it('focuses the study-day select when the server rejects the rollover hour', async () => {
+    const user = userEvent.setup();
+    serveSettings();
+    server.use(
+      http.put('/api/v1/settings', () =>
+        HttpResponse.json(
+          {
+            detail: [{ loc: ['body', 'rollover_hour'], msg: 'Not an hour', type: 'value_error' }],
+          },
+          { status: 422 },
+        ),
+      ),
+    );
+    await openSettings();
+    await openTab(user, 'Pace');
+    await user.selectOptions(screen.getByLabelText('A new study day starts at'), '6:00');
+    await openTab(user, 'Reviewing');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(tabNamed(/^Pace/)).toHaveAttribute('aria-selected', 'true');
+    });
+    expect(await screen.findByText('Not an hour')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByLabelText('A new study day starts at')).toHaveFocus();
+    });
+  });
+
+  it('focuses the first Kana-first switch when the gate error is on Learning path', async () => {
+    const user = userEvent.setup();
+    serveSettings();
+    await openSettings();
+    await user.click(screen.getByRole('switch', { name: 'Wait for kana before starting kanji' }));
+    await user.click(screen.getByRole('switch', { name: 'Introduce new kana' }));
+    await openTab(user, 'Reviewing');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(tabNamed(/^Learning path/)).toHaveAttribute('aria-selected', 'true');
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByRole('switch', { name: 'Wait for kana before starting kanji' }),
+      ).toHaveFocus();
+    });
+  });
+
+  it('focuses the selected tab when the only Kana-first switch that is on is not the first', async () => {
+    const user = userEvent.setup();
+    serveSettings();
+    await openSettings();
+    await user.click(
+      screen.getByRole('switch', { name: 'Wait for kana before starting vocabulary' }),
+    );
+    await user.click(screen.getByRole('switch', { name: 'Introduce new kana' }));
+    // The kanji switch is now greyed out, so it cannot take focus.
+    expect(
+      screen.getByRole('switch', { name: 'Wait for kana before starting kanji' }),
+    ).toBeDisabled();
+    await openTab(user, 'Reviewing');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(tabNamed('Learning path (has errors)')).toHaveFocus();
+    });
+    expect(tabNamed('Learning path (has errors)')).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('focuses the selected tab when the error is on a control that cannot take focus', async () => {
+    const user = userEvent.setup();
+    serveSettings(makeSettings({ new_card_policy: 'pinned_levels' }));
+    await openSettings();
+    await user.click(screen.getByRole('checkbox', { name: 'N5' }));
+    await openTab(user, 'Reviewing');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(tabNamed('Learning path (has errors)')).toHaveFocus();
+    });
+    expect(screen.getByText('Pick at least one level.')).toBeInTheDocument();
+  });
+
+  it('focuses the first errored field that can take focus, not just the first recorded error', async () => {
+    const user = userEvent.setup();
+    serveSettings(makeSettings({ new_card_policy: 'pinned_levels' }));
+    await openSettings();
+    // active_levels is recorded before the mastery threshold, but only the threshold is an input.
+    await user.click(screen.getByRole('checkbox', { name: 'N5' }));
+    await user.click(screen.getByRole('radio', { name: /Mastery unlock/ }));
+    await setNumber(user, 'Mastery needed to unlock the next level', '');
+    await openTab(user, 'Reviewing');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('textbox', { name: /Mastery needed/ })).toHaveFocus();
+    });
+    expect(screen.getByText('Pick at least one level.')).toBeInTheDocument();
   });
 
   it('clears the mark of a single tab when Reset refills the form', async () => {

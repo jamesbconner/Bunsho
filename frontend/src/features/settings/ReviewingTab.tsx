@@ -10,6 +10,7 @@ export function ReviewingTab({ form }: { form: SettingsFormApi }) {
   const select = (field: 'kana_mode' | 'kanji_mode' | 'vocab_mode', label: string) => (
     <NativeSelect
       label={label}
+      data-path={field}
       data={REVIEW_MODE_OPTIONS}
       value={values[field]}
       error={typeof form.errors[field] === 'string' ? form.errors[field] : undefined}

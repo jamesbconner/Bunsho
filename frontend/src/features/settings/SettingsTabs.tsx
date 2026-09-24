@@ -13,7 +13,7 @@ import { SaveBar } from './SaveBar';
 import {
   RECOMMENDED_SETTINGS,
   SETTINGS_TABS,
-  firstErrorPathIn,
+  errorPathsIn,
   firstTabWithErrors,
   isSettingsDirty,
   placeServerErrors,
@@ -42,10 +42,11 @@ export function SettingsTabs({ initial }: { initial: ReviewSettings }) {
   });
   const { mutate: sendSettings } = save;
 
-  // The field to focus once its tab is the one shown. It is state, and each request a fresh object, so
-  // the effect runs again even when the target tab is already the current one; `focused` remembers
-  // which request was served, so a later visit to that tab does not steal focus again.
-  const [focusRequest, setFocusRequest] = useState<{ tab: string; path: string } | null>(null);
+  // The errored fields to try, in order, once their tab is the one shown. It is state, and each
+  // request a fresh object, so the effect runs again even when the target tab is already the current
+  // one; `focused` remembers which request was served, so a later visit to that tab does not steal
+  // focus again.
+  const [focusRequest, setFocusRequest] = useState<{ tab: string; paths: string[] } | null>(null);
   const focused = useRef<object | null>(null);
   const { getInputNode } = form;
 
@@ -53,17 +54,23 @@ export function SettingsTabs({ initial }: { initial: ReviewSettings }) {
     if (focusRequest === null || focusRequest.tab !== tab || focused.current === focusRequest)
       return;
     focused.current = focusRequest;
-    // Not every control is one the form tracks; a missing node is simply not focused.
-    getInputNode(focusRequest.path)?.focus();
+    // Not every control has a node the form can find, or can take focus (a disabled switch, chips, the
+    // slider). Focus the first errored field that can; otherwise the selected tab, whose name says
+    // "(has errors)", so a keyboard or screen-reader user is told where they are and why.
+    for (const path of focusRequest.paths) {
+      const node = getInputNode(path);
+      node?.focus();
+      if (node !== null && node !== undefined && document.activeElement === node) return;
+    }
+    document.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus();
   }, [tab, focusRequest, getInputNode]);
 
   /** After a failed Save or a placed 422: show the first tab with an error, and focus its field. */
   const showFirstError = (errors: Readonly<Record<string, unknown>>) => {
     const target = firstTabWithErrors(errors);
     if (target === null) return;
-    const path = firstErrorPathIn(errors, target);
     setTab(target);
-    setFocusRequest(path === null ? null : { tab: target, path });
+    setFocusRequest({ tab: target, paths: errorPathsIn(errors, target) });
   };
 
   const submit = (request: ReviewSettingsInput) => {

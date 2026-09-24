@@ -327,13 +327,17 @@ export function firstTabWithErrors(errors: Readonly<Record<string, unknown>>): F
   return FORM_TABS.find((tab) => tabs.has(tab)) ?? null;
 }
 
+/** Every errored field path on `tab`, in the order the errors were recorded. */
+export function errorPathsIn(errors: Readonly<Record<string, unknown>>, tab: FormTab): string[] {
+  return Object.entries(errors)
+    .filter(([path, message]) => hasMessage(message) && tabOfField(path) === tab)
+    .map(([path]) => path);
+}
+
 /** The first errored field path on `tab`, in the order the errors were recorded. */
 export function firstErrorPathIn(
   errors: Readonly<Record<string, unknown>>,
   tab: FormTab,
 ): string | null {
-  for (const [path, message] of Object.entries(errors)) {
-    if (hasMessage(message) && tabOfField(path) === tab) return path;
-  }
-  return null;
+  return errorPathsIn(errors, tab)[0] ?? null;
 }

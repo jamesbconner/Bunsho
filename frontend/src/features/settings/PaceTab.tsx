@@ -69,6 +69,7 @@ export function PaceTab({ form }: { form: SettingsFormApi }) {
           label="A new study day starts at"
           description="In the server's timezone (the TZ setting). Daily limits reset then."
           data={HOURS}
+          data-path="rollover_hour"
           value={String(values.rollover_hour)}
           onChange={(event) => {
             form.setFieldValue('rollover_hour', Number(event.currentTarget.value));
