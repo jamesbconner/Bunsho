@@ -14,6 +14,8 @@ const HOURS = Array.from({ length: 24 }, (_, hour) => ({
   label: `${hour}:00`,
 }));
 
+const SWITCHED_OFF = 'Switched off in Learning path.';
+
 /** How much and how often: daily new-card limits, when the study day starts, target retention. */
 export function PaceTab({ form }: { form: SettingsFormApi }) {
   const retentionId = useId();
@@ -34,6 +36,7 @@ export function PaceTab({ form }: { form: SettingsFormApi }) {
             max={LIMIT_MAX}
             allowDecimal={false}
             disabled={!values.type_enabled.kana}
+            description={values.type_enabled.kana ? undefined : SWITCHED_OFF}
             {...form.getInputProps('new_limits.kana')}
           />
           <NumberInput
@@ -42,6 +45,7 @@ export function PaceTab({ form }: { form: SettingsFormApi }) {
             max={LIMIT_MAX}
             allowDecimal={false}
             disabled={!values.type_enabled.kanji}
+            description={values.type_enabled.kanji ? undefined : SWITCHED_OFF}
             {...form.getInputProps('new_limits.kanji')}
           />
           <NumberInput
@@ -50,6 +54,7 @@ export function PaceTab({ form }: { form: SettingsFormApi }) {
             max={LIMIT_MAX}
             allowDecimal={false}
             disabled={!values.type_enabled.vocab}
+            description={values.type_enabled.vocab ? undefined : SWITCHED_OFF}
             {...form.getInputProps('new_limits.vocab')}
           />
         </Group>

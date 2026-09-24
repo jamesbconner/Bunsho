@@ -121,7 +121,7 @@ describe('App', () => {
     goTo('/settings');
     render(<App />);
     expect(
-      await screen.findByRole('button', { name: 'Reset to recommended values' }),
+      await screen.findByRole('button', { name: 'Reset all tabs to recommended values' }),
     ).toBeInTheDocument();
   });
 

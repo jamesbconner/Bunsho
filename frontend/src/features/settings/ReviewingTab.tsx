@@ -12,6 +12,7 @@ export function ReviewingTab({ form }: { form: SettingsFormApi }) {
       label={label}
       data={REVIEW_MODE_OPTIONS}
       value={values[field]}
+      error={typeof form.errors[field] === 'string' ? form.errors[field] : undefined}
       onChange={(event) => {
         form.setFieldValue(field, event.currentTarget.value as SettingsFormValues[typeof field]);
       }}

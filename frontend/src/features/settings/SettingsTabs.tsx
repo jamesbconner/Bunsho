@@ -1,4 +1,4 @@
-import { Skeleton, Tabs } from '@mantine/core';
+import { Box, Skeleton, Tabs, VisuallyHidden } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
 import { lazy, Suspense, useState } from 'react';
@@ -13,8 +13,11 @@ import { SaveBar } from './SaveBar';
 import {
   RECOMMENDED_SETTINGS,
   SETTINGS_TABS,
+  firstErrorPathIn,
+  firstTabWithErrors,
   isSettingsDirty,
   placeServerErrors,
+  tabsWithErrors,
   toFormValues,
   toRequest,
   validateSettings,
@@ -39,6 +42,19 @@ export function SettingsTabs({ initial }: { initial: ReviewSettings }) {
   });
   const { mutate: sendSettings } = save;
 
+  /** After a failed Save or a placed 422: show the first tab with an error, and focus its field. */
+  const showFirstError = (errors: Readonly<Record<string, unknown>>) => {
+    const target = firstTabWithErrors(errors);
+    if (target === null) return;
+    setTab(target);
+    const path = firstErrorPathIn(errors, target);
+    if (path === null) return;
+    // The panel is shown on the next render; focus what the form tracks (not every control is one).
+    window.setTimeout(() => {
+      form.getInputNode(path)?.focus();
+    }, 0);
+  };
+
   const submit = (request: ReviewSettingsInput) => {
     setGeneral(null);
     sendSettings(request, {
@@ -52,6 +68,7 @@ export function SettingsTabs({ initial }: { initial: ReviewSettings }) {
         if (error instanceof ApiError && error.status === 422) {
           const placed = placeServerErrors(error);
           form.setErrors(placed.fields);
+          showFirstError(placed.fields);
           if (placed.general !== null) setGeneral({ message: placed.general, retryable: false });
           return;
         }
@@ -61,21 +78,48 @@ export function SettingsTabs({ initial }: { initial: ReviewSettings }) {
   };
 
   const dirty = isSettingsDirty(form.getValues(), form.getInitialValues());
+  const errorTabs = tabsWithErrors(form.errors);
 
   return (
     <Tabs value={tab} onChange={setTab} keepMounted={false}>
       <Tabs.List aria-label="Settings sections">
-        {SETTINGS_TABS.map(({ value, label }) => (
-          <Tabs.Tab key={value} value={value}>
-            {label}
-          </Tabs.Tab>
-        ))}
+        {SETTINGS_TABS.map(({ value, label }) => {
+          const failing = value !== 'system' && errorTabs.has(value);
+          return (
+            <Tabs.Tab
+              key={value}
+              value={value}
+              color={failing ? 'red' : undefined}
+              rightSection={
+                failing ? (
+                  <Box
+                    component="span"
+                    w={8}
+                    h={8}
+                    bg="red"
+                    style={{ borderRadius: '50%' }}
+                    aria-hidden
+                  />
+                ) : null
+              }
+            >
+              {label}
+              {failing && ' '}
+              {failing && <VisuallyHidden>(has errors)</VisuallyHidden>}
+            </Tabs.Tab>
+          );
+        })}
       </Tabs.List>
 
       <form
-        onSubmit={form.onSubmit((submitted) => {
-          submit(toRequest(submitted));
-        })}
+        onSubmit={form.onSubmit(
+          (submitted) => {
+            submit(toRequest(submitted));
+          },
+          (errors) => {
+            showFirstError(errors);
+          },
+        )}
         noValidate
       >
         <Tabs.Panel value="learning" pt="md" keepMounted>

@@ -28,7 +28,7 @@ export function SaveBar({ dirty, saving, general, onRetry, onReset }: SaveBarPro
           Save
         </Button>
         <Button variant="subtle" onClick={onReset}>
-          Reset to recommended values
+          Reset all tabs to recommended values
         </Button>
         {dirty && (
           <Text size="sm" c="dimmed">
