@@ -14,7 +14,6 @@ const NAVIGATION = [
   { to: '/review', label: 'Study' },
   { to: '/stats', label: 'Statistics' },
   { to: '/settings', label: 'Settings' },
-  { to: '/build', label: 'Build content' },
 ] as const;
 
 /** The frame around every logged-in page: header, navigation and the page itself. */

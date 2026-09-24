@@ -44,7 +44,7 @@ function renderReview() {
     <Routes>
       <Route path="/" element={<p>Dashboard</p>} />
       <Route path="/review" element={<ReviewPage />} />
-      <Route path="/build" element={<p>Build page</p>} />
+      <Route path="/settings" element={<p>Build page</p>} />
     </Routes>,
     { initialEntries: ['/review'] },
   );
@@ -294,7 +294,7 @@ describe('ReviewPage', () => {
     expect(await screen.findByText('Nothing to study yet')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Build your content' })).toHaveAttribute(
       'href',
-      '/build',
+      '/settings?tab=system',
     );
   });
 

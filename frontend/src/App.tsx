@@ -2,7 +2,7 @@ import { MantineProvider } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { lazy, useState } from 'react';
-import { BrowserRouter, Route, Routes } from 'react-router';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 
 import { AuthProvider } from './auth/AuthProvider';
 import { RequireAuth } from './auth/RequireAuth';
@@ -29,9 +29,6 @@ const StatsPage = lazy(() =>
 const SettingsPage = lazy(() =>
   import('./features/settings/SettingsPage').then((module) => ({ default: module.SettingsPage })),
 );
-const BuildPage = lazy(() =>
-  import('./features/build/BuildPanel').then((module) => ({ default: module.BuildPanel })),
-);
 
 export function App() {
   const [queryClient] = useState(createQueryClient);
@@ -56,7 +53,7 @@ export function App() {
                   <Route path="review" element={<ReviewPage />} />
                   <Route path="stats" element={<StatsPage />} />
                   <Route path="settings" element={<SettingsPage />} />
-                  <Route path="build" element={<BuildPage />} />
+                  <Route path="build" element={<Navigate to="/settings?tab=system" replace />} />
                   <Route path="*" element={<NotFoundPage />} />
                 </Route>
               </Route>

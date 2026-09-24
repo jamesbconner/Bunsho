@@ -25,7 +25,7 @@ function renderHome() {
   return renderWithProviders(
     <Routes>
       <Route index element={<HomePage />} />
-      <Route path="build" element={<p>Build page</p>} />
+      <Route path="settings" element={<p>Build page</p>} />
     </Routes>,
   );
 }

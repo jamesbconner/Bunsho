@@ -19,7 +19,7 @@ function renderStats() {
   return renderWithProviders(
     <Routes>
       <Route path="/" element={<StatsPage />} />
-      <Route path="/build" element={<p>Build page</p>} />
+      <Route path="/settings" element={<p>Build page</p>} />
     </Routes>,
   );
 }
@@ -125,7 +125,7 @@ describe('StatsPage', () => {
     expect(await screen.findByText('Nothing to show yet')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Build your content' })).toHaveAttribute(
       'href',
-      '/build',
+      '/settings?tab=system',
     );
   });
 
