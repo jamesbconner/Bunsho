@@ -35,6 +35,7 @@ function rememberLogin() {
   window.localStorage.setItem(REFRESH_TOKEN_KEY, 'r1');
   server.use(
     http.post('/api/v1/auth/refresh', () => HttpResponse.json(TOKENS)),
+    http.post('/api/v1/auth/logout', () => new HttpResponse(null, { status: 204 })),
     http.get('/api/v1/content/summary', () => HttpResponse.json(SUMMARY)),
     http.get('/api/v1/reviews/next', () => HttpResponse.json(makeNextCard(makeKanaCard()))),
     http.get('/api/v1/stats/summary', () => HttpResponse.json(makeStatsSummary())),

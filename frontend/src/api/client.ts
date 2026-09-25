@@ -78,3 +78,19 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     throw error;
   }
 }
+
+/**
+ * Ask the server to end the login session behind `refreshToken`. Best effort: it never throws.
+ * The caller has already forgotten the session locally, so when the server cannot be reached the
+ * token simply stays valid until it expires, as it did before logout reached the server.
+ */
+export async function revokeSession(refreshToken: string): Promise<void> {
+  try {
+    await rawRequest<void>('/auth/logout', {
+      method: 'POST',
+      body: { refresh_token: refreshToken },
+    });
+  } catch {
+    // Nothing to do: logging the error could only leak information, and the user is logged out here.
+  }
+}
