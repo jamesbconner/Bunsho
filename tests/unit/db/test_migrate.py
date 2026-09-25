@@ -1,3 +1,4 @@
+import importlib.util
 import logging
 import os
 import shutil
@@ -10,6 +11,7 @@ from pathlib import Path
 import filelock
 import pytest
 from alembic.autogenerate import compare_metadata
+from alembic.operations import Operations
 from alembic.runtime.migration import MigrationContext
 from alembic.util.exc import CommandError
 from sqlalchemy import create_engine
@@ -31,10 +33,16 @@ def _tables(db_path: Path) -> set[str]:
 def test_fresh_database_is_created_without_backup(tmp_path: Path) -> None:
     db = tmp_path / "data" / "progress.db"
     result = run_migrations(db, backup_dir=tmp_path / "backups", now=lambda: NOW)
-    assert (result.from_revision, result.to_revision) == (None, "0001")
+    assert (result.from_revision, result.to_revision) == (None, "0002")
     assert result.upgraded is True
     assert result.backup_path is None
-    assert {"card_state", "review_log", "app_setting", "alembic_version"} <= _tables(db)
+    assert {
+        "card_state",
+        "review_log",
+        "app_setting",
+        "revoked_session",
+        "alembic_version",
+    } <= _tables(db)
     assert not (tmp_path / "backups").exists()
 
 
@@ -42,7 +50,7 @@ def test_second_run_is_a_no_op(tmp_path: Path) -> None:
     db = tmp_path / "progress.db"
     run_migrations(db, backup_dir=tmp_path / "backups", now=lambda: NOW)
     again = run_migrations(db, backup_dir=tmp_path / "backups", now=lambda: NOW)
-    assert (again.from_revision, again.upgraded, again.backup_path) == ("0001", False, None)
+    assert (again.from_revision, again.upgraded, again.backup_path) == ("0002", False, None)
     assert not (tmp_path / "backups").exists()
 
 
@@ -260,3 +268,38 @@ def test_backup_of_a_wal_database_contains_uncheckpointed_writes(tmp_path: Path)
 
     with closing(sqlite3.connect(backup)) as con:
         assert con.execute(query).fetchall() == [("kept",)]
+
+
+def _migration_0002() -> object:
+    path = Path(migrate.__file__).parent / "migrations" / "versions" / "0002_revoked_session.py"
+    spec = importlib.util.spec_from_file_location("migration_0002", path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_migration_0002_downgrade_removes_only_its_table_and_upgrade_restores_it(
+    tmp_path: Path,
+) -> None:
+    db = tmp_path / "progress.db"
+    run_migrations(db, backup_dir=tmp_path / "backups", now=lambda: NOW)
+    module = _migration_0002()
+    engine = create_engine(URL.create("sqlite", database=str(db)))
+    try:
+        with (
+            engine.begin() as connection,
+            Operations.context(MigrationContext.configure(connection)),
+        ):
+            module.downgrade()  # type: ignore[attr-defined]
+        assert "revoked_session" not in _tables(db)
+        assert {"card_state", "review_log", "app_setting"} <= _tables(db)
+        with (
+            engine.begin() as connection,
+            Operations.context(MigrationContext.configure(connection)),
+        ):
+            module.upgrade()  # type: ignore[attr-defined]
+        assert "revoked_session" in _tables(db)
+    finally:
+        engine.dispose()

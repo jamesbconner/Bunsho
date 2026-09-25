@@ -102,3 +102,15 @@ class NewCardPolicy(Protocol):
             limit: Maximum number of cards, or ``None`` for no limit.
         """
         ...
+
+
+class SessionRevocations(Protocol):
+    """Remembers which login sessions were logged out."""
+
+    def is_revoked(self, sid: str) -> bool:
+        """Return whether ``sid`` was revoked. Synchronous and free of I/O."""
+        ...
+
+    async def revoke(self, sid: str, expires_at: datetime) -> None:
+        """Revoke ``sid`` until ``expires_at`` (after that no token of it can be valid anyway)."""
+        ...
