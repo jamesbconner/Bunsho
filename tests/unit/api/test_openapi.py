@@ -8,6 +8,7 @@ PUBLIC = {
     ("get", "/api/v1/health"),
     ("post", "/api/v1/auth/login"),
     ("post", "/api/v1/auth/refresh"),
+    ("post", "/api/v1/auth/logout"),  # always 204, needs no bearer token
 }
 HTTP_METHODS = {"get", "post", "put", "patch", "delete"}
 

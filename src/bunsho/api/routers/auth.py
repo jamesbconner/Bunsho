@@ -5,11 +5,12 @@ from __future__ import annotations
 import asyncio
 import math
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from bunsho.api.deps import ServicesDep
 from bunsho.api.responses import TOO_MANY_REQUESTS, UNAUTHORIZED
-from bunsho.api.schemas import LoginRequest, RefreshRequest, TokenResponse
+from bunsho.api.schemas import LoginRequest, LogoutRequest, RefreshRequest, TokenResponse
+from bunsho.orchestration.session_logout import logout_session
 from bunsho.services.auth import AuthError, TokenPair
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -76,3 +77,27 @@ async def refresh(body: RefreshRequest, services: ServicesDep) -> TokenResponse:
             "Invalid or expired refresh token",
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
+
+
+@router.post(
+    "/logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+    operation_id="logout",
+)
+async def logout(body: LogoutRequest, request: Request, services: ServicesDep) -> Response:
+    """End the login session behind a refresh token and close its open streams.
+
+    Always answers 204, whether or not the token was valid, so the endpoint tells a caller
+    nothing about a token. It needs no bearer token (the access token may have expired),
+    and it never touches the login throttle.
+    """
+    client = request.client.host if request.client else "unknown"
+    await logout_session(
+        services.auth,
+        services.sockets,
+        body.refresh_token,
+        logger=services.ctx.logger,
+        client=client,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

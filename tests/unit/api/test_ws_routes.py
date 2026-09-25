@@ -331,3 +331,73 @@ def test_two_workers_failing_together_leave_no_unretrieved_exception(
     gc.collect()
     assert "never retrieved" not in caplog.text
     assert tasks.unsubscribed == 1
+
+
+LOGOUT = "/api/v1/auth/logout"
+
+
+def _registered_sockets(client: TestClient) -> int:
+    return client.app.state.services.sockets.count()  # type: ignore[no-any-return,attr-defined]
+
+
+def _logout(client: TestClient, tokens: dict) -> int:  # type: ignore[type-arg]
+    return client.post(LOGOUT, json={"refresh_token": tokens["refresh_token"]}).status_code
+
+
+def _authenticate(ws: Any, tokens: dict) -> None:  # type: ignore[type-arg]
+    ws.send_json({"type": "auth", "token": tokens["access_token"]})
+    assert ws.receive_json() == {"type": "ready"}
+
+
+def test_logout_closes_that_sessions_open_socket(stub_client: TestClient) -> None:
+    tokens = _login(stub_client)
+    with stub_client.websocket_connect(WS) as ws:
+        _authenticate(ws, tokens)
+        assert _registered_sockets(stub_client) == 1
+        assert _logout(stub_client, tokens) == 204
+        with pytest.raises(WebSocketDisconnect) as info:
+            ws.receive_json()
+        assert info.value.code == 1008
+        close_and_wait_for_unsubscribe(stub_client, ws)
+    assert _registered_sockets(stub_client) == 0
+
+
+def test_logout_leaves_another_sessions_socket_streaming(stub_client: TestClient) -> None:
+    one, two = _login(stub_client), _login(stub_client)
+    headers_two = {"Authorization": f"Bearer {two['access_token']}"}
+    with (
+        stub_client.websocket_connect(WS) as ws_one,
+        stub_client.websocket_connect(WS) as ws_two,
+    ):
+        _authenticate(ws_one, one)
+        _authenticate(ws_two, two)
+        assert _registered_sockets(stub_client) == 2
+        assert _logout(stub_client, one) == 204
+        with pytest.raises(WebSocketDisconnect) as info:
+            ws_one.receive_json()
+        assert info.value.code == 1008
+        started = stub_client.post(BUILD, json={}, headers=headers_two)
+        assert started.status_code == 202
+        event = ws_two.receive_json()  # session two still streams
+        assert event["type"] == "event"
+        ws_one.close()
+        close_and_wait_for_unsubscribe(stub_client, ws_two)
+    assert _registered_sockets(stub_client) == 0
+
+
+def test_a_revoked_sessions_token_cannot_open_a_socket(stub_client: TestClient) -> None:
+    tokens = _login(stub_client)
+    assert _logout(stub_client, tokens) == 204
+    message = {"type": "auth", "token": tokens["access_token"]}
+    assert _connect_and_expect_close(stub_client, message) == 1008
+    assert _registered_sockets(stub_client) == 0
+    assert _subscriber_count(stub_client) == 0
+
+
+def test_a_socket_is_unregistered_when_its_client_disconnects(stub_client: TestClient) -> None:
+    tokens = _login(stub_client)
+    with stub_client.websocket_connect(WS) as ws:
+        _authenticate(ws, tokens)
+        assert _registered_sockets(stub_client) == 1
+        close_and_wait_for_unsubscribe(stub_client, ws)
+    assert _registered_sockets(stub_client) == 0

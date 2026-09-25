@@ -27,7 +27,7 @@ from bunsho.api.schemas import (
     build_status,
 )
 from bunsho.orchestration.build_tasks import BuildEvent
-from bunsho.services.auth import AuthError
+from bunsho.services.auth import AuthError, SessionClaims
 
 router = APIRouter(tags=["ws"])
 
@@ -40,8 +40,8 @@ MAX_AUTH_MESSAGE_CHARS = 8192
 POLICY_VIOLATION = 1008
 INTERNAL_ERROR = 1011
 
-_AuthOutcome = Literal[
-    "ok", "disconnected", "timeout", "not_text", "oversized", "malformed", "invalid_token"
+_FailedAuth = Literal[
+    "disconnected", "timeout", "not_text", "oversized", "malformed", "invalid_token"
 ]
 
 
@@ -49,8 +49,10 @@ def _client_host(websocket: WebSocket) -> str:
     return websocket.client.host if websocket.client else "unknown"
 
 
-def _check_first_message(message: Mapping[str, Any], services: ServicesDep) -> _AuthOutcome:
-    """Classify the first frame the client sent."""
+def _check_first_message(
+    message: Mapping[str, Any], services: ServicesDep
+) -> SessionClaims | _FailedAuth:
+    """Classify the first frame the client sent: the session it authenticates, or why not."""
     if message["type"] == "websocket.disconnect":
         return "disconnected"
     text = message.get("text")
@@ -63,35 +65,34 @@ def _check_first_message(message: Mapping[str, Any], services: ServicesDep) -> _
     except (ValueError, RecursionError, ValidationError):
         return "malformed"
     try:
-        services.auth.authenticate(auth.token)
+        return services.auth.authenticate_session(auth.token)
     except AuthError:
         return "invalid_token"
-    return "ok"
 
 
-async def _authenticate(websocket: WebSocket, services: ServicesDep) -> bool:
+async def _authenticate(websocket: WebSocket, services: ServicesDep) -> SessionClaims | None:
     """Read the first message and validate the access token.
 
     Closes the socket with 1008 on any failure and never raises for client misbehaviour.
 
     Returns:
-        ``True`` when the client authenticated.
+        The authenticated session, or ``None`` when the client did not authenticate.
     """
     try:
         message = await asyncio.wait_for(websocket.receive(), AUTH_TIMEOUT_SECONDS)
     except TimeoutError:
-        outcome: _AuthOutcome = "timeout"
+        outcome: SessionClaims | _FailedAuth = "timeout"
     else:
         outcome = _check_first_message(message, services)
     client = _client_host(websocket)
-    if outcome == "ok":
+    if isinstance(outcome, SessionClaims):
         services.ctx.logger.info("ws_auth_ok client=%s", client)
-        return True
+        return outcome
     services.ctx.logger.warning("ws_auth_failed client=%s outcome=%s", client, outcome)
     if outcome != "disconnected":
         with suppress(RuntimeError, WebSocketDisconnect):
             await websocket.close(code=POLICY_VIOLATION)
-    return False
+    return None
 
 
 async def _forward(websocket: WebSocket, queue: asyncio.Queue[BuildEvent]) -> None:
@@ -153,11 +154,16 @@ async def task_stream(websocket: WebSocket, services: ServicesDep) -> None:
     Protocol: the client sends ``{"type": "auth", "token": <access token>}`` within
     ``AUTH_TIMEOUT_SECONDS``; the server answers ``ready``, then a ``snapshot`` of the
     latest build (if any), then one ``event`` per build event. Any other first message
-    closes the socket with code 1008.
+    closes the socket with code 1008. A logout of the session that authenticated the socket
+    closes it with 1008 too.
     """
     await websocket.accept()
-    if not await _authenticate(websocket, services):
+    session = await _authenticate(websocket, services)
+    if session is None:
         return
+    # Nothing is awaited between the token check and this registration, so a logout cannot
+    # slip in between and miss this socket.
+    services.sockets.register(session.sid, websocket)
     try:
         await _stream(websocket, services)
     except Exception as exc:
@@ -167,3 +173,5 @@ async def task_stream(websocket: WebSocket, services: ServicesDep) -> None:
         )
         with suppress(RuntimeError, WebSocketDisconnect):
             await websocket.close(code=INTERNAL_ERROR)
+    finally:
+        services.sockets.unregister(session.sid, websocket)
