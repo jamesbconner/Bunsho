@@ -22,6 +22,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Every login now has a session id in its tokens. Tokens issued before this version are rejected,
   so you have to log in once after upgrading.
 - The note beside Log out now says it also ends the session on the server.
+- Upgrading adds a `revoked_session` table to `progress.db` (migration 0002; the existing
+  pre-upgrade backup is taken as usual). Rolling back to 1.3.x afterwards will not start against the
+  migrated database: restore the pre-upgrade backup from `data/backups/` (reviews done since the
+  upgrade are lost).
 
 ### Fixed
 

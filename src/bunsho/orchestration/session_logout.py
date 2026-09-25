@@ -38,6 +38,6 @@ async def logout_session(
     except AuthError:
         logger.debug("logout_ignored client=%s", client)
         return False
-    closed = await sockets.close_session(sid)
+    closed = await sockets.close_session(sid, logger=logger)
     logger.info("logout sid=%s client=%s sockets_closed=%d", sid, client, closed)
     return True

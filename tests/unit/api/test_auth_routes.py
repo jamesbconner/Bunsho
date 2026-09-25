@@ -192,7 +192,32 @@ def test_a_token_that_does_not_verify_gets_the_same_204(client: TestClient, toke
     assert _logout(client, token).status_code == 204
 
 
-def test_an_expired_refresh_token_gets_204_and_revokes_nothing(client: TestClient) -> None:
+class _RecordingSocket:
+    def __init__(self, *, error: Exception | None = None) -> None:
+        self.closed_with: list[int] = []
+        self._error = error
+
+    async def close(self, code: int = 1000) -> None:
+        if self._error is not None:
+            raise self._error
+        self.closed_with.append(code)
+
+
+def test_logout_still_204_and_revokes_when_a_socket_fails_to_close(client: TestClient) -> None:
+    tokens = _login(client).json()
+    services = client.app.state.services  # type: ignore[attr-defined]
+    sid = services.auth.authenticate_session(tokens["access_token"]).sid
+    failing, healthy = _RecordingSocket(error=OSError("boom")), _RecordingSocket()
+    services.sockets.register(sid, failing)
+    services.sockets.register(sid, healthy)
+    response = _logout(client, tokens["refresh_token"])
+    assert response.status_code == 204
+    assert healthy.closed_with == [1008]
+    assert client.post(REFRESH, json={"refresh_token": tokens["refresh_token"]}).status_code == 401
+    assert client.get(SUMMARY, headers=_bearer(tokens["access_token"])).status_code == 401
+
+
+def test_an_expired_refresh_token_gets_204(client: TestClient) -> None:
     past = AuthService(make_auth_settings(), clock=lambda: datetime(2020, 1, 1, tzinfo=UTC))
     assert _logout(client, past.issue_tokens("james").refresh_token).status_code == 204
 

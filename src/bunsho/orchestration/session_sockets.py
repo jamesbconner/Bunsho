@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from contextlib import suppress
 from typing import Protocol
 
@@ -49,17 +50,34 @@ class SessionSockets:
             return len(self._by_sid.get(sid, ()))
         return sum(len(sockets) for sockets in self._by_sid.values())
 
-    async def close_session(self, sid: str, code: int = POLICY_VIOLATION) -> int:
-        """Close every socket of session ``sid``.
+    async def close_session(
+        self,
+        sid: str,
+        code: int = POLICY_VIOLATION,
+        *,
+        logger: logging.Logger | None = None,
+    ) -> int:
+        """Close every socket of session ``sid``, whatever happens to any one of them.
 
-        A socket that is already closed or whose client vanished is skipped silently, so one
-        dead socket never keeps the others open.
+        A socket that is already closed or whose client vanished is skipped silently. Any
+        other ``Exception`` from a close is logged as a warning (its type name only, never its
+        text) and the loop carries on, so a failing socket never keeps the others open.
+        Cancellation is not an ``Exception`` and still propagates.
+
+        Args:
+            sid: The session whose sockets to close.
+            code: The WebSocket close code to send.
+            logger: Receives ``session_socket_close_failed``; defaults to the ``bunsho`` logger.
 
         Returns:
-            How many sockets it asked to close.
+            How many sockets it asked to close, including any whose close failed.
         """
+        log = logger or logging.getLogger("bunsho")
         sockets = list(self._by_sid.get(sid, ()))
         for socket in sockets:
-            with suppress(RuntimeError, WebSocketDisconnect):
-                await socket.close(code=code)
+            try:
+                with suppress(RuntimeError, WebSocketDisconnect):
+                    await socket.close(code=code)
+            except Exception as exc:
+                log.warning("session_socket_close_failed error_type=%s", type(exc).__name__)
         return len(sockets)
