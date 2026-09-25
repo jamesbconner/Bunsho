@@ -1,9 +1,11 @@
-import { Chip, Group, Input, NumberInput, Stack, Switch, Text, Title } from '@mantine/core';
+import { Chip, Divider, Group, Input, NumberInput, Stack, Text } from '@mantine/core';
 import { useId } from 'react';
 
 import { groupAria } from './fieldAria';
 import { PolicyField } from './PolicyField';
 import { LEVELS, type Level, type SettingsFormApi } from './settingsForm';
+import { SettingsSection } from './SettingsSection';
+import { SwitchRow } from './SwitchRow';
 
 type SwitchPath =
   | 'type_enabled.kana'
@@ -43,9 +45,8 @@ export function LearningPathTab({ form }: { form: SettingsFormApi }) {
   const kanaOff = !values.type_enabled.kana;
 
   return (
-    <Stack gap="xl">
-      <Stack gap="md">
-        <Title order={3}>New cards</Title>
+    <Stack gap="lg">
+      <SettingsSection title="New cards">
         <PolicyField
           value={values.new_card_policy}
           onChange={(policy) => {
@@ -57,37 +58,43 @@ export function LearningPathTab({ form }: { form: SettingsFormApi }) {
               : undefined
           }
         />
-        <Stack gap="xs">
-          <Switch
+      </SettingsSection>
+
+      <SettingsSection
+        title="Content types"
+        hint="A type that is switched off introduces no new cards. Cards you already started stay due, so no progress is lost."
+      >
+        <Stack gap="sm">
+          <SwitchRow
             label="Introduce new kana"
+            description="Hiragana and katakana."
             checked={values.type_enabled.kana}
             onChange={(event) => {
               setSwitch('type_enabled.kana', event.currentTarget.checked);
             }}
           />
-          <Switch
+          <Divider />
+          <SwitchRow
             label="Introduce new kanji"
+            description="Characters, with their meanings and readings."
             checked={values.type_enabled.kanji}
             onChange={(event) => {
               setSwitch('type_enabled.kanji', event.currentTarget.checked);
             }}
           />
-          <Switch
+          <Divider />
+          <SwitchRow
             label="Introduce new vocabulary"
+            description="Words, with example sentences."
             checked={values.type_enabled.vocab}
             onChange={(event) => {
               setSwitch('type_enabled.vocab', event.currentTarget.checked);
             }}
           />
-          <Text size="sm" c="dimmed">
-            A type that is switched off introduces no new cards. Cards you already started stay due,
-            so no progress is lost.
-          </Text>
         </Stack>
-      </Stack>
+      </SettingsSection>
 
-      <Stack gap="md">
-        <Title order={3}>Kana first</Title>
+      <SettingsSection title="Kana first">
         <Input.Wrapper
           id={gateId}
           label="Start kanji and vocabulary after kana"
@@ -95,9 +102,10 @@ export function LearningPathTab({ form }: { form: SettingsFormApi }) {
           error={gateError}
           {...groupAria(gateId, gateError !== undefined)}
         >
-          <Stack gap="xs" mt="xs">
-            <Switch
+          <Stack gap="sm" mt="sm">
+            <SwitchRow
               label="Wait for kana before starting kanji"
+              description="New kanji start once your kana are well known."
               data-path="kana_gate"
               checked={gate.kanji}
               disabled={kanaOff && !gate.kanji}
@@ -105,8 +113,10 @@ export function LearningPathTab({ form }: { form: SettingsFormApi }) {
                 setSwitch('kana_gate.kanji', event.currentTarget.checked);
               }}
             />
-            <Switch
+            <Divider />
+            <SwitchRow
               label="Wait for kana before starting vocabulary"
+              description="New vocabulary starts once your kana are well known."
               checked={gate.vocab}
               disabled={kanaOff && !gate.vocab}
               onChange={(event) => {
@@ -131,10 +141,9 @@ export function LearningPathTab({ form }: { form: SettingsFormApi }) {
             {...form.getInputProps('kana_gate.threshold_percent')}
           />
         )}
-      </Stack>
+      </SettingsSection>
 
-      <Stack gap="md">
-        <Title order={3}>Levels</Title>
+      <SettingsSection title="Levels">
         <Input.Wrapper
           id={levelsId}
           label="Levels to study"
@@ -174,7 +183,7 @@ export function LearningPathTab({ form }: { form: SettingsFormApi }) {
           disabled={!mastery}
           {...form.getInputProps('mastery_threshold_percent')}
         />
-      </Stack>
+      </SettingsSection>
     </Stack>
   );
 }

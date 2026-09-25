@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import type { InitialEntry } from 'react-router';
@@ -34,6 +34,12 @@ export async function openSettings(initialEntries: InitialEntry[] = ['/settings'
 /** Click the named tab ("Pace"); the accessible name may gain " (has errors)". */
 export async function openTab(user: User, name: string) {
   await user.click(screen.getByRole('tab', { name: new RegExp(`^${name}`) }));
+}
+
+/** Pick a review mode ("Typed") for a card type ("Kana") in its segmented control. */
+export async function chooseMode(user: User, kind: string, mode: string) {
+  const group = screen.getByRole('radiogroup', { name: `${kind} review mode` });
+  await user.click(within(group).getByRole('radio', { name: mode }));
 }
 
 export async function setNumber(user: User, name: string, value: string) {

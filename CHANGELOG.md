@@ -7,6 +7,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-24
+
+### Added
+
+- Settings: **Discard changes** puts every field on every tab back to what was last saved.
+
+### Changed
+
+- Settings: the Learning path, Pace and Reviewing tabs are now titled cards, like the System tab.
+  The type and Kana first switches are rows with the label and its explanation on the left and
+  the toggle on the right.
+- Settings, Reviewing: each card type's review mode is a segmented control (Flip, Typed, Multiple
+  choice) with a line explaining the selected mode, instead of a drop-down.
+- Settings: Save, Discard and Reset stay in view at the bottom of the window, and the bar says
+  whether there are unsaved changes.
+- Settings: the form cannot be edited while a save is in progress, so the saved values can no
+  longer overwrite an edit made in that moment. The field you were in keeps its focus afterwards.
+
 ## [1.2.1] - 2026-09-24
 
 ### Fixed
