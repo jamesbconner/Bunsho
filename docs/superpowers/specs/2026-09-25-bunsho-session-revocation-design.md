@@ -36,7 +36,7 @@ other Security & Auth items (B, C, D).
 |---|---|
 | Revocation unit | The **session**: every token pair from one login shares a `sid` claim; revoking the sid revokes the refresh token and every access token of that login. |
 | Rotation | None. `refresh` keeps the sid, so concurrent tabs cannot invalidate each other. |
-| Store | `revoked_sessions` table in `progress.db` (Alembic migration 0002) plus a write-through in-memory set loaded at startup. |
+| Store | `revoked_session` table in `progress.db` (Alembic migration 0002) plus a write-through in-memory set loaded at startup. |
 | Old tokens | Tokens without a `sid` are rejected. The user logs in once after upgrading; a 401 on refresh already means "signed out" in the UI. |
 | Logout endpoint | `POST /auth/logout` with `{refresh_token}`, no bearer required, always 204. |
 | Open sockets | Closed with 1008 when their session is revoked. |
@@ -51,16 +51,18 @@ other Security & Auth items (B, C, D).
 `login` lets it default (a new sid); `refresh` passes the sid of the token it decoded, so the new
 pair belongs to the same session. `_decode` adds `sid` to the required claims.
 
-`_decode` returns a small frozen dataclass `TokenClaims(username, sid, expires_at)` internally. The
-public surface:
+`_decode` returns a small frozen dataclass `SessionClaims(username, sid)`. The public surface:
 
 - `authenticate(access_token) -> str` is unchanged (username), so REST dependencies do not change.
 - `authenticate_session(access_token) -> SessionClaims` returns username and sid; the WebSocket
   handler uses it.
 - `async revoke(refresh_token) -> str` (async because the store writes to SQLite) decodes the
-  token, revokes its sid until the token's `exp`, and returns the sid. It raises `AuthError` for a
-  token that does not verify (the endpoint swallows that). An already-revoked but otherwise valid
-  token is a no-op that still returns its sid.
+  token, revokes its sid until **now plus the refresh TTL** (the latest any token of that session can
+  expire; using the presented token's own `exp` would let a newer refresh token from another tab
+  come back to life once the row was pruned), and returns the sid. It raises `AuthError` for a
+  token that does not verify, is expired, or belongs to an already-revoked session (the endpoint
+  answers 204 for all of these; an already-revoked session's sockets were closed by the first
+  logout).
 
 `_decode` raises `AuthError("session revoked")` when the sid is in the revocation set. The message
 never reaches a client: routers already answer with a fixed generic 401.
@@ -77,8 +79,9 @@ class SessionRevocations(Protocol):
 
 Implementation `RevokedSessionStore` next to `ProgressRepository` (in `db/`):
 
-- `revoked_sessions(sid TEXT PRIMARY KEY, expires_at)`; timestamps stored the way the other
-  `progress.db` tables store them (`db/timestamps.py`).
+- `revoked_session(sid TEXT PRIMARY KEY, expires_at)` (singular, like `card_state` and
+  `app_setting`); timestamps stored the way the other `progress.db` tables store them
+  (`db/timestamps.py`).
 - `RevokedSessionStore.load()` runs in `build_services` (already async, inside the lifespan): it
   deletes rows whose `expires_at` has passed and loads the remaining sids into a set.
 - `is_revoked` reads only the set, because `authenticate` runs on every request and WebSocket
@@ -147,6 +150,10 @@ Both `RevokedSessionStore` and `SessionSockets` are wired in `build_services` an
 Other tabs already follow through the `storage` event and only clear locally; only the tab that
 clicked Log out calls the server.
 
+The note beside the Log out button in `AppLayout` ("Logging out only affects this browser: the
+server cannot end sessions yet.") becomes false and is replaced by "Logging out also ends this
+session on the server." Its visible-text and `aria-describedby` test is updated to match.
+
 ### Session epoch
 
 `session.ts` gets a module-level counter `epoch`:
@@ -206,8 +213,8 @@ Frontend (Vitest):
 ## Housekeeping
 
 - Version 1.4.0 in the files a release bump touches (`pyproject.toml`, `src/bunsho/__init__.py`,
-  `uv.lock`, `frontend/package.json`, `frontend/package-lock.json`, `frontend/openapi.json`,
-  `README.md`) and a CHANGELOG entry (Added: `POST /auth/logout`, session revocation; Changed:
+  `uv.lock`, `frontend/package.json`, `frontend/package-lock.json`, `frontend/openapi.json`) and a
+  CHANGELOG entry (Added: `POST /auth/logout`, session revocation; Changed:
   tokens issued before the upgrade are rejected, so log in once; Fixed: a refresh in flight can no
   longer undo a logout).
 - README: a short paragraph on logout semantics (server-side revocation, open streams closed,
