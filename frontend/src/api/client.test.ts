@@ -191,3 +191,82 @@ describe('sessions without a refresh token', () => {
     await expect(ensureAccessToken()).resolves.toBe('access-1');
   });
 });
+
+function deferred() {
+  let release: () => void = () => {};
+  const promise = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return { promise, release };
+}
+
+describe('a refresh that is overtaken by a logout', () => {
+  beforeEach(() => {
+    session.clear();
+    session.setTokens(pair(1));
+  });
+
+  it('cannot bring the logged-out session back', async () => {
+    const gate = deferred();
+    server.use(
+      http.post(REFRESH, async () => {
+        await gate.promise;
+        return HttpResponse.json({ ...pair(2), token_type: 'bearer' });
+      }),
+    );
+    const pending = refreshSession();
+    const settled = expect(pending).rejects.toMatchObject({ status: 401 });
+    session.clear(); // the user logs out while the refresh is in flight
+    gate.release();
+    await settled;
+    expect(session.getRefreshToken()).toBeNull();
+    expect(session.getAccessToken()).toBeNull();
+  });
+
+  it('a late 401 for the old token does not end a newer login', async () => {
+    const expired = vi.fn();
+    const stop = session.onExpired(expired);
+    const gate = deferred();
+    server.use(
+      http.post(REFRESH, async () => {
+        await gate.promise;
+        return HttpResponse.json({ detail: 'Invalid or expired refresh token' }, { status: 401 });
+      }),
+    );
+    const pending = refreshSession();
+    const settled = expect(pending).rejects.toMatchObject({ status: 401 });
+    session.clear();
+    session.setTokens(pair(5)); // the user logs in again
+    gate.release();
+    await settled;
+    expect(expired).not.toHaveBeenCalled();
+    expect(session.getRefreshToken()).toBe('refresh-5');
+    stop();
+  });
+
+  it('a new session refreshes on its own instead of joining the old refresh', async () => {
+    const gate = deferred();
+    const calls: string[] = [];
+    server.use(
+      http.post(REFRESH, async ({ request: incoming }) => {
+        const body = (await incoming.json()) as { refresh_token: string };
+        calls.push(body.refresh_token);
+        if (body.refresh_token === 'refresh-1') await gate.promise;
+        return HttpResponse.json({ ...pair(7), token_type: 'bearer' });
+      }),
+    );
+    const stale = refreshSession();
+    const staleSettled = expect(stale).rejects.toMatchObject({ status: 401 });
+    await vi.waitFor(() => {
+      expect(calls).toContain('refresh-1');
+    });
+    session.clear();
+    session.setTokens(pair(6));
+    await refreshSession();
+    expect([...calls].sort()).toEqual(['refresh-1', 'refresh-6']);
+    expect(session.getRefreshToken()).toBe('refresh-7');
+    gate.release();
+    await staleSettled;
+    expect(session.getRefreshToken()).toBe('refresh-7'); // the old answer changed nothing
+  });
+});

@@ -73,3 +73,61 @@ describe('session', () => {
     }).not.toThrow();
   });
 });
+
+describe('session epoch', () => {
+  beforeEach(() => {
+    session.clear();
+  });
+
+  it('clear and expire each start a new epoch, setTokens does not', () => {
+    const start = session.getEpoch();
+    session.setTokens(PAIR);
+    expect(session.getEpoch()).toBe(start);
+    session.clear();
+    expect(session.getEpoch()).toBe(start + 1);
+    session.expire();
+    expect(session.getEpoch()).toBe(start + 2);
+  });
+
+  it('stores a pair that belongs to the current epoch and says so', () => {
+    expect(session.setTokens(PAIR, 1_000, session.getEpoch())).toBe(true);
+    expect(session.getRefreshToken()).toBe('refresh-1');
+    expect(session.getAccessToken(1_000)).toBe('access-1');
+  });
+
+  it('discards a pair from an earlier epoch and says so', () => {
+    const stale = session.getEpoch();
+    session.clear();
+    expect(session.setTokens(PAIR, 1_000, stale)).toBe(false);
+    expect(session.getRefreshToken()).toBeNull();
+    expect(session.getAccessToken(1_000)).toBeNull();
+  });
+
+  it('a login without an epoch always stores its pair', () => {
+    session.clear();
+    expect(session.setTokens(PAIR, 1_000)).toBe(true);
+    expect(session.getRefreshToken()).toBe('refresh-1');
+  });
+
+  it('expire from an earlier epoch leaves a newer session and its listeners alone', () => {
+    const listener = vi.fn();
+    const stop = session.onExpired(listener);
+    const stale = session.getEpoch();
+    session.clear();
+    session.setTokens(PAIR);
+    session.expire(stale);
+    expect(session.getRefreshToken()).toBe('refresh-1');
+    expect(listener).not.toHaveBeenCalled();
+    stop();
+  });
+
+  it('expire from the current epoch ends the session and tells the listeners', () => {
+    const listener = vi.fn();
+    const stop = session.onExpired(listener);
+    session.setTokens(PAIR);
+    session.expire(session.getEpoch());
+    expect(session.getRefreshToken()).toBeNull();
+    expect(listener).toHaveBeenCalledTimes(1);
+    stop();
+  });
+});

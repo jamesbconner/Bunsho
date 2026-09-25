@@ -16,6 +16,12 @@ export type TokenPair = Pick<
 
 let accessToken: string | null = null;
 let accessExpiresAt = 0;
+/**
+ * Counts how many times the session was ended (logout, expiry). A refresh remembers the epoch it
+ * started in and its answer is dropped when the epoch has moved on, so a slow refresh can never
+ * bring back a session the user has since left, or end the one they logged in to afterwards.
+ */
+let epoch = 0;
 const expiredListeners = new Set<() => void>();
 
 function readStoredRefreshToken(): string | null {
@@ -47,22 +53,37 @@ export const session = {
     return accessToken !== null && now < accessExpiresAt - EXPIRY_MARGIN_MS ? accessToken : null;
   },
 
-  /** Store a fresh token pair (after login or refresh). */
-  setTokens(pair: TokenPair, now: number = Date.now()): void {
+  /** The current epoch (see above); capture it before an asynchronous call that stores tokens. */
+  getEpoch(): number {
+    return epoch;
+  },
+
+  /**
+   * Store a fresh token pair (after login or refresh). With `expectedEpoch`, a pair from an earlier
+   * epoch is dropped. Returns whether the pair was stored.
+   */
+  setTokens(pair: TokenPair, now: number = Date.now(), expectedEpoch?: number): boolean {
+    if (expectedEpoch !== undefined && expectedEpoch !== epoch) return false;
     accessToken = pair.access_token;
     accessExpiresAt = now + pair.expires_in * 1000;
     writeStoredRefreshToken(pair.refresh_token);
+    return true;
   },
 
-  /** Forget everything (logout). Does not notify. */
+  /** Forget everything (logout) and start a new epoch. Does not notify. */
   clear(): void {
+    epoch += 1;
     accessToken = null;
     accessExpiresAt = 0;
     writeStoredRefreshToken(null);
   },
 
-  /** The server rejected the refresh token: forget everything and tell the listeners. */
-  expire(): void {
+  /**
+   * The server rejected the refresh token: forget everything and tell the listeners. With
+   * `expectedEpoch`, a rejection that belongs to an earlier epoch is ignored.
+   */
+  expire(expectedEpoch?: number): void {
+    if (expectedEpoch !== undefined && expectedEpoch !== epoch) return;
     this.clear();
     for (const listener of [...expiredListeners]) {
       listener();
