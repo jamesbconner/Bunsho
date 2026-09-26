@@ -2,8 +2,10 @@ import dataclasses
 import inspect
 import json
 import socket
+import sys
 import threading
 import time
+import traceback
 import urllib.error
 import urllib.request
 from collections.abc import Iterator
@@ -16,6 +18,7 @@ from fastapi.testclient import TestClient
 from bunsho.api.app import create_app
 from bunsho.api.routers.ws import MAX_AUTH_MESSAGE_CHARS
 from bunsho.config.normalizer import ConfigError
+from bunsho.config.service import ServiceConfig
 from bunsho.main import (
     GRACEFUL_SHUTDOWN_SECONDS,
     WS_MAX_MESSAGE_BYTES,
@@ -133,6 +136,67 @@ def _free_port() -> int:
         return int(sock.getsockname()[1])
 
 
+SERVER_THREAD_NAME = "bunsho-live-server"
+STARTUP_TIMEOUT_SECONDS = 60.0
+"""A normal start takes about 0.1 s, but the Windows CI runner for PR #34 needed more than 15 s
+once and the cause is unknown; be generous. A start that fails fast (the thread dies) never waits
+this long."""
+
+
+def _stack_of(thread: threading.Thread) -> str:
+    """Where ``thread`` is right now, for a failure message (empty when it has no frame)."""
+    frame = sys._current_frames().get(thread.ident) if thread.ident is not None else None
+    return "".join(traceback.format_stack(frame)) if frame is not None else "(no frame)"
+
+
+def _start_server(
+    config: ServiceConfig, startup_timeout: float = STARTUP_TIMEOUT_SECONDS
+) -> tuple[uvicorn.Server, threading.Thread]:
+    """Run the app in uvicorn on a thread and wait until it accepts connections."""
+    server = uvicorn.Server(build_server_config(create_app(config), config))
+    thread = threading.Thread(target=server.run, daemon=True, name=SERVER_THREAD_NAME)
+    thread.start()
+    deadline = time.monotonic() + startup_timeout
+    try:
+        while not server.started:
+            assert thread.is_alive(), "server thread died during startup"
+            assert time.monotonic() < deadline, (
+                f"server did not start within {startup_timeout:g}s; its thread was at:\n"
+                f"{_stack_of(thread)}"
+            )
+            time.sleep(0.02)
+    except BaseException:
+        # The fixture never reaches its own cleanup when startup fails, so stop the thread here:
+        # left running it would migrate concurrently with the next test's server.
+        _stop_server(server, thread)
+        raise
+    return server, thread
+
+
+def _stop_server(server: uvicorn.Server, thread: threading.Thread) -> None:
+    """Ask the server to exit and wait for its thread."""
+    server.should_exit = True
+    thread.join(timeout=15)
+    assert not thread.is_alive(), "server thread did not shut down"
+
+
+def test_a_server_that_misses_its_startup_deadline_is_stopped_not_leaked(tmp_path: Path) -> None:
+    """A late start must not leave its thread running in the background.
+
+    A leaked thread keeps running Alembic while the next test's server starts. Alembic's ``op``
+    proxy is process-global, so the two migrations corrupt each other: the CI errors
+    ``'NoneType' object has no attribute 'create_index'`` and, locally, a native access violation.
+    """
+    base = make_service_config(tmp_path)
+    port = _free_port()
+    config = dataclasses.replace(base, server=dataclasses.replace(base.server, port=port))
+    with pytest.raises(AssertionError, match="did not start") as failure:
+        _start_server(config, startup_timeout=0.0)
+    assert not [t for t in threading.enumerate() if t.name == SERVER_THREAD_NAME]
+    # The failure says where the server thread was, so a slow CI start can be diagnosed.
+    assert "its thread was at" in str(failure.value)
+
+
 @pytest.fixture
 def live_server(tmp_path: Path, request: pytest.FixtureRequest) -> Iterator[int]:
     """Serve the app on a free port exactly as the launcher configures uvicorn.
@@ -145,20 +209,11 @@ def live_server(tmp_path: Path, request: pytest.FixtureRequest) -> Iterator[int]
         base.server, port=port, trusted_proxies=getattr(request, "param", ())
     )
     config = dataclasses.replace(base, server=server_settings)
-    server = uvicorn.Server(build_server_config(create_app(config), config))
-    thread = threading.Thread(target=server.run, daemon=True)
-    thread.start()
-    deadline = time.monotonic() + 15
-    while not server.started:
-        assert thread.is_alive(), "server thread died during startup"
-        assert time.monotonic() < deadline, "server did not start"
-        time.sleep(0.02)
+    server, thread = _start_server(config)
     try:
         yield port
     finally:
-        server.should_exit = True
-        thread.join(timeout=15)
-        assert not thread.is_alive(), "server thread did not shut down"
+        _stop_server(server, thread)
 
 
 def _login_status(port: int, forwarded_for: str) -> int:
