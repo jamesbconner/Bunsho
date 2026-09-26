@@ -329,7 +329,7 @@ Deferred from Plan 1C, delivered later:
 - [x] Tested the logout -> login stream lifecycle (stream closes on logout, a new one opens after
       login) and the StrictMode double mount
 
-### WebSocket connection cap
+### WebSocket connection cap (1.4.0)
 
 - [x] At most 16 WebSockets can be connected but unauthenticated at once (`PendingAuthGate`); a
       17th is refused with 1008 before it is accepted. The cap is global, not per client host (behind

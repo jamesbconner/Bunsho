@@ -7,13 +7,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Security
-
-- The live-progress WebSocket now allows at most 16 connections that have not yet sent their login
-  token. A client that opens more is refused (close code 1008) before the connection is accepted,
-  so an unauthenticated client can no longer hold an unbounded number of sockets open. Connections
-  that have authenticated do not count towards the limit.
-
 ## [1.4.0] - 2026-09-25
 
 ### Added
@@ -39,6 +32,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A token refresh that was in flight when you logged out could sign you back in. A refresh answer
   that arrives after the session ended is now discarded, and a late rejection of the old token no
   longer signs you out of a newer login.
+
+### Security
+
+- The live-progress WebSocket now allows at most 16 connections that have not yet sent their login
+  token. A client that opens more is refused (close code 1008) before the connection is accepted,
+  so an unauthenticated client can no longer hold an unbounded number of sockets open. Connections
+  that have authenticated do not count towards the limit.
 
 ## [1.3.0] - 2026-09-24
 
