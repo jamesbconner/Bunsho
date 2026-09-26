@@ -54,6 +54,13 @@ function goTo(path: string) {
   window.history.pushState({}, '', path);
 }
 
+function setNonceMeta(content: string) {
+  const meta = document.createElement('meta');
+  meta.setAttribute('name', 'csp-nonce');
+  meta.setAttribute('content', content);
+  document.head.appendChild(meta);
+}
+
 describe('App', () => {
   // Pay the cost of transforming the lazy pages (recharts is large) outside the tests' 1 s waits.
   beforeAll(async () => {
@@ -187,5 +194,50 @@ describe('App', () => {
     expect(window.localStorage.getItem(REFRESH_TOKEN_KEY)).toBeNull();
     expect(screen.getByText('Your session has expired. Please log in again.')).toBeInTheDocument();
     expect(await screen.findByText('Log in again to continue.')).toBeInTheDocument();
+  });
+
+  describe('CSP nonce', () => {
+    afterEach(() => {
+      document.head.querySelectorAll('meta[name="csp-nonce"]').forEach((node) => {
+        node.remove();
+      });
+      delete (globalThis as { __webpack_nonce__?: string }).__webpack_nonce__;
+    });
+
+    it('publishes the nonce for the scroll-lock style of the overlays', async () => {
+      setNonceMeta('test-nonce+123==');
+      render(<App />);
+      await screen.findByLabelText('Username');
+      expect((globalThis as { __webpack_nonce__?: string }).__webpack_nonce__).toBe(
+        'test-nonce+123==',
+      );
+    });
+
+    it('publishes nothing when the page has no nonce (development)', async () => {
+      render(<App />);
+      await screen.findByLabelText('Username');
+      expect('__webpack_nonce__' in globalThis).toBe(false);
+    });
+
+    it("puts the page's nonce on Mantine's runtime style elements", async () => {
+      setNonceMeta('test-nonce+123==');
+      render(<App />);
+      await screen.findByLabelText('Username');
+      const styles = Array.from(document.querySelectorAll('style[data-mantine-styles]'));
+      expect(styles.length).toBeGreaterThan(0);
+      for (const style of styles) {
+        expect(style.getAttribute('nonce')).toBe('test-nonce+123==');
+      }
+    });
+
+    it('adds no nonce when the page has none (development)', async () => {
+      render(<App />);
+      await screen.findByLabelText('Username');
+      const styles = Array.from(document.querySelectorAll('style[data-mantine-styles]'));
+      expect(styles.length).toBeGreaterThan(0);
+      for (const style of styles) {
+        expect(style.hasAttribute('nonce')).toBe(false);
+      }
+    });
   });
 });

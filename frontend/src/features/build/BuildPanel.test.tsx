@@ -1,15 +1,19 @@
-import { act, screen, waitFor, within } from '@testing-library/react';
-import { type QueryClient } from '@tanstack/react-query';
+import { MantineProvider } from '@mantine/core';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { MemoryRouter } from 'react-router';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { BuildStatus } from '../../api/endpoints';
 import { queryKeys } from '../../api/queries';
 import { session } from '../../auth/session';
+import { installCspNonce } from '../../csp';
 import { makeBuildStatus, makeReport } from '../../test/fixtures';
-import { renderWithProviders } from '../../test/render';
+import { createTestQueryClient, renderWithProviders } from '../../test/render';
 import { server } from '../../test/server';
+import { theme } from '../../theme';
 import { BuildPanel } from './BuildPanel';
 
 const BUILD = '/api/v1/admin/content/build';
@@ -102,6 +106,48 @@ describe('BuildPanel', () => {
     );
     await waitFor(() => {
       expect(posted).toEqual([{ dry_run: false }]);
+    });
+  });
+
+  describe('under a Content-Security-Policy nonce', () => {
+    const NONCE = 'test-nonce+123==';
+
+    afterEach(() => {
+      document.head.querySelectorAll('meta[name="csp-nonce"]').forEach((node) => {
+        node.remove();
+      });
+      delete (globalThis as { __webpack_nonce__?: string }).__webpack_nonce__;
+    });
+
+    it('gives the scroll-lock style of the open confirmation the nonce too', async () => {
+      const meta = document.createElement('meta');
+      meta.setAttribute('name', 'csp-nonce');
+      meta.setAttribute('content', NONCE);
+      document.head.appendChild(meta);
+      // What App does once at start: read the nonce for Mantine and publish it for the scroll lock.
+      const nonce = installCspNonce();
+
+      serve({ built: true });
+      render(
+        <MantineProvider theme={theme} env="test" getStyleNonce={() => nonce ?? ''}>
+          <QueryClientProvider client={createTestQueryClient()}>
+            <MemoryRouter>
+              <BuildPanel />
+            </MemoryRouter>
+          </QueryClientProvider>
+        </MantineProvider>,
+      );
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole('button', { name: 'Rebuild content' }));
+      await screen.findByRole('dialog');
+
+      // The tag react-remove-scroll builds lives only while the dialog is open (a scroll lock).
+      const styles = Array.from(document.querySelectorAll('style'));
+      expect(document.body).toHaveAttribute('data-scroll-locked');
+      expect(styles.some((style) => style.textContent.includes('data-scroll-locked'))).toBe(true);
+      for (const style of styles) {
+        expect(style.getAttribute('nonce')).toBe(NONCE);
+      }
     });
   });
 

@@ -21,6 +21,7 @@ class ServerSettings:
     port: int
     cors_origins: tuple[str, ...]
     trusted_proxies: tuple[str, ...] = ()
+    csp_report_only: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +47,14 @@ class ServiceConfig:
 def _int(cfg: ConfigNormalizer, section: str, key: str, fallback: int, errors: list[str]) -> int:
     try:
         return cfg.get_int(section, key, fallback)
+    except ConfigError as exc:
+        errors.append(str(exc))
+        return fallback
+
+
+def _bool(cfg: ConfigNormalizer, section: str, key: str, fallback: bool, errors: list[str]) -> bool:
+    try:
+        return cfg.get_bool(section, key, fallback)
     except ConfigError as exc:
         errors.append(str(exc))
         return fallback
@@ -102,6 +111,7 @@ def validate_service_config(cfg: ConfigNormalizer) -> list[str]:
     for proxy in _trusted_proxies(cfg):
         if problem := _trusted_proxy_problem(proxy):
             errors.append(f"[server] trusted_proxies entry {proxy!r} {problem}")
+    _bool(cfg, "server", "csp_report_only", False, errors)
     if not cfg.get_string("auth", "username").strip():
         errors.append("[auth] username is required")
     if not cfg.get_string("auth", "password_hash").startswith(_ARGON2_PREFIX):
@@ -135,6 +145,7 @@ def load_service_config(cfg: ConfigNormalizer) -> ServiceConfig:
             port=cfg.get_int("server", "port", 8192),
             cors_origins=_origins(cfg),
             trusted_proxies=_trusted_proxies(cfg),
+            csp_report_only=cfg.get_bool("server", "csp_report_only", False),
         ),
         auth=AuthSettings(
             username=cfg.get_string("auth", "username").strip(),

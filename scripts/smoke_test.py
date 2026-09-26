@@ -126,6 +126,22 @@ def http_get(path: str) -> tuple[int, dict[str, str], bytes]:
         return exc.code, {name.lower(): value for name, value in exc.headers.items()}, exc.read()
 
 
+NONCE_META = re.compile(rb'(name="csp-nonce" content=")([^"]*)(")')
+
+
+def shell_nonce(body: bytes) -> bytes:
+    """The nonce in the shell's csp-nonce meta tag."""
+    match = NONCE_META.search(body)
+    if match is None:
+        raise SmokeFailure("the app shell has no csp-nonce meta tag")
+    return match.group(2)
+
+
+def without_nonce(body: bytes) -> bytes:
+    """The shell with its nonce blanked, so two responses can be compared."""
+    return NONCE_META.sub(rb"\1\3", body)
+
+
 def expect_frontend_served() -> None:
     """The container serves the built UI: shell, deep links, cache headers and JSON API 404s."""
     status, headers, body = http_get("/")
@@ -133,8 +149,20 @@ def expect_frontend_served() -> None:
     expect("text/html" in headers.get("content-type", ""), "GET / is not HTML")
     expect(b'<div id="root">' in body, "GET / did not return the app shell")
     expect(headers.get("cache-control") == "no-cache", "the app shell must not be cached")
+    nonce = shell_nonce(body)
+    expect(nonce not in (b"", b"__CSP_NONCE__"), "the shell still holds the nonce placeholder")
+    csp = headers.get("content-security-policy", "")
+    expect(f"'nonce-{nonce.decode()}'" in csp, "the shell CSP does not carry the body's nonce")
+    expect("script-src 'self'" in csp and "unsafe-inline" not in csp, "the shell CSP is not strict")
+    expect(headers.get("x-frame-options") == "DENY", "the shell lacks X-Frame-Options")
+    expect(headers.get("x-content-type-options") == "nosniff", "the shell lacks nosniff")
+    expect(headers.get("referrer-policy") == "no-referrer", "the shell lacks Referrer-Policy")
     status, _, deep_link = http_get("/build")
-    expect(status == 200 and deep_link == body, "a client-side route did not return the shell")
+    expect(
+        status == 200 and without_nonce(deep_link) == without_nonce(body),
+        "a client-side route did not return the shell",
+    )
+    expect(shell_nonce(deep_link) != nonce, "the nonce must change on every request")
     script = re.search(rb'/assets/[^"\']+\.js', body)
     expect(script is not None, "index.html references no hashed script")
     status, headers, _ = http_get(script.group(0).decode())
@@ -144,6 +172,13 @@ def expect_frontend_served() -> None:
     status, headers, _ = http_get("/api/v1/does-not-exist")
     expect(status == 404, f"an unknown API path returned {status}, not 404")
     expect("application/json" in headers.get("content-type", ""), "an API 404 must be JSON")
+    expect(
+        headers.get("content-security-policy") == "default-src 'none'; frame-ancestors 'none'",
+        "an API response must carry the default-deny CSP",
+    )
+    status, headers, _ = http_get("/docs")
+    expect(status == 200, f"/docs returned {status}, not 200")
+    expect("cdn.jsdelivr.net" in headers.get("content-security-policy", ""), "/docs needs its CSP")
 
 
 def expect(condition: bool, message: str) -> None:
