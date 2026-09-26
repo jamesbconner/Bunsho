@@ -201,6 +201,22 @@ describe('App', () => {
       document.head.querySelectorAll('meta[name="csp-nonce"]').forEach((node) => {
         node.remove();
       });
+      delete (globalThis as { __webpack_nonce__?: string }).__webpack_nonce__;
+    });
+
+    it('publishes the nonce for the scroll-lock style of the overlays', async () => {
+      setNonceMeta('test-nonce+123==');
+      render(<App />);
+      await screen.findByLabelText('Username');
+      expect((globalThis as { __webpack_nonce__?: string }).__webpack_nonce__).toBe(
+        'test-nonce+123==',
+      );
+    });
+
+    it('publishes nothing when the page has no nonce (development)', async () => {
+      render(<App />);
+      await screen.findByLabelText('Username');
+      expect('__webpack_nonce__' in globalThis).toBe(false);
     });
 
     it("puts the page's nonce on Mantine's runtime style elements", async () => {

@@ -12,3 +12,15 @@ export function readCspNonce(): string | undefined {
     return undefined;
   return content;
 }
+
+/**
+ * Read the nonce (see readCspNonce) and also publish it as `__webpack_nonce__`, the global that
+ * `get-nonce` reads on behalf of react-style-singleton, which builds the `<style>` tag behind
+ * Mantine's scroll lock (Modal and friends). MantineProvider's getStyleNonce does not reach it.
+ * Idempotent; leaves the global alone when there is no nonce (development).
+ */
+export function installCspNonce(): string | undefined {
+  const nonce = readCspNonce();
+  if (nonce !== undefined) (globalThis as { __webpack_nonce__?: string }).__webpack_nonce__ = nonce;
+  return nonce;
+}
