@@ -162,4 +162,27 @@ describe('Phone navigation drawer', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
   });
+
+  it('stays closed when the viewport is at least the phone breakpoint wide', async () => {
+    // jsdom's stub in src/test/setup.ts never matches; make every query match (a wide viewport).
+    const matchMedia = vi.spyOn(window, 'matchMedia').mockImplementation((query: string) => ({
+      matches: true,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }));
+    try {
+      renderLayout();
+      const burger = screen.getByRole('button', { name: 'Toggle navigation' });
+      await userEvent.click(burger);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(burger).toHaveAttribute('aria-expanded', 'false');
+    } finally {
+      matchMedia.mockRestore();
+    }
+  });
 });

@@ -1,5 +1,14 @@
-import { AppShell, Box, Burger, Button, Container, Group, Title } from '@mantine/core';
-import { useDisclosure } from '@mantine/hooks';
+import {
+  AppShell,
+  Box,
+  Burger,
+  Button,
+  Container,
+  Group,
+  Title,
+  useMantineTheme,
+} from '@mantine/core';
+import { useDisclosure, useMediaQuery } from '@mantine/hooks';
 import { Link, Outlet, useLocation } from 'react-router';
 
 import { ConnectionBadge } from '../realtime/ConnectionBadge';
@@ -17,6 +26,11 @@ import { PAGE_WIDTHS } from './pageWidths';
 export function AppLayout() {
   const [drawerOpened, { toggle, close }] = useDisclosure(false);
   const { pathname } = useLocation();
+  const theme = useMantineTheme();
+  const isWide = useMediaQuery(`(min-width: ${theme.breakpoints.sm})`);
+  // The drawer is for phones only. Past `sm` the burger is hidden, so an open drawer would be left
+  // invisible with the page's scroll still locked; derive "shown" instead of trusting the state.
+  const drawerShown = drawerOpened && !isWide;
 
   return (
     <AppShell header={{ height: 56 }} padding="md">
@@ -28,12 +42,12 @@ export function AppLayout() {
               <Group gap="lg" wrap="nowrap">
                 <Group gap="sm" wrap="nowrap">
                   <Burger
-                    opened={drawerOpened}
+                    opened={drawerShown}
                     onClick={toggle}
                     hiddenFrom="sm"
                     size="sm"
                     aria-label="Toggle navigation"
-                    aria-expanded={drawerOpened}
+                    aria-expanded={drawerShown}
                   />
                   <Title order={3} style={{ whiteSpace: 'nowrap' }}>
                     Bunshō <span lang="ja">文章</span>
@@ -73,7 +87,7 @@ export function AppLayout() {
           </Container>
         </Box>
       </AppShell.Header>
-      <NavDrawer opened={drawerOpened} onClose={close} />
+      <NavDrawer opened={drawerShown} onClose={close} />
       <AppShell.Main>
         <Outlet />
       </AppShell.Main>
