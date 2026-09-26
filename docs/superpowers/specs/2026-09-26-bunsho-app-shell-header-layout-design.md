@@ -31,8 +31,8 @@ header (breadcrumbs, per-page titles, a user name).
 | Navigation | The sidebar is removed. Header links (Home, Study, Statistics, Settings) inline on desktop; no dropdown menus for them. |
 | Account | One Account menu on the right of the header holds Log out and its "ends this session on the server" note. |
 | Connection badge | Stays in the header at every width. |
-| Theme toggle | In the header from `sm` up; inside the phone drawer below `sm` (see "Amended after the preview"). |
-| Phones (below `sm`) | Inline links, the theme toggle and the Account menu are hidden; a Burger opens a `Drawer` with the four links, the theme toggle, Log out and the note. The header bar keeps the burger, the title on one line and the badge. |
+| Theme toggle | In the header from `md` up; inside the phone drawer below `md` (see "Amended after the preview"). |
+| Phones (below `md`) | Inline links, the theme toggle and the Account menu are hidden; a Burger opens a `Drawer` with the four links, the theme toggle, Log out and the note. The header bar keeps the burger, the title on one line and the badge. |
 | Header width | The header's inner content uses the wide width, so it lines up with the dashboard pages. |
 
 ### Why layout routes, not route `handle`
@@ -73,7 +73,7 @@ components/
   PageWidth.tsx     new. props: size 'narrow' | 'wide'. <Container size=…> wrapping
                     <ErrorBoundary key={pathname}><Suspense><Outlet/></Suspense></ErrorBoundary>
   AccountMenu.tsx   new. Mantine Menu: target button, Log out item, the note. Desktop only.
-  NavDrawer.tsx     new. Mantine Drawer: four links, Log out, the note. Below `sm` only.
+  NavDrawer.tsx     new. Mantine Drawer: four links, Log out, the note. Below `md` only.
                     (Extracted so AppLayout stays a short composition of its parts.)
   navigation.ts     new. the NAVIGATION list, shared by the header links and the drawer
 ```
@@ -102,11 +102,11 @@ components/
 `AppShell` keeps `header={{ height: 56 }}` and loses `navbar`. Inside the header, one wide `Container`
 (with horizontal padding) holds a single `Group` with `justify="space-between"`:
 
-- Left: the Burger (`hiddenFrom="sm"`), the `Bunshō 文章` title (same markup, so `lang="ja"` stays),
-  then the four links in a `Group` with `visibleFrom="sm"`. Each link is a router `Link`;
+- Left: the Burger (`hiddenFrom="md"`), the `Bunshō 文章` title (same markup, so `lang="ja"` stays),
+  then the four links in a `Group` with `visibleFrom="md"`. Each link is a router `Link`;
   the current page gets `aria-current="page"` and a visible active style. The active test stays
   `pathname === to`, exactly as today.
-- Right: `ConnectionBadge`, then `ColorSchemeToggle` and `AccountMenu`, both `visibleFrom="sm"`.
+- Right: `ConnectionBadge`, then `ColorSchemeToggle` and `AccountMenu`, both `visibleFrom="md"`.
 - The title does not wrap (`white-space: nowrap`).
 
 `AppShell` `padding="md"` still gives the main area its gutters, so `PageWidth`'s `Container` uses
@@ -118,8 +118,17 @@ are the same at every viewport width (measured in the preview: both 730 to 1830 
 
 Built as a throwaway preview page, the first header design kept the theme toggle in the phone header
 bar. At 390 px the title wrapped mid-word and the badge truncated to "Li…"; at 360 px the toggle was
-clipped to "Aut". So below `sm` the toggle moves into the drawer, and the title gets `nowrap`. With
+clipped to "Aut". So below `md` the toggle moves into the drawer, and the title gets `nowrap`. With
 that the bar shows the burger, the full title and the full "Live" badge at 360 px.
+
+### Amended after the final review: the switch is at `md`, not `sm`
+
+Measured in a browser with exact-width frames: from `sm` (768 px) the links, theme toggle and Account
+menu together are wider than the header. At 768 px the Account button overflowed the container by
+25 px and the page by 9 px, and up to about 840 px the connection badge was squeezed to 34 to 40 px
+(natural 57 px). From 850 px everything fit. So every switch between the phone layout (burger and
+drawer) and the desktop layout (links, theme toggle, Account menu) is at `md` (62em, 992 px), and the
+viewport query that closes the drawer uses the same breakpoint.
 
 ### Account menu
 
@@ -132,7 +141,7 @@ a later "Signed in as…" line, and a bare button would lose the note on touch d
 
 ### Phone drawer
 
-The Burger toggles a `Drawer` (`hiddenFrom="sm"`) with the four links, the theme toggle, a Log out
+The Burger toggles a `Drawer` (`hiddenFrom="md"`) with the four links, the theme toggle, a Log out
 button and the note (same `aria-describedby` wiring). Choosing a link closes it. The burger keeps its
 `aria-label="Toggle navigation"` and gains `aria-expanded`. The drawer is unmounted when closed, so it
 is not a keyboard tab stop while hidden (an item in `TODO.md` under the mobile shell).

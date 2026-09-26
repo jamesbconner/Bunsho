@@ -27,8 +27,8 @@ export function AppLayout() {
   const [drawerOpened, { toggle, close }] = useDisclosure(false);
   const { pathname } = useLocation();
   const theme = useMantineTheme();
-  const isWide = useMediaQuery(`(min-width: ${theme.breakpoints.sm})`);
-  // The drawer is for phones only. Past `sm` the burger is hidden, so an open drawer would be left
+  const isWide = useMediaQuery(`(min-width: ${theme.breakpoints.md})`);
+  // The drawer is for phones only. Past `md` the burger is hidden, so an open drawer would be left
   // invisible with the page's scroll still locked; derive "shown" instead of trusting the state.
   const drawerShown = drawerOpened && !isWide;
 
@@ -44,7 +44,7 @@ export function AppLayout() {
                   <Burger
                     opened={drawerShown}
                     onClick={toggle}
-                    hiddenFrom="sm"
+                    hiddenFrom="md"
                     size="sm"
                     aria-label="Toggle navigation"
                     aria-expanded={drawerShown}
@@ -53,7 +53,7 @@ export function AppLayout() {
                     Bunshō <span lang="ja">文章</span>
                   </Title>
                 </Group>
-                <Box component="nav" aria-label="Main" visibleFrom="sm">
+                <Box component="nav" aria-label="Main" visibleFrom="md">
                   <Group gap={4} wrap="nowrap">
                     {NAVIGATION.map((item) => {
                       const current = isCurrentPage(pathname, item.to);
@@ -76,10 +76,10 @@ export function AppLayout() {
               <Group gap="xs" wrap="nowrap">
                 <ConnectionBadge />
                 {/* On a phone the theme toggle lives in the drawer; the bar has no room for it. */}
-                <Box visibleFrom="sm">
+                <Box visibleFrom="md">
                   <ColorSchemeToggle />
                 </Box>
-                <Box visibleFrom="sm">
+                <Box visibleFrom="md">
                   <AccountMenu />
                 </Box>
               </Group>

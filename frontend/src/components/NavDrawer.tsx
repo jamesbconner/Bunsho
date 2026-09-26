@@ -18,20 +18,23 @@ export function NavDrawer({ opened, onClose }: NavDrawerProps) {
   const noteId = useId();
 
   return (
-    <Drawer opened={opened} onClose={onClose} title="Menu" size="xs" hiddenFrom="sm">
+    <Drawer opened={opened} onClose={onClose} title="Menu" size="xs" hiddenFrom="md">
       <Stack gap="md">
         <nav aria-label="Pages">
-          {NAVIGATION.map((item) => (
-            <NavLink
-              key={item.to}
-              component={Link}
-              to={item.to}
-              label={item.label}
-              active={isCurrentPage(pathname, item.to)}
-              aria-current={isCurrentPage(pathname, item.to) ? 'page' : undefined}
-              onClick={onClose}
-            />
-          ))}
+          {NAVIGATION.map((item) => {
+            const current = isCurrentPage(pathname, item.to);
+            return (
+              <NavLink
+                key={item.to}
+                component={Link}
+                to={item.to}
+                label={item.label}
+                active={current}
+                aria-current={current ? 'page' : undefined}
+                onClick={onClose}
+              />
+            );
+          })}
         </nav>
         <Divider />
         <ColorSchemeToggle />

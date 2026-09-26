@@ -125,7 +125,7 @@ describe('Phone navigation drawer', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('opens with the pages, Log out and the note, and closes again', async () => {
+  it('opens with the pages, the theme toggle, Log out and the note', async () => {
     const logout = renderLayout();
     const burger = screen.getByRole('button', { name: 'Toggle navigation' });
     await userEvent.click(burger);
@@ -134,6 +134,7 @@ describe('Phone navigation drawer', () => {
     for (const name of ['Home', 'Study', 'Statistics', 'Settings']) {
       expect(drawer.getByRole('link', { name })).toBeInTheDocument();
     }
+    expect(drawer.getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page');
     expect(drawer.getByRole('radio', { name: 'Dark' })).toBeInTheDocument();
     const note = drawer.getByText(NOTE);
     expect(note).toBeVisible();
@@ -151,6 +152,10 @@ describe('Phone navigation drawer', () => {
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
+    expect(screen.getByRole('button', { name: 'Toggle navigation' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
   });
 
   it('closes on Escape', async () => {
@@ -181,6 +186,7 @@ describe('Phone navigation drawer', () => {
       await userEvent.click(burger);
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       expect(burger).toHaveAttribute('aria-expanded', 'false');
+      expect(matchMedia).toHaveBeenCalledWith('(min-width: 62em)');
     } finally {
       matchMedia.mockRestore();
     }

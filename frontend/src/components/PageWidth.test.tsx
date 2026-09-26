@@ -50,6 +50,7 @@ describe('PageWidth', () => {
   it('offers a narrow and a wide column, in that order of size', () => {
     expect(PAGE_WIDTHS.narrow).toBe(720);
     expect(PAGE_WIDTHS.wide).toBe(1100);
+    expect(PAGE_WIDTHS.narrow).toBeLessThan(PAGE_WIDTHS.wide);
   });
 
   it('puts each page in the column its layout route asks for', () => {
@@ -57,7 +58,7 @@ describe('PageWidth', () => {
     expect(widthOf('Wide page')).toBe('wide');
   });
 
-  it('centers the column and limits it to its width', () => {
+  it('limits the column to its width', () => {
     renderRoutes(['/narrow']);
     const column = screen.getByText('Narrow page').closest<HTMLElement>('[data-width]');
     // 720 px is 45 rem; Mantine wraps it in a scale factor.
