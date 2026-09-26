@@ -15,6 +15,11 @@ from fastapi.responses import JSONResponse
 
 from bunsho import APP_NAME, __version__
 from bunsho.api import API_PREFIX
+from bunsho.api.error_middleware import (
+    INTERNAL_ERROR_DETAIL,
+    UnhandledErrorMiddleware,
+    unhandled_error_response,
+)
 from bunsho.api.routers import admin, auth, content, health, reviews, settings, stats, ws
 from bunsho.api.schemas import WsAuthMessage, WsEvent, WsReady, WsSnapshot
 from bunsho.api.services import ServiceOverrides, build_services
@@ -49,9 +54,6 @@ _REVIEW_ERROR_STATUS: dict[type[ReviewError], int] = {
 }
 
 
-_INTERNAL_ERROR_DETAIL = "internal error"
-
-
 async def _review_error_handler(_request: Request, exc: Exception) -> JSONResponse:
     """Map review-engine errors to their HTTP status with a string ``detail``.
 
@@ -62,14 +64,17 @@ async def _review_error_handler(_request: Request, exc: Exception) -> JSONRespon
         (code for kind, code in _REVIEW_ERROR_STATUS.items() if isinstance(exc, kind)), None
     )
     if status_code is None:
-        return JSONResponse(status_code=500, content={"detail": _INTERNAL_ERROR_DETAIL})
+        return JSONResponse(status_code=500, content={"detail": INTERNAL_ERROR_DETAIL})
     return JSONResponse(status_code=status_code, content={"detail": str(exc)})
 
 
 async def _unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:
-    """Answer 500 with a fixed JSON body; the exception is logged, never returned."""
-    logging.getLogger("bunsho").exception("unhandled_error path=%s", request.url.path, exc_info=exc)
-    return JSONResponse(status_code=500, content={"detail": _INTERNAL_ERROR_DETAIL})
+    """Answer 500 with a fixed JSON body; the exception is logged, never returned.
+
+    ``UnhandledErrorMiddleware`` normally answers first, inside the CORS layer. This handler
+    is the backstop for an error raised by the middleware stack itself.
+    """
+    return unhandled_error_response(request.url.path, exc)
 
 
 _WS_MESSAGE_MODELS = (WsAuthMessage, WsReady, WsSnapshot, WsEvent)
@@ -132,6 +137,8 @@ def create_app(config: ServiceConfig, *, overrides: ServiceOverrides | None = No
             await services.aclose()
 
     app = FastAPI(title=APP_NAME, version=__version__, lifespan=lifespan)
+    # Added first so it sits inside CORSMiddleware: the CORS layer then decorates the 500 too.
+    app.add_middleware(UnhandledErrorMiddleware)
     if config.server.cors_origins:
         app.add_middleware(
             CORSMiddleware,
