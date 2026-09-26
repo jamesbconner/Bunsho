@@ -164,10 +164,12 @@ Settings redesign.
 
 ## Release
 
-User-visible reorganisation with no fix inside it, like the Settings tabs (1.2.0), so a minor bump is
-proposed: **1.5.0** with a `### Changed` entry in `CHANGELOG.md`. Left open for James: 1.4.0 is dated
-in the changelog but not tagged, so the alternative is to add the entry there without a bump. The
-version bump is applied with the implementation, not with this spec.
+James's ruling (2026-09-26): this is a bug fix, not a feature. The pages are inconsistently laid out,
+and nothing about content or capability changes. So it is a patch release, **1.4.1**, with a
+`### Fixed` entry in `CHANGELOG.md` (for example "Every page is now centered in a width-limited
+column, and navigation moved from the sidebar to the header"). The version bump in `pyproject.toml`
+and `frontend/package.json` and the changelog entry are applied with the implementation, not with
+this spec. No tag is created (that step is James's).
 
 ## Risks and open points
 
