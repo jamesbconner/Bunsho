@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from bunsho.api.routers import ws as ws_module
+from bunsho.orchestration.pending_auth_gate import PendingAuthGate
 from tests.base import PASSWORD, close_and_wait_for_unsubscribe
 
 WS = "/api/v1/ws/tasks"
@@ -401,3 +402,77 @@ def test_a_socket_is_unregistered_when_its_client_disconnects(stub_client: TestC
         assert _registered_sockets(stub_client) == 1
         close_and_wait_for_unsubscribe(stub_client, ws)
     assert _registered_sockets(stub_client) == 0
+
+
+def _use_pending_auth_limit(client: TestClient, limit: int) -> None:
+    client.app.state.services.pending_auth = PendingAuthGate(limit=limit)  # type: ignore[attr-defined]
+
+
+def _pending_auth(client: TestClient) -> int:
+    return client.app.state.services.pending_auth.pending  # type: ignore[no-any-return,attr-defined]
+
+
+def test_connections_beyond_the_pending_cap_are_refused_before_accept(
+    stub_client: TestClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    _use_pending_auth_limit(stub_client, 2)
+    caplog.set_level(logging.INFO, logger="bunsho")
+    with (
+        stub_client.websocket_connect(WS),
+        stub_client.websocket_connect(WS),
+        pytest.raises(WebSocketDisconnect) as info,
+        stub_client.websocket_connect(WS),
+    ):
+        pass
+    assert info.value.code == 1008
+    assert "ws_rejected" in caplog.text
+    assert "reason=too_many_unauthenticated" in caplog.text
+    assert "testclient" in caplog.text  # the client host, as for the other ws_* lines
+
+
+def test_a_slot_is_held_only_until_authentication_resolves(stub_client: TestClient) -> None:
+    _use_pending_auth_limit(stub_client, 1)
+    tokens = _login(stub_client)
+    with stub_client.websocket_connect(WS) as ws:
+        _authenticate(ws, tokens)
+        assert _pending_auth(stub_client) == 0  # an authenticated stream holds no slot
+        with stub_client.websocket_connect(WS) as second:  # so a new client can still connect
+            _authenticate(second, tokens)
+            second.close()
+            close_and_wait_for_unsubscribe(stub_client, ws)
+
+
+@pytest.mark.parametrize(
+    "first_message", [{"type": "auth", "token": "bad-token"}, "this is not json", None]
+)
+def test_a_failed_authentication_frees_its_slot(
+    stub_client: TestClient, monkeypatch: pytest.MonkeyPatch, first_message: object
+) -> None:
+    monkeypatch.setattr("bunsho.api.routers.ws.AUTH_TIMEOUT_SECONDS", 0.2)  # the None case
+    _use_pending_auth_limit(stub_client, 1)
+    for _ in range(3):  # a leak would refuse the second attempt
+        assert _connect_and_expect_close(stub_client, first_message) == 1008
+    assert _pending_auth(stub_client) == 0
+
+
+def test_disconnecting_before_authenticating_frees_the_slot(stub_client: TestClient) -> None:
+    _use_pending_auth_limit(stub_client, 1)
+    with stub_client.websocket_connect(WS) as ws:
+        ws.close()
+    with stub_client.websocket_connect(WS) as ws:
+        ws.close()
+    assert _pending_auth(stub_client) == 0
+
+
+def test_a_refused_connection_never_reaches_authentication(
+    stub_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def unexpected(*_args: Any) -> None:
+        raise AssertionError("a refused connection must not be authenticated")
+
+    _use_pending_auth_limit(stub_client, 1)
+    with stub_client.websocket_connect(WS):
+        monkeypatch.setattr("bunsho.api.routers.ws._authenticate", unexpected)
+        with pytest.raises(WebSocketDisconnect) as info, stub_client.websocket_connect(WS):
+            pass
+    assert info.value.code == 1008
