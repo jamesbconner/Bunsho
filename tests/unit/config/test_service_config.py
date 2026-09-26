@@ -128,3 +128,38 @@ def test_wildcard_hint_is_absent_for_other_bad_entries() -> None:
     [error] = validate_service_config(_valid(server={"trusted_proxies": "bogus"}))
     assert "bogus" in error
     assert "wildcard" not in error
+
+
+def test_csp_report_only_defaults_to_false() -> None:
+    assert load_service_config(_valid()).server.csp_report_only is False
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [("true", True), ("yes", True), ("on", True), ("1", True), ("false", False), ("off", False)],
+)
+def test_csp_report_only_reads_the_usual_boolean_spellings(raw: str, expected: bool) -> None:
+    config = load_service_config(_valid(server={"csp_report_only": raw}))
+    assert config.server.csp_report_only is expected
+
+
+def test_csp_report_only_is_read_from_the_environment() -> None:
+    from bunsho.config.loader import load_config
+
+    cfg = load_config(
+        environ={
+            "BUNSHO_AUTH__USERNAME": "james",
+            "BUNSHO_AUTH__PASSWORD_HASH": VALID_HASH,
+            "BUNSHO_AUTH__JWT_SECRET": SECRET,
+            "BUNSHO_SERVER__CSP_REPORT_ONLY": "true",
+        }
+    )
+    assert load_service_config(cfg).server.csp_report_only is True
+
+
+def test_a_bad_csp_report_only_is_reported_with_the_other_errors() -> None:
+    errors = validate_service_config(_valid(server={"csp_report_only": "maybe", "port": "80"}))
+    assert any("csp_report_only" in e for e in errors)
+    assert any("port" in e for e in errors)  # reported together, not one at a time
+    with pytest.raises(ConfigError, match="csp_report_only"):
+        load_service_config(_valid(server={"csp_report_only": "maybe"}))
