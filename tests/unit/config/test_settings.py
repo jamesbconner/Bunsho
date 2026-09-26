@@ -75,3 +75,26 @@ def test_frontend_dir_is_read_from_the_paths_section(tmp_path: Path) -> None:
 def test_frontend_dir_must_be_a_directory(tmp_path: Path) -> None:
     errors = validate_config(ConfigNormalizer({"paths": {"frontend_dir": str(tmp_path / "nope")}}))
     assert any("frontend_dir" in error and "not a directory" in error for error in errors)
+
+
+def test_a_frontend_build_without_the_nonce_placeholder_is_reported(tmp_path: Path) -> None:
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("<html><body>old build</body></html>", encoding="utf-8")
+    errors = validate_config(ConfigNormalizer({"paths": {"frontend_dir": str(dist)}}))
+    assert any("frontend_dir" in e and "npm run build" in e for e in errors)
+
+
+def test_a_current_frontend_build_is_accepted(tmp_path: Path) -> None:
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text('<meta content="__CSP_NONCE__">', encoding="utf-8")
+    errors = validate_config(ConfigNormalizer({"paths": {"frontend_dir": str(dist)}}))
+    assert not any("frontend_dir" in e for e in errors)
+
+
+def test_a_frontend_folder_without_an_index_is_not_reported(tmp_path: Path) -> None:
+    dist = tmp_path / "dist"
+    dist.mkdir()  # the existing behaviour: only "is a directory" is checked
+    errors = validate_config(ConfigNormalizer({"paths": {"frontend_dir": str(dist)}}))
+    assert not any("frontend_dir" in e for e in errors)

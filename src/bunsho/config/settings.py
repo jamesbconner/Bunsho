@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from bunsho.config.normalizer import ConfigError, ConfigNormalizer
+from bunsho.frontend_shell import shell_problem
 
 DEFAULT_DECK_FILENAME = "JLPT_N5_to_N1_Japanese_Vocabulary.apkg"
 DEFAULT_DECK_SHA256 = "fe5cf438a8f0f6690af00b2c2a9c61da9390feb5bd6d663ea8e6b225b17c3b4a"
@@ -93,6 +94,8 @@ def validate_config(cfg: ConfigNormalizer) -> list[str]:
             f"[paths] frontend_dir={frontend!r} is not a directory; build the UI with "
             "'npm run build' in frontend/, or unset it to serve the API only"
         )
+    elif frontend and (problem := shell_problem(Path(frontend))):
+        errors.append(f"[paths] frontend_dir={frontend!r}: {problem}")
     return errors
 
 
