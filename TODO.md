@@ -203,22 +203,9 @@ no known exploit path. Nothing is rated High right now.
 - [ ] Image trim candidates: `pip` in the base image, `watchfiles`, the venv `activate` scripts
 - [ ] Single source of truth for the uv pin (0.12.17 is in `ci.yml`, `release.yml` and the `Dockerfile`),
       for example an `ARG UV_VERSION` shared through a build-arg
-- [ ] Use a separate image tag for the smoke project (`bunsho:smoke`) so it never retags a developer's
-      `bunsho:local`
 - [ ] First real run of `release.yml` (it has never run), and check that Dependabot's docker ecosystem
       can bump the two Dockerfile image references
-- [ ] Docker Node stage: add `--platform=$BUILDPLATFORM` so multi-arch builds do not run the JS build
-      under emulation
 - [ ] Health-check access-log noise: the Docker healthcheck adds ~2,900 uvicorn access-log lines a day
-- [ ] `.gitattributes` `frontend/** text eol=lf` would corrupt binary assets: add `binary` overrides
-      before committing any image or font
-- [ ] If the root `.gitignore` `build/` pattern is narrowed to `/build/`, remove the
-      `!src/features/build/` override in `frontend/.gitignore`
-- [ ] Root `.gitignore` patterns `lib/`, `env/`, `var/`, `parts/`, `downloads/` would silently ignore a
-      future `frontend/src/lib` or `src/env`: anchor them (as with `build/` -> `/build/`)
-- [ ] The OpenAPI snapshot embeds `info.version`: a release version bump fails
-      `test_the_committed_snapshot_matches_the_app` until `scripts/export_openapi.py` and
-      `npm run gen:api` are re-run (add to the release checklist)
 
 ### Open Decisions
 
@@ -280,6 +267,12 @@ Baseline from the spec:
       (commit `ff3621b`) ignores `.claude/` and `.agents/`
 - [x] Local (git-ignored) `.claude/` guideline documents (`CLAUDE.md`, `llm-patterns.md`, `react.md`):
       TMDB-specific rules made generic (external-API caching and rate-limit guidance kept, no TMDB text left)
+- [x] Build and CI hygiene: the Docker Node stage is `--platform=$BUILDPLATFORM`; the smoke test tags its
+      image `bunsho:smoke` (compose `BUNSHO_IMAGE`) and never retags `bunsho:local`; `.gitattributes`
+      marks frontend images and fonts `binary`; the root `.gitignore` patterns for `build`, `env`, `ENV`,
+      `lib`, `var`, `parts` and `downloads` are anchored (the `!src/features/build/` override in
+      `frontend/.gitignore` is gone); the README has a "Releasing" section covering the OpenAPI
+      snapshot's `info.version`
 
 Carry-forward from Plan 1A's final review:
 - [x] Rebuild endpoint: `_replace_with_retry` retries `PermissionError` (`services/content_repository.py`);

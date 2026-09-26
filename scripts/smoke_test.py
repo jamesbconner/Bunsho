@@ -12,8 +12,9 @@ the stack and its temp env folder).
 
 The script generates its own credentials and env file in a temp folder outside the repository, so
 it never touches a developer's ``.env`` or the real ``bunsho_bunsho-data`` volume. Containers,
-network and volume are isolated by the ``bunsho-smoke`` compose project name; only the image tag
-``bunsho:local`` is shared, so the smoke build reuses and retags a developer's own local build.
+network and volume are isolated by the ``bunsho-smoke`` compose project name, and the image is
+tagged ``bunsho:smoke`` (through ``BUNSHO_IMAGE``), so a developer's own ``bunsho:local`` build is
+never retagged. The smoke image is left in place after a run so the next one reuses its layers.
 """
 
 from __future__ import annotations
@@ -37,6 +38,7 @@ from pwdlib import PasswordHash
 
 ROOT = Path(__file__).resolve().parent.parent
 PROJECT = "bunsho-smoke"
+IMAGE = "bunsho:smoke"
 PORT = int(os.environ.get("BUNSHO_SMOKE_PORT", "18192"))
 ORIGIN = f"http://127.0.0.1:{PORT}"
 BASE = f"{ORIGIN}/api/v1"
@@ -77,7 +79,12 @@ def compose(
     timeout: float = COMPOSE_TIMEOUT_SECONDS,
 ) -> subprocess.CompletedProcess[str]:
     """Run ``docker compose`` for the smoke project (``TimeoutExpired`` after ``timeout`` s)."""
-    env = {**os.environ, "BUNSHO_ENV_FILE": str(env_file), "BUNSHO_HOST_PORT": str(PORT)}
+    env = {
+        **os.environ,
+        "BUNSHO_ENV_FILE": str(env_file),
+        "BUNSHO_HOST_PORT": str(PORT),
+        "BUNSHO_IMAGE": IMAGE,
+    }
     return subprocess.run(
         ["docker", "compose", "-p", PROJECT, "-f", str(ROOT / "compose.yaml"), *args],
         cwd=ROOT,
