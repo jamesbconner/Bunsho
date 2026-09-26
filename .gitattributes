@@ -4,3 +4,15 @@ Dockerfile text eol=lf
 *.yml text eol=lf
 *.sh text eol=lf
 frontend/** text eol=lf
+# Binary assets under frontend/ must not be rewritten by the eol=lf rule above.
+frontend/**/*.png binary
+frontend/**/*.jpg binary
+frontend/**/*.jpeg binary
+frontend/**/*.gif binary
+frontend/**/*.webp binary
+frontend/**/*.avif binary
+frontend/**/*.ico binary
+frontend/**/*.woff binary
+frontend/**/*.woff2 binary
+frontend/**/*.ttf binary
+frontend/**/*.otf binary
