@@ -37,7 +37,9 @@ def test_next_returns_the_first_card_with_content_and_counts(
     assert response.status_code == 200
     body = response.json()
     card = body["card"]
-    assert (card["item_type"], card["direction"]) == ("kana", "glyph_to_sound")
+    # Kana are shuffled, so either direction of the only kana (あ) can come first.
+    assert card["item_type"] == "kana"
+    assert card["direction"] in {"glyph_to_sound", "sound_to_glyph"}
     assert card["is_new"] is True
     assert card["state"] == 0
     assert card["expected_last_review"] is None
