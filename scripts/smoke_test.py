@@ -189,7 +189,7 @@ def expect_frontend_served() -> None:
     expect(status == 200, f"/docs returned {status}, not 200")
     docs_scripts = csp_sources(headers.get("content-security-policy", ""), "script-src")
     expect(
-        "https://cdn.jsdelivr.net" in docs_scripts,
+        any(source == "https://cdn.jsdelivr.net" for source in docs_scripts),
         "/docs must allow its scripts from https://cdn.jsdelivr.net",
     )
 
