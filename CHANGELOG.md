@@ -16,6 +16,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   it never reveals whether a token was valid, and it needs no access token.
 - The UI's Log out now calls it (best effort: if the server cannot be reached you are still logged
   out in this browser, and the token stays valid until it expires).
+- `server.csp_report_only` (`BUNSHO_SERVER__CSP_REPORT_ONLY`, default false) sends the
+  Content-Security-Policy as `Content-Security-Policy-Report-Only`, so a browser reports violations in
+  its console without blocking anything.
 
 ### Changed
 
@@ -26,6 +29,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   pre-upgrade backup is taken as usual). Rolling back to 1.3.x afterwards will not start against the
   migrated database: restore the pre-upgrade backup from `data/backups/` (reviews done since the
   upgrade are lost).
+- The service now reads the UI's `index.html` once at startup (it needs to insert a nonce into it on
+  every request), so after rebuilding the UI with `npm run build` restart the service to serve the
+  new build.
 
 ### Fixed
 
@@ -50,6 +56,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The page you are returned to after logging in is now rejected unless it is a plain path on this
   site: a backslash or a control character (which browsers treat as a slash or drop) sends you to
   the home page instead.
+- Every response now carries `X-Content-Type-Options`, `Referrer-Policy` and `X-Frame-Options`, not
+  only the static files: the API, `/openapi.json` and the docs pages too.
+- The web UI is served with a Content-Security-Policy: only the service's own scripts, and styles only
+  with a per-request nonce (no `unsafe-inline`). The API and static assets are default-deny. `/docs`
+  and `/redoc` have their own looser policy so Swagger UI and Redoc still load from `cdn.jsdelivr.net`.
+- The service refuses to start with a `frontend_dir` built before this version (no nonce placeholder
+  in `index.html`) and says to rebuild the UI with `npm run build`.
 
 ## [1.3.0] - 2026-09-24
 

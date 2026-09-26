@@ -1,7 +1,6 @@
 # Bunshō: Content-Security-Policy and Security Headers — Design
 
-Status: design approved in conversation 2026-09-26 (brainstorming); this document awaits review.
-Next: implementation plan.
+Status: implemented in PR <number> (the number is filled in when the PR is opened).
 Parent designs: `2026-09-19-bunsho-foundation-and-review-engine-design.md` (the service and its
 delivery, built by plan 1C) and `2026-09-20-bunsho-2b1-frontend-skeleton-design.md` (the Mantine
 app shell).
@@ -64,9 +63,9 @@ SHELL   default-src 'none'; script-src 'self'; style-src 'self' 'nonce-<N>';
         base-uri 'none'; form-action 'self'; frame-ancestors 'none'
 DEFAULT default-src 'none'; frame-ancestors 'none'
 DOCS    default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;
-        style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;
-        img-src 'self' data: https://fastapi.tiangolo.com; connect-src 'self';
-        frame-ancestors 'none'
+        style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com;
+        img-src 'self' data: https://fastapi.tiangolo.com; font-src https://fonts.gstatic.com;
+        worker-src blob:; connect-src 'self'; frame-ancestors 'none'
 ```
 
 - `shell_policy(nonce: str) -> str`, plus the `DEFAULT_POLICY` and `DOCS_POLICY` constants and
@@ -74,10 +73,7 @@ DOCS    default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdeli
   `Content-Security-Policy-Report-Only`).
 - `img-src` has no `data:` for the shell: the built CSS contains no `url(...)` at all. If the
   manual browser check finds a `data:` image, it is added there, not by loosening anything else.
-- The DOCS list is the starting point. Redoc may also need its font origin and `blob:` workers;
-  the exact list is settled against the real pages during implementation and this section is
-  updated to match. Swagger UI is the page the README points people to, so it is the acceptance
-  test.
+- The DOCS list was settled on 2026-09-26 against the HTML FastAPI serves today: Swagger UI loads its script and stylesheet from cdn.jsdelivr.net, the favicon from fastapi.tiangolo.com and runs one inline script; Redoc loads its bundle from cdn.jsdelivr.net, its fonts stylesheet from fonts.googleapis.com (font files from fonts.gstatic.com) and uses blob: workers. A test pins every origin the two pages reference against the policy, so a FastAPI upgrade that changes them is noticed.
 - `DEFAULT` is what every non-shell, non-docs response gets: JSON and hashed assets have no
   active content, and this also stops a file such as an SVG from running script if it is opened as
   a page.
@@ -130,7 +126,7 @@ from `UnhandledErrorMiddleware`.
 `ServerSettings.csp_report_only: bool = False`, read from `[server] csp_report_only` /
 `BUNSHO_SERVER__CSP_REPORT_ONLY` with the existing `ConfigNormalizer` boolean accessor, alongside
 `cors_origins` and `trusted_proxies`, and validated like them. Documented in the README settings
-section and in `.env.example`.
+section. .env.example is untracked in this repository, so it is not edited; the PR notes the new optional key for James to add by hand.
 
 ## Frontend
 
@@ -184,6 +180,7 @@ blocked. Any violation found is added to the policy here, with the reason.
   (the CSP and headers) and `### Added` (the setting).
 - README: the new setting; the docs-page exception in one sentence; a line recommending that the
   TLS reverse proxy also sets HSTS.
+- .env.example is untracked in this repository, so it is not edited; the PR notes the new optional key for James to add by hand.
 - No version bump (it stays 1.4.0). No tag or release is created; that is James's step.
 
 ## Risks and notes

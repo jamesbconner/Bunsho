@@ -12,9 +12,7 @@ items are kept at the bottom of the file, grouped by the plan that delivered the
 
 ### Security & Auth
 
-- [ ] Content-Security-Policy header for the served UI (Mantine injects inline styles: needs nonces or hashes)
-- [ ] Security headers (nosniff, Referrer-Policy, X-Frame-Options) are set on static responses only;
-      extend to API/docs responses together with the CSP work
+- (nothing open)
 
 ### Reliability & Data Integrity
 
@@ -344,6 +342,14 @@ Deferred from Plan 1C, delivered later:
 - [x] The fixed JSON 500 is now produced by `UnhandledErrorMiddleware`, one layer inside
       `CORSMiddleware`, so a cross-origin browser gets the 500 with its CORS headers instead of a
       network failure; the `Exception` handler stays as a backstop for the outer layers
+
+### CSP and security headers (1.4.0)
+
+- [x] Baseline security headers on every response, and a CSP per response class: a strict nonce-based
+      policy for the UI shell (`SPAStaticFiles` renders `index.html` per request; Mantine gets the nonce
+      via `getStyleNonce`), default-deny for the API and assets, a looser one for `/docs` and `/redoc`
+- [x] `server.csp_report_only` switch; a UI build without the nonce placeholder is reported by config
+      validation
 
 ### Decisions
 

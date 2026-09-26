@@ -97,7 +97,9 @@ Environment variables `BUNSHO_<SECTION>__<KEY>` override the `.env` file, which 
 named by `BUNSHO_CONFIG_FILE` (`BUNSHO_ENV_FILE` names a different `.env`). Keys: `server.host`,
 `server.port`, `server.cors_origins` (comma separated; empty means no CORS), `server.trusted_proxies`
 (comma separated IP addresses or CIDR networks whose `X-Forwarded-For` header is believed; empty, the
-default, means proxy headers are ignored), `auth.access_ttl_minutes`, `auth.refresh_ttl_days`,
+default, means proxy headers are ignored), `server.csp_report_only` (`true` sends the
+Content-Security-Policy as `Content-Security-Policy-Report-Only`: the browser reports violations in its
+console and blocks nothing; default `false`), `auth.access_ttl_minutes`, `auth.refresh_ttl_days`,
 `paths.data_dir`, `paths.resources_dir`, `paths.jamdict_db`, `logging.level`.
 
 `progress.db` (your study history) lives in `data_dir`. When an existing database needs a schema
@@ -327,6 +329,14 @@ For a bind mount run `chown -R 10001:10001 <host directory>` on the host instead
   interfaces, so anything on your LAN can reach it. The app does no HTTPS: passwords and tokens cross
   the network in clear text. Either keep it on a trusted network or put a TLS-terminating reverse proxy
   in front. Never expose the port to the internet.
+- Every response carries `X-Content-Type-Options`, `Referrer-Policy` and `X-Frame-Options` headers and a
+  Content-Security-Policy. The UI's policy allows only the service's own scripts and styles (styles by a
+  per-request nonce); the API is default-deny; `/docs` and `/redoc` get a looser policy so they can load
+  Swagger UI and Redoc from `cdn.jsdelivr.net`. If a browser or extension misbehaves under the policy,
+  set `BUNSHO_SERVER__CSP_REPORT_ONLY=true` to see the violations in the browser console without
+  blocking anything. The service does not send `Strict-Transport-Security`; if a reverse proxy
+  terminates TLS, have the proxy send it. The app shell (`index.html`) is read once at startup, so after
+  rebuilding the UI with `npm run build`, restart the service to serve the new build.
 - To keep the service off the LAN, publish it on the loopback interface only. The simplest way is a
   `compose.override.yaml` next to `compose.yaml` (compose reads it automatically). Plain `ports:` would
   be merged with the existing entry and leave the LAN-wide port open, so replace the list with
