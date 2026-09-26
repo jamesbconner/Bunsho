@@ -470,3 +470,76 @@ def test_a_blocked_type_is_logged_with_its_reason(
     assert "type_blocked type=kanji reason=disabled" in caplog.text
     expected = "type_blocked type=vocab reason=waiting_for_kana kana_share=0.0 threshold=0.8"
     assert expected in caplog.text
+
+
+CHART = [
+    make_kana(char, romaji)
+    for char, romaji in zip(
+        "あいうえおかきくけこ", ["a", "i", "u", "e", "o", "ka", "ki", "ku", "ke", "ko"], strict=True
+    )
+]
+SEED = 7
+CHART_ORDER = [kana.id for kana in CHART]  # the order of a kana chart, as content.db stores it
+
+
+async def offered_kana_ids(stack: ReviewStack, cards: int) -> list[str]:
+    """Answer ``cards`` new kana cards Good, returning the item id of each as it was offered."""
+    offered: list[str] = []
+    for _ in range(cards):
+        card = await next_card(stack)
+        assert card.item_type is ItemType.KANA
+        offered.append(card.item_id)
+        await answer(stack, card)
+    return offered
+
+
+def first_appearances(item_ids: list[str]) -> list[str]:
+    return list(dict.fromkeys(item_ids))
+
+
+def test_new_kana_are_not_introduced_in_chart_order(tmp_path: Path) -> None:
+    async def scenario(db: ProgressDatabase) -> None:
+        stack = build_review_stack(tmp_path, db, kana=CHART, shuffle_seed=SEED)
+        introduced = first_appearances(await offered_kana_ids(stack, 20))
+        assert sorted(introduced) == sorted(CHART_ORDER)  # the same cards, all of them
+        assert introduced != CHART_ORDER
+
+    run_with_database(tmp_path, scenario)
+
+
+def test_due_kana_are_not_served_in_the_order_they_were_first_studied(tmp_path: Path) -> None:
+    async def scenario(db: ProgressDatabase) -> None:
+        stack = build_review_stack(tmp_path, db, kana=CHART, shuffle_seed=SEED)
+        studied = await offered_kana_ids(stack, 20)
+        stack.clock.advance(hours=1)  # every learning step has elapsed, so all 20 are due
+        served = await offered_kana_ids(stack, 20)
+        assert sorted(served) == sorted(studied)
+        assert served != studied
+
+    run_with_database(tmp_path, scenario)
+
+
+def test_a_kana_card_is_stable_until_it_is_answered(tmp_path: Path) -> None:
+    async def scenario(db: ProgressDatabase) -> None:
+        stack = build_review_stack(tmp_path, db, kana=CHART, shuffle_seed=SEED)
+        first = await next_card(stack)
+        assert key_of(await next_card(stack)) == key_of(first)
+        await answer(stack, first)
+        stack.clock.advance(hours=1)
+        second = await next_card(stack)
+        assert key_of(await next_card(stack)) == key_of(second)
+
+    run_with_database(tmp_path, scenario)
+
+
+def test_due_vocab_still_comes_earliest_due_first(tmp_path: Path) -> None:
+    async def scenario(db: ProgressDatabase) -> None:
+        stack = build_review_stack(tmp_path, db, vocab=[A, B], shuffle_seed=SEED)
+        first = await next_card(stack)  # answered first, so due first
+        await answer(stack, first)
+        stack.clock.advance(minutes=1)
+        await answer(stack, await next_card(stack))
+        stack.clock.advance(hours=1)  # both are due now
+        assert key_of(await next_card(stack)) == key_of(first)
+
+    run_with_database(tmp_path, scenario)

@@ -8,7 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, tzinfo
 
-from bunsho.db.progress_repository import ProgressRepository
+from bunsho.db.progress_repository import ProgressRepository, StoredCard
 from bunsho.models.content import Item, Kana, Kanji, Vocab
 from bunsho.models.review import (
     CardKey,
@@ -29,6 +29,7 @@ from bunsho.models.review_session import (
 )
 from bunsho.models.review_settings import ReviewModeName, ReviewSettings
 from bunsho.services.answer_key import accepted_answers_for
+from bunsho.services.card_shuffle import StableShuffle
 from bunsho.services.content_access import ContentGate
 from bunsho.services.content_catalog import ContentCatalog
 from bunsho.services.content_repository import ContentRepository
@@ -62,11 +63,12 @@ class _Plan:
             ),
         )
 
-    def pick_new(self) -> CardKey | None:
+    def pick_new(self, shuffle: StableShuffle) -> CardKey | None:
         """Pick from the type with the largest remaining share of its daily allowance.
 
         Ties go to the earlier type in kana, kanji, vocab order. An unlimited type counts
-        as a full allowance.
+        as a full allowance. Kana come out shuffled, because chart order gives each card away;
+        the other types keep the policy's order.
         """
         best: CardKey | None = None
         best_share = -1.0
@@ -77,8 +79,24 @@ class _Plan:
             limit = self.settings.new_limits.for_type(item_type)
             share = 1.0 if limit == 0 else (limit - self.introduced.get(item_type, 0)) / limit
             if share > best_share:
-                best, best_share = keys[0], share
+                best = _first_new(item_type, keys, shuffle)
+                best_share = share
         return best
+
+
+def _first_new(item_type: ItemType, keys: list[CardKey], shuffle: StableShuffle) -> CardKey:
+    if item_type is ItemType.KANA:
+        return min(keys, key=lambda key: shuffle.rank(key, None))
+    return keys[0]
+
+
+def _pick_due(due: list[StoredCard], shuffle: StableShuffle) -> StoredCard:
+    """Take the earliest due card, or a shuffled kana card when that one is kana."""
+    earliest = due[0]
+    if earliest.key.item_type is not ItemType.KANA:
+        return earliest
+    kana = [card for card in due if card.key.item_type is ItemType.KANA]
+    return min(kana, key=lambda card: shuffle.rank(card.key, card.schedule.last_review))
 
 
 def _load_item(repo: ContentRepository, key: CardKey) -> Item | None:
@@ -162,6 +180,7 @@ class ReviewSessionOrchestrator:
         tz: tzinfo,
         logger: logging.Logger,
         clock: Callable[[], datetime] | None = None,
+        shuffle_seed: int | None = None,
     ) -> None:
         """Create the orchestrator.
 
@@ -174,6 +193,7 @@ class ReviewSessionOrchestrator:
             tz: Timezone in which the study-day rollover hour is read.
             logger: Logger for key=value messages.
             clock: Returns the current UTC time (defaults to the system clock).
+            shuffle_seed: Fixes the kana shuffle (tests); random when omitted.
         """
         self._gate = gate
         self._progress = progress
@@ -183,12 +203,15 @@ class ReviewSessionOrchestrator:
         self._tz = tz
         self._logger = logger
         self._clock = clock or (lambda: datetime.now(UTC))
+        self._shuffle = StableShuffle(shuffle_seed)
 
     async def next_card(self, now: datetime | None = None) -> NextCard:
         """Return the next card to study, plus what is left to do.
 
         Due cards come first (earliest due); otherwise a new card chosen by the active
-        policy within today's per-type limits; otherwise no card and ``next_due_at``.
+        policy within today's per-type limits; otherwise no card and ``next_due_at``. Kana
+        cards, due or new, are picked in a shuffled order that stays the same until the card is
+        answered.
 
         Args:
             now: Override the current time (tests).
@@ -206,7 +229,7 @@ class ReviewSessionOrchestrator:
         plan = await self._plan(moment, repo, settings)
         card = await self._due_view(moment, repo, scheduler, settings)
         if card is None:
-            key = plan.pick_new()
+            key = plan.pick_new(self._shuffle)
             item = None if key is None else await asyncio.to_thread(_load_item, repo, key)
             if key is not None and item is not None:
                 mode, answers, choices = await _answer_fields(key, item, settings, repo)
@@ -277,7 +300,10 @@ class ReviewSessionOrchestrator:
     async def _due_view(
         self, now: datetime, repo: ContentRepository, scheduler: Scheduler, settings: ReviewSettings
     ) -> CardView | None:
-        for stored in await self._progress.due_cards(now, _ORPHAN_SCAN):
+        due = await self._progress.due_cards(now, _ORPHAN_SCAN)
+        while due:
+            stored = _pick_due(due, self._shuffle)
+            due.remove(stored)
             item = await asyncio.to_thread(_load_item, repo, stored.key)
             if item is not None:
                 mode, answers, choices = await _answer_fields(stored.key, item, settings, repo)
