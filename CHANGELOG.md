@@ -32,6 +32,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A token refresh that was in flight when you logged out could sign you back in. A refresh answer
   that arrives after the session ended is now discarded, and a late rejection of the old token no
   longer signs you out of a newer login.
+- Logging in after being sent to the login page now returns you to the exact page you were heading
+  for, including its query string and anchor (`/build?tab=system#top`), not just its path.
+- A login the server rejects as malformed (a username over 256 or a password over 1024 characters)
+  now shows the message on the field it names and puts the cursor there, instead of a generic
+  "Some fields are invalid." alert.
+- When the server hits an unexpected error, a browser on another origin (the dev server, or a
+  `server.cors_origins` setup) now receives the "internal error" 500 with its CORS headers, so the
+  UI says "The server had a problem" instead of "Can't reach the server".
 
 ### Security
 
@@ -39,6 +47,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   token. A client that opens more is refused (close code 1008) before the connection is accepted,
   so an unauthenticated client can no longer hold an unbounded number of sockets open. Connections
   that have authenticated do not count towards the limit.
+- The page you are returned to after logging in is now rejected unless it is a plain path on this
+  site: a backslash or a control character (which browsers treat as a slash or drop) sends you to
+  the home page instead.
 
 ## [1.3.0] - 2026-09-24
 

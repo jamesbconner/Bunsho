@@ -16,13 +16,19 @@ import { Navigate, useLocation } from 'react-router';
 import { ApiError, messageFor } from '../../api/errors';
 import { useAuth } from '../../auth/authContext';
 import { useCountdown } from '../../hooks/useCountdown';
+import { returnPath } from './returnPath';
 
-function returnPath(state: unknown): string {
-  if (typeof state === 'object' && state !== null && 'from' in state) {
-    const from = state.from;
-    if (typeof from === 'string' && from.startsWith('/') && !from.startsWith('//')) return from;
+type LoginField = 'username' | 'password';
+const LOGIN_FIELDS: readonly LoginField[] = ['username', 'password'];
+
+/** The server's per-field messages for the two login inputs; empty when it named neither. */
+function loginFieldErrors(error: ApiError): Partial<Record<LoginField, string>> {
+  const fields: Partial<Record<LoginField, string>> = {};
+  for (const name of LOGIN_FIELDS) {
+    const message = error.fieldErrors[name];
+    if (message !== undefined) fields[name] = message;
   }
-  return '/';
+  return fields;
 }
 
 export function LoginPage() {
@@ -50,8 +56,15 @@ export function LoginPage() {
     try {
       await login(values.username.trim(), values.password);
     } catch (caught) {
+      const fields =
+        caught instanceof ApiError && caught.status === 422 ? loginFieldErrors(caught) : {};
       if (caught instanceof ApiError && caught.status === 401) {
         setError('Invalid username or password.');
+      } else if (Object.keys(fields).length > 0) {
+        form.setErrors(fields);
+        // The first rejected field, in form order, gets the cursor.
+        const first = LOGIN_FIELDS.find((name) => name in fields);
+        if (first !== undefined) form.getInputNode(first)?.focus();
       } else {
         if (caught instanceof ApiError && caught.status === 429) {
           start(caught.retryAfterSeconds ?? 30);
