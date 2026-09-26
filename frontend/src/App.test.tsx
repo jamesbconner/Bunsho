@@ -152,6 +152,21 @@ describe('App', () => {
     ).toBeInTheDocument();
   });
 
+  it.each([
+    ['/', 'Your content', 'wide'],
+    ['/stats', 'Statistics', 'wide'],
+    ['/review', 'Study', 'narrow'],
+    ['/settings', 'Settings', 'narrow'],
+    ['/build', 'Build', 'narrow'],
+    ['/nothing/here', 'Page not found', 'narrow'],
+  ])('puts %s (%s) in a %s column', async (path, heading, width) => {
+    rememberLogin();
+    goTo(path);
+    render(<App />);
+    const title = await screen.findByRole('heading', { name: heading });
+    expect(title.closest('[data-width]')).toHaveAttribute('data-width', width);
+  });
+
   it('answers an unknown address with a not-found page', async () => {
     rememberLogin();
     goTo('/nothing/here');

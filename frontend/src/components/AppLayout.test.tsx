@@ -1,6 +1,5 @@
-import { act, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { lazy } from 'react';
 import { Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -8,16 +7,6 @@ import { AuthContext, type AuthContextValue } from '../auth/authContext';
 import { RealtimeContext } from '../realtime/realtimeContext';
 import { renderWithProviders } from '../test/render';
 import { AppLayout } from './AppLayout';
-
-let releaseSlowPage: () => void = () => undefined;
-const SlowPage = lazy(
-  () =>
-    new Promise<{ default: () => React.JSX.Element }>((resolve) => {
-      releaseSlowPage = () => {
-        resolve({ default: () => <p>Slow page loaded</p> });
-      };
-    }),
-);
 
 function renderLayout(logout = vi.fn(), initialEntries: string[] = ['/']) {
   const auth: AuthContextValue = {
@@ -34,7 +23,6 @@ function renderLayout(logout = vi.fn(), initialEntries: string[] = ['/']) {
           <Route element={<AppLayout />}>
             <Route index element={<p>Home content</p>} />
             <Route path="settings" element={<p>Settings page</p>} />
-            <Route path="slow" element={<SlowPage />} />
           </Route>
         </Routes>
       </RealtimeContext>
@@ -89,17 +77,5 @@ describe('AppLayout', () => {
   it('has a theme toggle', () => {
     renderLayout();
     expect(screen.getByRole('radio', { name: 'Dark' })).toBeInTheDocument();
-  });
-
-  it('shows a loading indicator while a page is being fetched, then the page', async () => {
-    renderLayout(vi.fn(), ['/slow']);
-    expect(screen.getByRole('status', { name: 'Loading page' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
-    await act(async () => {
-      releaseSlowPage();
-      await Promise.resolve();
-    });
-    expect(await screen.findByText('Slow page loaded')).toBeInTheDocument();
-    expect(screen.queryByRole('status', { name: 'Loading page' })).not.toBeInTheDocument();
   });
 });

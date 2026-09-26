@@ -7,6 +7,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { AuthProvider } from './auth/AuthProvider';
 import { RequireAuth } from './auth/RequireAuth';
 import { AppLayout } from './components/AppLayout';
+import { PageWidth } from './components/PageWidth';
 import { installCspNonce } from './csp';
 import { LoginPage } from './features/login/LoginPage';
 import { NotFoundPage } from './features/NotFoundPage';
@@ -55,12 +56,16 @@ export function App() {
                     </RealtimeProvider>
                   }
                 >
-                  <Route index element={<HomePage />} />
-                  <Route path="review" element={<ReviewPage />} />
-                  <Route path="stats" element={<StatsPage />} />
-                  <Route path="settings" element={<SettingsPage />} />
-                  <Route path="build" element={<Navigate to="/settings?tab=system" replace />} />
-                  <Route path="*" element={<NotFoundPage />} />
+                  <Route element={<PageWidth size="wide" />}>
+                    <Route index element={<HomePage />} />
+                    <Route path="stats" element={<StatsPage />} />
+                  </Route>
+                  <Route element={<PageWidth size="narrow" />}>
+                    <Route path="review" element={<ReviewPage />} />
+                    <Route path="settings" element={<SettingsPage />} />
+                    <Route path="build" element={<Navigate to="/settings?tab=system" replace />} />
+                    <Route path="*" element={<NotFoundPage />} />
+                  </Route>
                 </Route>
               </Route>
             </Routes>

@@ -1,13 +1,10 @@
 import { AppShell, Burger, Button, Group, NavLink, Stack, Text, Title } from '@mantine/core';
 import { useDisclosure, useId } from '@mantine/hooks';
-import { Suspense } from 'react';
 import { Link, Outlet, useLocation } from 'react-router';
 
 import { useAuth } from '../auth/authContext';
 import { ConnectionBadge } from '../realtime/ConnectionBadge';
 import { ColorSchemeToggle } from './ColorSchemeToggle';
-import { ErrorBoundary } from './ErrorBoundary';
-import { PageLoader } from './PageLoader';
 
 const NAVIGATION = [
   { to: '/', label: 'Home' },
@@ -75,11 +72,7 @@ export function AppLayout() {
         </Stack>
       </AppShell.Navbar>
       <AppShell.Main>
-        <ErrorBoundary key={pathname}>
-          <Suspense fallback={<PageLoader />}>
-            <Outlet />
-          </Suspense>
-        </ErrorBoundary>
+        <Outlet />
       </AppShell.Main>
     </AppShell>
   );
