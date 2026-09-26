@@ -26,7 +26,13 @@ export function RequireAuth() {
         </Center>
       );
     case 'anonymous':
-      return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+      return (
+        <Navigate
+          to="/login"
+          replace
+          state={{ from: `${location.pathname}${location.search}${location.hash}` }}
+        />
+      );
     case 'authenticated':
       return <Outlet />;
   }
