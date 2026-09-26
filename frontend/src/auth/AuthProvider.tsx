@@ -2,7 +2,7 @@ import { notifications } from '@mantine/notifications';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
-import { refreshSession } from '../api/client';
+import { refreshSession, revokeSession } from '../api/client';
 import { ApiError } from '../api/errors';
 import { rawRequest } from '../api/http';
 import type { components } from '../api/schema';
@@ -80,10 +80,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    const refreshToken = session.getRefreshToken(); // read before the session is cleared
     session.clear();
     queryClient.clear();
     setSessionExpired(false);
     setStatus('anonymous');
+    // The screen has already changed; ending the session on the server (and closing its live
+    // stream) happens in the background. Other tabs follow through the `storage` event and only
+    // clear their own state.
+    if (refreshToken !== null) void revokeSession(refreshToken);
   }, [queryClient]);
 
   const retry = useCallback(() => {

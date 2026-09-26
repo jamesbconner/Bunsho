@@ -16,6 +16,7 @@ from bunsho.db.engine import ProgressDatabase
 from bunsho.db.instance_lock import InstanceLock, InstanceLockedError
 from bunsho.db.migrate import run_migrations
 from bunsho.db.progress_repository import ProgressRepository
+from bunsho.db.revoked_session_store import RevokedSessionStore
 from bunsho.factories import (
     create_content_build_orchestrator,
     create_context,
@@ -24,6 +25,7 @@ from bunsho.factories import (
 )
 from bunsho.orchestration.build_tasks import BuildTaskManager, OrchestratorFactory
 from bunsho.orchestration.review_session import ReviewSessionOrchestrator
+from bunsho.orchestration.session_sockets import SessionSockets
 from bunsho.services.auth import AuthService
 from bunsho.services.content_access import ContentGate
 from bunsho.services.content_repository import ContentSchemaError, remove_stale_temp_files
@@ -46,6 +48,7 @@ class Services:
     ctx: Context
     progress_db: ProgressDatabase
     auth: AuthService
+    sockets: SessionSockets
     throttle: LoginThrottle
     tasks: BuildTaskManager
     health: HealthService
@@ -134,6 +137,8 @@ async def build_services(
         progress_db = ProgressDatabase(app_config.progress_db_path)
         try:
             await progress_db.ping()
+            revocations = RevokedSessionStore(progress_db)
+            await revocations.load()
             ctx = await asyncio.to_thread(create_context, app_config, logger=logger)
             await _check_content_schema(ctx, logger)
             factory = (overrides.orchestrator_factory if overrides else None) or (
@@ -147,7 +152,8 @@ async def build_services(
                 config=config,
                 ctx=ctx,
                 progress_db=progress_db,
-                auth=AuthService(config.auth),
+                auth=AuthService(config.auth, revocations=revocations),
+                sockets=SessionSockets(),
                 throttle=LoginThrottle(),
                 tasks=BuildTaskManager(ctx, factory),
                 health=HealthService(progress_db, ctx),

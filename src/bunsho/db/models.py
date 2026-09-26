@@ -61,3 +61,12 @@ class AppSetting(Base):
 
     key: Mapped[str] = mapped_column(String(128), primary_key=True)
     value: Mapped[str] = mapped_column(String)
+
+
+class RevokedSession(Base):
+    """A login session that was logged out; its tokens are refused until ``expires_at``."""
+
+    __tablename__ = "revoked_session"
+
+    sid: Mapped[str] = mapped_column(String(64), primary_key=True)
+    expires_at: Mapped[str] = mapped_column(String(32))

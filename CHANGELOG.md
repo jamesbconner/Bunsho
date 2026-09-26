@@ -7,6 +7,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-09-25
+
+### Added
+
+- `POST /api/v1/auth/logout` ends a login session on the server: its refresh token, every access
+  token issued for it and its open live connections stop working. It answers 204 for any token, so
+  it never reveals whether a token was valid, and it needs no access token.
+- The UI's Log out now calls it (best effort: if the server cannot be reached you are still logged
+  out in this browser, and the token stays valid until it expires).
+
+### Changed
+
+- Every login now has a session id in its tokens. Tokens issued before this version are rejected,
+  so you have to log in once after upgrading.
+- The note beside Log out now says it also ends the session on the server.
+- Upgrading adds a `revoked_session` table to `progress.db` (migration 0002; the existing
+  pre-upgrade backup is taken as usual). Rolling back to 1.3.x afterwards will not start against the
+  migrated database: restore the pre-upgrade backup from `data/backups/` (reviews done since the
+  upgrade are lost).
+
+### Fixed
+
+- A token refresh that was in flight when you logged out could sign you back in. A refresh answer
+  that arrives after the session ended is now discarded, and a late rejection of the old token no
+  longer signs you out of a newer login.
+
 ## [1.3.0] - 2026-09-24
 
 ### Added

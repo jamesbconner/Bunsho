@@ -12,12 +12,6 @@ items are kept at the bottom of the file, grouped by the plan that delivered the
 
 ### Security & Auth
 
-- [ ] Logout / revocation for the stateless refresh tokens — no denylist/jti store exists server-side;
-      the UI's Log out only clears the browser's local session, the token itself stays valid until it expires
-- [ ] Logout can be undone by a refresh that is in flight (`session.setTokens` after `session.clear()`):
-      add a session epoch
-- [ ] Test the logout -> login stream lifecycle (stream closes on logout, a new one opens after login)
-      and StrictMode double mount
 - [ ] Cap on unauthenticated WebSocket connections
 - [ ] Content-Security-Policy header for the served UI (Mantine injects inline styles: needs nonces or hashes)
 - [ ] Security headers (nosniff, Referrer-Policy, X-Frame-Options) are set on static responses only;
@@ -325,6 +319,16 @@ Deferred from Plan 1C, delivered later:
 
 - [x] 3. Typed-answer (romaji -> kana; ぢ/じ and づ/ず share romaji, accept both) and multiple-choice
       modes (Plan: typed-mc-review-modes)
+
+### Session revocation (1.4.0)
+
+- [x] Server-side logout: every login has a `sid` claim, `POST /auth/logout` revokes it (stored in
+      `progress.db`, migration 0002), old tokens without a `sid` are rejected, and the session's open
+      WebSockets are closed with 1008
+- [x] Logout can no longer be undone by a refresh in flight: `session.ts` has an epoch and a late
+      refresh answer (success or 401) from an earlier epoch is dropped
+- [x] Tested the logout -> login stream lifecycle (stream closes on logout, a new one opens after
+      login) and the StrictMode double mount
 
 ### Decisions
 

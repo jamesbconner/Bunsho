@@ -34,6 +34,7 @@ def test_the_document_describes_the_routes_the_frontend_uses() -> None:
     assert {
         "login",
         "refreshToken",
+        "logout",
         "getContentSummary",
         "getConfigCheck",
         "startContentBuild",

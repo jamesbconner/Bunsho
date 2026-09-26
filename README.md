@@ -70,7 +70,11 @@ Bunshō serves an authenticated REST + WebSocket API under `/api/v1`. Interactiv
 
 - `POST /api/v1/auth/login` with `{"username": ..., "password": ...}` returns an access and a refresh
   token; send the access token as `Authorization: Bearer <token>`. `POST /api/v1/auth/refresh` exchanges a
-  refresh token for a new pair.
+  refresh token for a new pair of the same login session. `POST /api/v1/auth/logout` with
+  `{"refresh_token": ...}` ends that session on the server: the refresh token, every access token of the
+  login and its open WebSocket streams stop working (streams close with code 1008). It answers `204` for
+  any token, valid or not, and needs no access token. Revoked sessions are stored in `progress.db`, so
+  they stay revoked across restarts.
 - `GET /api/v1/admin/config-check` validates the deck, resources and optional services.
 - `POST /api/v1/admin/content/build` (body `{}` or `{"dry_run": true}`) starts a background content
   build and answers `202` with a `task_id`; poll `GET /api/v1/admin/content/build/{task_id}` or follow it
@@ -79,8 +83,8 @@ Bunshō serves an authenticated REST + WebSocket API under `/api/v1`. Interactiv
   into logs, so authenticate with the first message within 5 seconds:
   `{"type": "auth", "token": "<access token>"}`. The server answers `{"type": "ready"}`, then a
   `{"type": "snapshot", ...}` of the latest build if there is one, then `{"type": "event", ...}` messages
-  for build state changes and progress. Any invalid first message, a refresh token, or silence closes the
-  socket with code 1008.
+  for build state changes and progress. Any invalid first message, a refresh token, a token of a revoked session, or silence closes the
+  socket with code 1008, and so does logging out the session that authenticated it.
 - Logins are throttled: 5 failures within 60 seconds per client address returns `429` with a
   `Retry-After` header. Validation errors return `422` with only `loc`, `msg` and `type`.
 - `/health` reports component status and exception class names only, never messages.
@@ -130,7 +134,7 @@ Some behaviours to know about:
 
 **One instance per data folder.** The service takes an exclusive lock (`.bunsho.instance.lock`) in the data folder; a second instance on the same folder refuses to start with an explanatory error. `progress.db` runs in WAL mode, so you will also see `progress.db-wal` and `progress.db-shm` files next to it; back up the folder with the service stopped, or use the timestamped backups in `backups/`. When you restore, stop the service and remove those two files first (see the note under "Where the data lives" and the restore steps above).
 
-**Web UI.** The Docker image contains the built web UI and serves it at `http://<host>:8192/` (log in with the credentials from your env file; the pages are `/` for the dashboard and content summary, `/review` for the study session, `/stats` for statistics, `/settings` for the settings (its System tab, `/settings?tab=system`, has the service status and the content build; the old `/build` address redirects there) and `/login`). Outside Docker the API serves the UI only when `paths.frontend_dir` (`BUNSHO_PATHS__FRONTEND_DIR`) points at a built `frontend/dist`; unset, it serves the API only. Unknown paths under `/api` stay JSON 404s. The UI's Log out only clears the tokens in this browser; the server does not revoke them.
+**Web UI.** The Docker image contains the built web UI and serves it at `http://<host>:8192/` (log in with the credentials from your env file; the pages are `/` for the dashboard and content summary, `/review` for the study session, `/stats` for statistics, `/settings` for the settings (its System tab, `/settings?tab=system`, has the service status and the content build; the old `/build` address redirects there) and `/login`). Outside Docker the API serves the UI only when `paths.frontend_dir` (`BUNSHO_PATHS__FRONTEND_DIR`) points at a built `frontend/dist`; unset, it serves the API only. Unknown paths under `/api` stay JSON 404s. The UI's Log out clears the tokens in this browser and asks the server to end the session; if the server cannot be reached the token stays valid until it expires (30 days by default).
 
 **Studying in the browser.** Open the dashboard (`/`) and press *Study now*, or use the *Study* link. The review shows one card at a time: press Space or Enter (or *Show answer*) to flip it, then grade yourself with the buttons or the keys `1` Again, `2` Hard, `3` Good, `4` Easy (each button shows when the card would come back). Furigana is hidden on the front of cards that test a word's reading or meaning and shown once you flip the card; the *Show furigana* switch also shows it on the front (remembered in this browser only). There is no undo, because every grade is written to the append-only review log.
 

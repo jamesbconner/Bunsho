@@ -1,5 +1,5 @@
 """Bunshō (文章): a Japanese language learning tool."""
 
-__version__ = "1.3.0"
+__version__ = "1.4.0"
 APP_NAME = "Bunshō"
 APP_SLUG = "bunsho"

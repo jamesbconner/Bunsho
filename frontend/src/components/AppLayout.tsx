@@ -69,7 +69,7 @@ export function AppLayout() {
               Log out
             </Button>
             <Text id={logoutNoteId} size="xs" c="dimmed">
-              Logging out only affects this browser: the server cannot end sessions yet.
+              Logging out also ends this session on the server.
             </Text>
           </Stack>
         </Stack>

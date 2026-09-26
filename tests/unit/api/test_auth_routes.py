@@ -1,9 +1,13 @@
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
 
-from tests.base import PASSWORD
+from bunsho.api.app import create_app
+from bunsho.config.service import ServiceConfig
+from bunsho.services.auth import AuthService
+from tests.base import PASSWORD, make_auth_settings
 
 LOGIN = "/api/v1/auth/login"
 REFRESH = "/api/v1/auth/refresh"
@@ -133,3 +137,115 @@ def test_malformed_json_body_gets_a_clean_422(client: TestClient) -> None:
     error = response.json()["detail"][0]
     assert set(error) == {"loc", "msg", "type"}
     assert error["type"] == "json_invalid"
+
+
+LOGOUT = "/api/v1/auth/logout"
+SUMMARY = "/api/v1/content/summary"
+
+
+def _logout(client: TestClient, refresh_token: str):  # type: ignore[no-untyped-def]
+    return client.post(LOGOUT, json={"refresh_token": refresh_token})
+
+
+def _bearer(access_token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {access_token}"}
+
+
+def test_logout_revokes_the_whole_session(client: TestClient) -> None:
+    tokens = _login(client).json()
+    assert client.get(SUMMARY, headers=_bearer(tokens["access_token"])).status_code == 200
+    response = _logout(client, tokens["refresh_token"])
+    assert response.status_code == 204
+    assert response.content == b""
+    assert client.get(SUMMARY, headers=_bearer(tokens["access_token"])).status_code == 401
+    assert client.post(REFRESH, json={"refresh_token": tokens["refresh_token"]}).status_code == 401
+
+
+def test_logout_also_ends_tokens_from_earlier_refreshes(client: TestClient) -> None:
+    first = _login(client).json()
+    second = client.post(REFRESH, json={"refresh_token": first["refresh_token"]}).json()
+    assert _logout(client, first["refresh_token"]).status_code == 204
+    assert client.get(SUMMARY, headers=_bearer(second["access_token"])).status_code == 401
+    assert client.post(REFRESH, json={"refresh_token": second["refresh_token"]}).status_code == 401
+
+
+def test_logout_leaves_another_login_alone(client: TestClient) -> None:
+    one, two = _login(client).json(), _login(client).json()
+    assert _logout(client, one["refresh_token"]).status_code == 204
+    assert client.get(SUMMARY, headers=_bearer(two["access_token"])).status_code == 200
+    assert client.post(REFRESH, json={"refresh_token": two["refresh_token"]}).status_code == 200
+
+
+def test_logout_needs_no_bearer_token(client: TestClient) -> None:
+    tokens = _login(client).json()
+    assert client.post(LOGOUT, json={"refresh_token": tokens["refresh_token"]}).status_code == 204
+
+
+def test_logging_out_twice_is_still_204(client: TestClient) -> None:
+    tokens = _login(client).json()
+    assert _logout(client, tokens["refresh_token"]).status_code == 204
+    assert _logout(client, tokens["refresh_token"]).status_code == 204
+
+
+@pytest.mark.parametrize("token", ["garbage", "a.b.c", "x" * 5000])
+def test_a_token_that_does_not_verify_gets_the_same_204(client: TestClient, token: str) -> None:
+    assert _logout(client, token).status_code == 204
+
+
+class _RecordingSocket:
+    def __init__(self, *, error: Exception | None = None) -> None:
+        self.closed_with: list[int] = []
+        self._error = error
+
+    async def close(self, code: int = 1000) -> None:
+        if self._error is not None:
+            raise self._error
+        self.closed_with.append(code)
+
+
+def test_logout_still_204_and_revokes_when_a_socket_fails_to_close(client: TestClient) -> None:
+    tokens = _login(client).json()
+    services = client.app.state.services  # type: ignore[attr-defined]
+    sid = services.auth.authenticate_session(tokens["access_token"]).sid
+    failing, healthy = _RecordingSocket(error=OSError("boom")), _RecordingSocket()
+    services.sockets.register(sid, failing)
+    services.sockets.register(sid, healthy)
+    response = _logout(client, tokens["refresh_token"])
+    assert response.status_code == 204
+    assert healthy.closed_with == [1008]
+    assert client.post(REFRESH, json={"refresh_token": tokens["refresh_token"]}).status_code == 401
+    assert client.get(SUMMARY, headers=_bearer(tokens["access_token"])).status_code == 401
+
+
+def test_an_expired_refresh_token_gets_204(client: TestClient) -> None:
+    past = AuthService(make_auth_settings(), clock=lambda: datetime(2020, 1, 1, tzinfo=UTC))
+    assert _logout(client, past.issue_tokens("james").refresh_token).status_code == 204
+
+
+def test_an_access_token_cannot_log_a_session_out(client: TestClient) -> None:
+    tokens = _login(client).json()
+    assert _logout(client, tokens["access_token"]).status_code == 204
+    assert client.get(SUMMARY, headers=_bearer(tokens["access_token"])).status_code == 200
+
+
+def test_logout_validates_its_body(client: TestClient) -> None:
+    assert client.post(LOGOUT, json={}).status_code == 422
+    assert client.post(LOGOUT, json={"refresh_token": ""}).status_code == 422
+
+
+def test_a_flood_of_bad_logouts_cannot_block_login(client: TestClient) -> None:
+    for _ in range(20):
+        assert _logout(client, "garbage").status_code == 204
+    assert _login(client).status_code == 200
+
+
+def test_revocation_survives_a_restart(service_config: ServiceConfig) -> None:
+    with TestClient(create_app(service_config)) as first:
+        tokens = _login(first).json()
+        assert _logout(first, tokens["refresh_token"]).status_code == 204
+    with TestClient(create_app(service_config)) as second:
+        assert (
+            second.post(REFRESH, json={"refresh_token": tokens["refresh_token"]}).status_code == 401
+        )
+        assert second.get(SUMMARY, headers=_bearer(tokens["access_token"])).status_code == 401
+        assert _login(second).status_code == 200  # a new login is unaffected

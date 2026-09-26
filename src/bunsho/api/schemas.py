@@ -29,6 +29,12 @@ class RefreshRequest(BaseModel):
     refresh_token: str = Field(min_length=1)
 
 
+class LogoutRequest(BaseModel):
+    """Body of ``POST /auth/logout``."""
+
+    refresh_token: str = Field(min_length=1)
+
+
 class TokenResponse(BaseModel):
     """An access and refresh token."""
 
