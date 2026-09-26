@@ -78,6 +78,16 @@ def test_every_origin_the_docs_pages_load_from_is_allowed_by_the_docs_policy(
             )
 
 
+def test_the_docs_policy_keeps_the_origins_the_page_html_cannot_show(client: TestClient) -> None:
+    # Swagger UI and ReDoc load their fonts from the stylesheet and their web worker from the
+    # script, so neither appears in the HTML the scanning test above reads; pin them explicitly.
+    policy = client.get("/redoc").headers["content-security-policy"]
+    assert policy == DOCS_POLICY
+    directives = {part.strip() for part in policy.split(";")}
+    assert "worker-src blob:" in directives
+    assert "font-src https://fonts.gstatic.com" in directives
+
+
 @pytest.fixture
 def failing_client(service_config: ServiceConfig) -> Iterator[TestClient]:
     app = create_app(service_config)

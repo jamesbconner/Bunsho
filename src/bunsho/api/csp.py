@@ -80,5 +80,13 @@ def shell_policy(nonce: str) -> str:
 
 
 def header_name(report_only: bool) -> str:
-    """Return the CSP header name: enforcing, or report-only when ``report_only`` is set."""
+    """Return the CSP header name: enforcing, or report-only when ``report_only`` is set.
+
+    Args:
+        report_only: True to observe violations without blocking anything.
+
+    Returns:
+        ``Content-Security-Policy-Report-Only`` when ``report_only`` is set, else
+        ``Content-Security-Policy``.
+    """
     return CSP_REPORT_ONLY_HEADER if report_only else CSP_HEADER

@@ -12,6 +12,7 @@ from bunsho.api.csp import DEFAULT_POLICY, shell_policy
 from bunsho.api.static import SPAStaticFiles
 from bunsho.config.service import ServiceConfig
 from bunsho.frontend_shell import CSP_NONCE_PLACEHOLDER, StaleShellError
+from tests.base import make_service_config
 
 INDEX_HTML = (
     '<!doctype html><html><head><meta name="csp-nonce" content="__CSP_NONCE__" /></head>'
@@ -88,10 +89,27 @@ def test_the_placeholder_never_reaches_the_client(ui_client: TestClient) -> None
         assert CSP_NONCE_PLACEHOLDER not in ui_client.get(path).text
 
 
-def test_head_on_the_shell_is_secured_and_has_a_nonce(ui_client: TestClient) -> None:
-    response = ui_client.head("/")
+@pytest.mark.parametrize("path", ["/", "/build"])
+def test_head_on_the_shell_is_secured_and_has_a_nonce(ui_client: TestClient, path: str) -> None:
+    response = ui_client.head(path)
     assert response.status_code == 200
     assert NONCE_IN_POLICY.search(response.headers["content-security-policy"])
+    assert response.headers["cache-control"] == "no-cache"
+    assert response.content == b""
+
+
+def test_the_nonce_still_matches_when_cors_is_on_and_the_request_has_an_origin(
+    tmp_path: Path, dist: Path
+) -> None:
+    origin = "https://app.example.com"
+    config = make_service_config(tmp_path, cors_origins=(origin,))
+    config = dataclasses.replace(config, app=dataclasses.replace(config.app, frontend_dir=dist))
+    with TestClient(create_app(config)) as client:
+        response = client.get("/build", headers={"Origin": origin})
+    assert response.status_code == 200
+    nonce = shell_nonce(response)
+    assert response.headers["content-security-policy"] == shell_policy(nonce)
+    assert response.headers["access-control-allow-origin"] == origin
 
 
 @pytest.mark.parametrize("path", ["/", "/index.html", "/build"])

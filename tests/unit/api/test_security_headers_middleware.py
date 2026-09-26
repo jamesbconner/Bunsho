@@ -132,8 +132,11 @@ def test_body_messages_are_passed_through_untouched() -> None:
 def test_other_scopes_pass_through_without_touching_messages(kind: str) -> None:
     sent: list[Message] = []
 
-    async def app(_scope: Scope, _receive: Receive, send: Send) -> None:
-        await send({"type": "websocket.accept", "headers": []})
+    async def app(_scope: Scope, _receive: Receive, inner_send: Send) -> None:
+        # A middleware that wrapped `send` here would still pass the messages on, so the messages
+        # alone cannot tell; the identity of the callable does.
+        assert inner_send is send, "non-HTTP scopes must get the server's own send, unwrapped"
+        await inner_send({"type": "websocket.accept", "headers": []})
 
     async def receive() -> Message:
         return {"type": "websocket.connect"}
