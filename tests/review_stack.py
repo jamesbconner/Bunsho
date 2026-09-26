@@ -65,6 +65,7 @@ def stack_for_repository(
     *,
     clock: FakeClock | None = None,
     tz: tzinfo = UTC,
+    shuffle_seed: int | None = None,
 ) -> ReviewStack:
     """Wire the services around an existing content repository (``None`` = not built)."""
     fake = clock or FakeClock()
@@ -82,6 +83,7 @@ def stack_for_repository(
         tz=tz,
         logger=logger,
         clock=fake,
+        shuffle_seed=shuffle_seed,
     )
     stats = ReviewStatsService(gate=gate, progress=progress, settings=settings, tz=tz, clock=fake)
     return ReviewStack(ctx, fake, progress, settings, orchestrator, stats)
@@ -98,6 +100,7 @@ def build_review_stack(
     built: bool = True,
     clock: FakeClock | None = None,
     tz: tzinfo = UTC,
+    shuffle_seed: int | None = None,
 ) -> ReviewStack:
     """Write a small ``content.db`` (unless ``built=False``) and wire a stack around it."""
     repository = (
@@ -111,4 +114,6 @@ def build_review_stack(
         if built
         else None
     )
-    return stack_for_repository(tmp_path, database, repository, clock=clock, tz=tz)
+    return stack_for_repository(
+        tmp_path, database, repository, clock=clock, tz=tz, shuffle_seed=shuffle_seed
+    )
