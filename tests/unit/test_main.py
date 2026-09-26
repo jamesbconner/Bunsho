@@ -137,7 +137,10 @@ def _free_port() -> int:
 
 
 SERVER_THREAD_NAME = "bunsho-live-server"
-STARTUP_TIMEOUT_SECONDS = 15.0
+STARTUP_TIMEOUT_SECONDS = 60.0
+"""A normal start takes about 0.1 s, but the Windows CI runner for PR #34 needed more than 15 s
+once and the cause is unknown; be generous. A start that fails fast (the thread dies) never waits
+this long."""
 
 
 def _stack_of(thread: threading.Thread) -> str:
