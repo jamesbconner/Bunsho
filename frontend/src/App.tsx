@@ -7,6 +7,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { AuthProvider } from './auth/AuthProvider';
 import { RequireAuth } from './auth/RequireAuth';
 import { AppLayout } from './components/AppLayout';
+import { readCspNonce } from './csp';
 import { LoginPage } from './features/login/LoginPage';
 import { NotFoundPage } from './features/NotFoundPage';
 import { createQueryClient } from './queryClient';
@@ -32,9 +33,14 @@ const SettingsPage = lazy(() =>
 
 export function App() {
   const [queryClient] = useState(createQueryClient);
+  const [cspNonce] = useState(readCspNonce);
 
   return (
-    <MantineProvider theme={theme} defaultColorScheme="auto">
+    <MantineProvider
+      theme={theme}
+      defaultColorScheme="auto"
+      getStyleNonce={cspNonce === undefined ? undefined : () => cspNonce}
+    >
       <Notifications position="top-right" />
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
