@@ -17,8 +17,6 @@ items are kept at the bottom of the file, grouped by the plan that delivered the
       extend to API/docs responses together with the CSP work
 - [ ] The JSON 500 from unhandled errors is produced outside CORS middleware (only matters for
       cross-origin setups)
-- [ ] Login: map 422 field errors onto the form inputs; tighten `returnPath` (reject backslash) and
-      carry search/hash through RequireAuth
 
 ### Reliability & Data Integrity
 
@@ -335,6 +333,13 @@ Deferred from Plan 1C, delivered later:
       17th is refused with 1008 before it is accepted. The cap is global, not per client host (behind
       a proxy without `server.trusted_proxies` every client shares one host), and authenticated
       streams never count against it
+
+### Login form and return path (1.4.0)
+
+- [x] Login: a 422 puts the server's message on the username/password input it names and focuses it
+      (no alert); a 422 naming neither still shows the alert
+- [x] `returnPath` (now `features/login/returnPath.ts`) also rejects a backslash and control
+      characters, and `RequireAuth` carries search and hash through to the login redirect
 
 ### Decisions
 
