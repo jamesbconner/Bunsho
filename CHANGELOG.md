@@ -37,6 +37,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A login the server rejects as malformed (a username over 256 or a password over 1024 characters)
   now shows the message on the field it names and puts the cursor there, instead of a generic
   "Some fields are invalid." alert.
+- When the server hits an unexpected error, a browser on another origin (the dev server, or a
+  `server.cors_origins` setup) now receives the "internal error" 500 with its CORS headers, so the
+  UI says "The server had a problem" instead of "Can't reach the server".
 
 ### Security
 
