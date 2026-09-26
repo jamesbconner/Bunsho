@@ -154,11 +154,22 @@ async def task_stream(websocket: WebSocket, services: ServicesDep) -> None:
     Protocol: the client sends ``{"type": "auth", "token": <access token>}`` within
     ``AUTH_TIMEOUT_SECONDS``; the server answers ``ready``, then a ``snapshot`` of the
     latest build (if any), then one ``event`` per build event. Any other first message
-    closes the socket with code 1008. A logout of the session that authenticated the socket
-    closes it with 1008 too.
+    closes the socket with code 1008, and so does a connection made while too many others are
+    still unauthenticated (``MAX_PENDING_AUTH``), which is refused before it is accepted.
+    A logout of the session that authenticated the socket closes it with 1008 too.
     """
-    await websocket.accept()
-    session = await _authenticate(websocket, services)
+    if not services.pending_auth.try_enter():
+        # Refused before accept(): no handshake completes and the auth timer never starts.
+        services.ctx.logger.warning(
+            "ws_rejected client=%s reason=too_many_unauthenticated", _client_host(websocket)
+        )
+        await websocket.close(code=POLICY_VIOLATION)
+        return
+    try:
+        await websocket.accept()
+        session = await _authenticate(websocket, services)
+    finally:
+        services.pending_auth.leave()
     if session is None:
         return
     # Nothing is awaited between the token check and this registration, so a logout cannot

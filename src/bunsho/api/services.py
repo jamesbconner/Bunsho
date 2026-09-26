@@ -24,6 +24,7 @@ from bunsho.factories import (
     create_scheduler_from_settings,
 )
 from bunsho.orchestration.build_tasks import BuildTaskManager, OrchestratorFactory
+from bunsho.orchestration.pending_auth_gate import PendingAuthGate
 from bunsho.orchestration.review_session import ReviewSessionOrchestrator
 from bunsho.orchestration.session_sockets import SessionSockets
 from bunsho.services.auth import AuthService
@@ -49,6 +50,7 @@ class Services:
     progress_db: ProgressDatabase
     auth: AuthService
     sockets: SessionSockets
+    pending_auth: PendingAuthGate
     throttle: LoginThrottle
     tasks: BuildTaskManager
     health: HealthService
@@ -154,6 +156,7 @@ async def build_services(
                 progress_db=progress_db,
                 auth=AuthService(config.auth, revocations=revocations),
                 sockets=SessionSockets(),
+                pending_auth=PendingAuthGate(),
                 throttle=LoginThrottle(),
                 tasks=BuildTaskManager(ctx, factory),
                 health=HealthService(progress_db, ctx),
