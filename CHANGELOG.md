@@ -7,6 +7,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-09-26
+
+### Fixed
+
+- Every page now sits centered in a width-limited column. Home and Statistics were stretched across
+  the whole window on a wide monitor and Settings hugged the left edge; Study and Settings now share
+  a 720 px column, and Home and Statistics an 1100 px one.
+- Navigation moved from the sidebar to the header (Home, Study, Statistics, Settings), with Log out
+  in an Account menu. On a phone the header has a menu button that opens a drawer with the pages,
+  the theme switch and Log out.
+
 ## [1.4.0] - 2026-09-25
 
 ### Added

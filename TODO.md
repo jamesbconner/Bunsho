@@ -102,9 +102,9 @@ no known exploit path. Nothing is rated High right now.
 - [ ] An empty on/kun reading list renders an empty `span lang=ja`; after the last card focus falls to
       the body and only the status text announces the finish; the nav active state is an exact path
       match (`/review/` is not highlighted)
-- [ ] Mobile shell: Burger aria-expanded/aria-controls, hide the collapsed drawer from keyboard users,
-      verify header fit at 360 px; an `ErrorBoundary` now wraps the routed page content (`AppLayout.tsx`),
-      but not the header/nav/Burger around it — consider one further out if those can throw
+- [ ] Mobile shell: the Burger has `aria-expanded` but no `aria-controls`; an `ErrorBoundary` wraps the
+      routed page content (`PageWidth.tsx`) but not the header, Account menu or drawer — consider one
+      further out if those can throw
 - [ ] Toasts: session-expiry toast plus the inline 'Signed out' alert overlap in meaning; toasts at
       top-right overlap header controls
 - [ ] Ask before leaving the settings page with unsaved changes
