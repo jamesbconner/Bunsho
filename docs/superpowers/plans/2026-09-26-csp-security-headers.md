@@ -35,7 +35,7 @@
 The failure modes the spec implies but a per-task happy path would miss, most likely first. Each has a pinning test in the task named in brackets.
 
 1. **A stale or reused nonce:** two shell requests must get different nonces, and for each the nonce in the header must equal the one in the body. A `HEAD` and a deep link must behave the same. [Task 5]
-2. **The wrong policy on a near miss:** a missing asset (`/assets/missing.js`), an unknown API path (`/api/nothing`, `/api`) and a directory-like path must never get the shell policy or the shell body; they keep their 404 and the default-deny policy. `/docs/` (trailing slash) and `/docsx` must not get the loose docs policy. [Task 4, Task 5]
+2. **The wrong policy on a near miss:** a missing asset (`/assets/missing.js`), an unknown API path (`/api/nothing`, `/api`) and a directory-like path must never get the shell policy or the shell body; they keep their 404 and the default-deny policy. `/docs/` (trailing slash) and `/docsx` must not get the loose docs policy, and a POST/PUT/DELETE/PATCH to `/`, `/index.html` or a deep link must stay a 405, not be answered with the shell (`StaticFiles` enforces GET/HEAD and the shell branch must not bypass it). [Task 4, Task 5]
 3. **A stale UI build:** a `frontend_dir` whose `index.html` has no placeholder must fail with the "run `npm run build`" message, not produce a blank page at run time; an empty folder or no `index.html` keeps working as before. [Task 3, Task 5]
 4. **Headers missing on the unhappy paths:** 401, 404, 405, the JSON 500 and a CORS preflight must all carry the baseline headers and exactly one CSP header; an inner app that already set a header keeps its value. [Task 4]
 5. **The docs pages break silently after a FastAPI upgrade:** every origin the real `/docs` and `/redoc` HTML references must be covered by the docs policy, and the docs URLs must match the constants. [Task 4]
@@ -645,7 +645,7 @@ def _responding(headers: list[tuple[str, str]] | None = None, *, nonce: str | No
     async def app(scope: Scope, receive: Receive, send: Send) -> None:
         if nonce is not None:
             scope[NONCE_SCOPE_KEY] = nonce
-        raw = [(k.encode(), v.encode()) for k, v in headers or []]
+        raw = [(k.lower().encode(), v.encode()) for k, v in headers or []]  # ASGI names are lowercase
         await send({"type": "http.response.start", "status": 200, "headers": raw})
         await send({"type": "http.response.body", "body": b""})
 
@@ -1099,6 +1099,18 @@ def test_head_on_the_shell_is_secured_and_has_a_nonce(ui_client: TestClient) -> 
     response = ui_client.head("/")
     assert response.status_code == 200
     assert NONCE_IN_POLICY.search(response.headers["content-security-policy"])
+
+
+@pytest.mark.parametrize("path", ["/", "/index.html", "/build"])
+@pytest.mark.parametrize("method", ["post", "put", "delete", "patch"])
+def test_writes_to_the_shell_are_refused_not_answered_with_it(
+    ui_client: TestClient, method: str, path: str
+) -> None:
+    response = getattr(ui_client, method)(path)
+    assert response.status_code == 405
+    assert CSP_NONCE_PLACEHOLDER not in response.text
+    assert "csp-nonce" not in response.text
+    assert "nonce" not in response.headers["content-security-policy"]
 ```
 
 Update the asset tests:
@@ -1196,6 +1208,8 @@ INDEX = INDEX_FILE
 _IMMUTABLE = "public, max-age=31536000, immutable"
 _SHELL_PATHS = frozenset({"", ".", INDEX})
 """How Starlette names the root and the index file (the root arrives as ``.``)."""
+_READ_METHODS = frozenset({"GET", "HEAD"})
+"""The only methods the shell answers; ``StaticFiles`` answers anything else with a 405."""
 
 
 def _posix(path: str) -> str:
@@ -1264,7 +1278,11 @@ class SPAStaticFiles(StaticFiles):
         """
         served = _posix(path)  # on Windows Starlette passes "api\nothing", not "api/nothing"
         shell = self._shell
-        if shell is not None and served in _SHELL_PATHS:
+        # The method check matters: StaticFiles.get_response raises 405 for a POST, and this early
+        # return would otherwise answer a POST to "/" with the shell. Anything that is not
+        # GET/HEAD falls through to super(), which refuses it (the fallback below is only
+        # reached after super() raised a 404, which it does for GET/HEAD alone).
+        if shell is not None and served in _SHELL_PATHS and scope["method"] in _READ_METHODS:
             return self._shell_response(shell, scope)
         try:
             response = await super().get_response(path, scope)
