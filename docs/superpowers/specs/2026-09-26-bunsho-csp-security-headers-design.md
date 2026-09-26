@@ -1,6 +1,6 @@
 # Bunshō: Content-Security-Policy and Security Headers — Design
 
-Status: implemented in PR <number> (the number is filled in when the PR is opened).
+Status: implemented in PR #35 (plan: #34).
 Parent designs: `2026-09-19-bunsho-foundation-and-review-engine-design.md` (the service and its
 delivery, built by plan 1C) and `2026-09-20-bunsho-2b1-frontend-skeleton-design.md` (the Mantine
 app shell).
