@@ -1,76 +1,79 @@
-import { AppShell, Burger, Button, Group, NavLink, Stack, Text, Title } from '@mantine/core';
-import { useDisclosure, useId } from '@mantine/hooks';
+import { AppShell, Box, Burger, Button, Container, Group, Title } from '@mantine/core';
+import { useDisclosure } from '@mantine/hooks';
 import { Link, Outlet, useLocation } from 'react-router';
 
-import { useAuth } from '../auth/authContext';
 import { ConnectionBadge } from '../realtime/ConnectionBadge';
+import { AccountMenu } from './AccountMenu';
 import { ColorSchemeToggle } from './ColorSchemeToggle';
+import { NavDrawer } from './NavDrawer';
+import { isCurrentPage, NAVIGATION } from './navigation';
+import { PAGE_WIDTHS } from './pageWidths';
 
-const NAVIGATION = [
-  { to: '/', label: 'Home' },
-  { to: '/review', label: 'Study' },
-  { to: '/stats', label: 'Statistics' },
-  { to: '/settings', label: 'Settings' },
-] as const;
-
-/** The frame around every logged-in page: header, navigation and the page itself. */
+/**
+ * The frame around every logged-in page: the header (title, page links, connection state, theme,
+ * account) and the routed page. The page's own width comes from the `PageWidth` layout route
+ * around it.
+ */
 export function AppLayout() {
-  const [opened, { toggle, close }] = useDisclosure(false);
-  const { logout } = useAuth();
+  const [drawerOpened, { toggle, close }] = useDisclosure(false);
   const { pathname } = useLocation();
-  const logoutNoteId = useId();
 
   return (
-    <AppShell
-      header={{ height: 56 }}
-      navbar={{ width: 220, breakpoint: 'sm', collapsed: { mobile: !opened } }}
-      padding="md"
-    >
+    <AppShell header={{ height: 56 }} padding="md">
       <AppShell.Header>
-        <Group h="100%" px="md" justify="space-between" wrap="nowrap">
-          <Group gap="sm" wrap="nowrap">
-            <Burger
-              opened={opened}
-              onClick={toggle}
-              hiddenFrom="sm"
-              size="sm"
-              aria-label="Toggle navigation"
-            />
-            <Title order={3}>
-              Bunshō <span lang="ja">文章</span>
-            </Title>
-          </Group>
-          <Group gap="xs" wrap="nowrap">
-            <ConnectionBadge />
-            <ColorSchemeToggle />
-          </Group>
-        </Group>
+        {/* The outer padding + a px={0} container line the header up with the page columns below. */}
+        <Box h="100%" px="md">
+          <Container size={PAGE_WIDTHS.wide} px={0} h="100%">
+            <Group h="100%" justify="space-between" wrap="nowrap">
+              <Group gap="lg" wrap="nowrap">
+                <Group gap="sm" wrap="nowrap">
+                  <Burger
+                    opened={drawerOpened}
+                    onClick={toggle}
+                    hiddenFrom="sm"
+                    size="sm"
+                    aria-label="Toggle navigation"
+                    aria-expanded={drawerOpened}
+                  />
+                  <Title order={3} style={{ whiteSpace: 'nowrap' }}>
+                    Bunshō <span lang="ja">文章</span>
+                  </Title>
+                </Group>
+                <Box component="nav" aria-label="Main" visibleFrom="sm">
+                  <Group gap={4} wrap="nowrap">
+                    {NAVIGATION.map((item) => {
+                      const current = isCurrentPage(pathname, item.to);
+                      return (
+                        <Button
+                          key={item.to}
+                          component={Link}
+                          to={item.to}
+                          variant={current ? 'light' : 'subtle'}
+                          color={current ? undefined : 'gray'}
+                          aria-current={current ? 'page' : undefined}
+                        >
+                          {item.label}
+                        </Button>
+                      );
+                    })}
+                  </Group>
+                </Box>
+              </Group>
+              <Group gap="xs" wrap="nowrap">
+                <ConnectionBadge />
+                {/* On a phone the theme toggle lives in the drawer; the bar has no room for it. */}
+                <Box visibleFrom="sm">
+                  <ColorSchemeToggle />
+                </Box>
+                <Box visibleFrom="sm">
+                  <AccountMenu />
+                </Box>
+              </Group>
+            </Group>
+          </Container>
+        </Box>
       </AppShell.Header>
-      <AppShell.Navbar p="md">
-        <Stack justify="space-between" h="100%">
-          <div>
-            {NAVIGATION.map((item) => (
-              <NavLink
-                key={item.to}
-                component={Link}
-                to={item.to}
-                label={item.label}
-                active={pathname === item.to}
-                onClick={close}
-              />
-            ))}
-          </div>
-          {/* In the navbar (not the header) so the notice is visible text in the burger drawer too. */}
-          <Stack gap={4}>
-            <Button variant="subtle" onClick={logout} aria-describedby={logoutNoteId}>
-              Log out
-            </Button>
-            <Text id={logoutNoteId} size="xs" c="dimmed">
-              Logging out also ends this session on the server.
-            </Text>
-          </Stack>
-        </Stack>
-      </AppShell.Navbar>
+      <NavDrawer opened={drawerOpened} onClose={close} />
       <AppShell.Main>
         <Outlet />
       </AppShell.Main>

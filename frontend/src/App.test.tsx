@@ -177,7 +177,8 @@ describe('App', () => {
   it('logs out and forgets the remembered login', async () => {
     rememberLogin();
     render(<App />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Log out' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Account' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Log out' }));
     expect(await screen.findByLabelText('Username')).toBeInTheDocument();
     expect(window.localStorage.getItem(REFRESH_TOKEN_KEY)).toBeNull();
     await waitFor(() => {
