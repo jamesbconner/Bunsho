@@ -12,7 +12,39 @@ items are kept at the bottom of the file, grouped by the plan that delivered the
 
 ### Security & Auth
 
-- (nothing open)
+Assessed 2026-09-26, after the 1.4.0 security work and with CodeQL, Dependabot security updates and
+secret scanning enabled on the repository. Severity is a judgment of impact times likelihood for a
+single-user, self-hosted install, and items are ordered by it: **High** = fix before promoting a
+release; **Medium** = fix soon, or record a deliberate decision to accept it; **Low** = hardening with
+no known exploit path. Nothing is rated High right now.
+
+- [ ] **Medium**: Docker Compose publishes the port on every interface by default
+      (`"${BUNSHO_HOST_PORT:-8192}:8192"`), so anyone on the LAN reaches a plain-HTTP login and the
+      password and tokens cross the network in clear text. The README documents a loopback override.
+      Decide whether loopback should be the default with LAN access as the opt-in.
+- [ ] **Medium**: the refresh token (30 days by default) is kept in `localStorage`, so a script injection
+      could read it, and there is no refresh-token rotation or reuse detection (out of scope of the
+      1.4.0 session-revocation work). The strict CSP now makes injection much harder: mitigated, not
+      removed. Decide: accept and record it, or move the token to an `httpOnly` cookie (which needs
+      CSRF handling).
+- [ ] **Low**: the login throttle is in memory and per process: it resets on restart and keys on the
+      peer address only (behind a proxy without `server.trusted_proxies` every client shares one bucket,
+      as the README says). With argon2 and one user this is probably acceptable; record it as a
+      deliberate choice.
+- [ ] **Low**: nothing scans the container image's OS packages for known CVEs, and the base images come
+      from the `PYTHON_VERSION` / `NODE_VERSION` build args (floating `3.13` / `24` tags), which
+      Dependabot's docker updater is not expected to follow (unverified: it has not opened a PR yet).
+      Add an image scan (for example Trivy) if wanted, and rebuild to pick up patched base images.
+- [ ] **Low**: CI has no hard gate on known-vulnerable dependencies. Dependabot alerts and security-update
+      PRs are enabled, but a PR that pins a vulnerable version still goes green. Optionally add
+      `pip-audit` / `npm audit` steps.
+- [ ] **Low**: `actions/checkout@v7` and `actions/upload-artifact@v7` are pinned by tag while the other
+      actions are pinned by commit SHA; pin them the same way (Dependabot's `github-actions` ecosystem
+      keeps SHA pins up to date).
+- [ ] **Low**: two items under Reliability & Data Integrity have a security angle: an unmatched
+      WebSocket path under the `/` static mount raises an `AssertionError` that an unauthenticated client
+      can trigger (log noise, not a bypass), and a corrupt `progress.db` prints a full traceback on every
+      container restart. They stay listed there.
 
 ### Reliability & Data Integrity
 
@@ -20,7 +52,7 @@ items are kept at the bottom of the file, grouped by the plan that delivered the
       hide valid due cards (`_ORPHAN_SCAN` in `orchestration/review_session.py`): filter in SQL or page
       past them
 - [ ] A corrupt `progress.db` makes the container restart loop print a full traceback on every attempt;
-      log only the `StartupError` message
+      log only the `StartupError` message (security: Low, see Security & Auth)
 - [ ] Backup retention: backups in `data_dir/backups/` are never pruned
 - [ ] `sqlite3.Error` from a full backups volume is not wrapped in the actionable startup error
 - [ ] Test for the migration `downgrade()` path
@@ -31,6 +63,7 @@ items are kept at the bottom of the file, grouped by the plan that delivered the
       Space/Enter inside the review controls)
 - [ ] An unmatched WebSocket path under the `/` static mount reaches StaticFiles'
       `assert scope["type"] == "http"` (AssertionError instead of a clean rejection): guard it
+      (security: Low, see Security & Auth)
 - [ ] Wrong-method requests to real API routes behave differently when the UI is served: the catch-all
       `/` mount wins the full match over the router's partial (method) match, so POST to a GET-only
       route gives 405 without an `Allow` header, GET on a POST-only route gives 404 instead of 405, and
@@ -350,6 +383,12 @@ Deferred from Plan 1C, delivered later:
       via `getStyleNonce`), default-deny for the API and assets, a looser one for `/docs` and `/redoc`
 - [x] `server.csp_report_only` switch; a UI build without the nonce placeholder is reported by config
       validation
+
+### Repository security settings
+
+- [x] CodeQL default setup (Python, JavaScript/TypeScript, GitHub Actions), Dependabot security updates,
+      and secret scanning with push protection are enabled on the repository (2026-09-26). CodeQL's
+      first alert (a substring check in `scripts/smoke_test.py`) has its own fix PR.
 
 ### Decisions
 
