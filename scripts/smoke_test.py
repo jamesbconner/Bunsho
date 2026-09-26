@@ -142,6 +142,15 @@ def without_nonce(body: bytes) -> bytes:
     return NONCE_META.sub(rb"\1\3", body)
 
 
+def csp_sources(policy: str, directive: str) -> list[str]:
+    """The source expressions a CSP header value gives ``directive`` (empty if it has none)."""
+    for part in policy.split(";"):
+        tokens = part.split()
+        if tokens and tokens[0] == directive:
+            return tokens[1:]
+    return []
+
+
 def expect_frontend_served() -> None:
     """The container serves the built UI: shell, deep links, cache headers and JSON API 404s."""
     status, headers, body = http_get("/")
@@ -178,7 +187,11 @@ def expect_frontend_served() -> None:
     )
     status, headers, _ = http_get("/docs")
     expect(status == 200, f"/docs returned {status}, not 200")
-    expect("cdn.jsdelivr.net" in headers.get("content-security-policy", ""), "/docs needs its CSP")
+    docs_scripts = csp_sources(headers.get("content-security-policy", ""), "script-src")
+    expect(
+        "https://cdn.jsdelivr.net" in docs_scripts,
+        "/docs must allow its scripts from https://cdn.jsdelivr.net",
+    )
 
 
 def expect(condition: bool, message: str) -> None:
