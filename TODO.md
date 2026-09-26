@@ -12,7 +12,6 @@ items are kept at the bottom of the file, grouped by the plan that delivered the
 
 ### Security & Auth
 
-- [ ] Cap on unauthenticated WebSocket connections
 - [ ] Content-Security-Policy header for the served UI (Mantine injects inline styles: needs nonces or hashes)
 - [ ] Security headers (nosniff, Referrer-Policy, X-Frame-Options) are set on static responses only;
       extend to API/docs responses together with the CSP work
@@ -329,6 +328,13 @@ Deferred from Plan 1C, delivered later:
       refresh answer (success or 401) from an earlier epoch is dropped
 - [x] Tested the logout -> login stream lifecycle (stream closes on logout, a new one opens after
       login) and the StrictMode double mount
+
+### WebSocket connection cap
+
+- [x] At most 16 WebSockets can be connected but unauthenticated at once (`PendingAuthGate`); a
+      17th is refused with 1008 before it is accepted. The cap is global, not per client host (behind
+      a proxy without `server.trusted_proxies` every client shares one host), and authenticated
+      streams never count against it
 
 ### Decisions
 

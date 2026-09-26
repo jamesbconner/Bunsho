@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Security
+
+- The live-progress WebSocket now allows at most 16 connections that have not yet sent their login
+  token. A client that opens more is refused (close code 1008) before the connection is accepted,
+  so an unauthenticated client can no longer hold an unbounded number of sockets open. Connections
+  that have authenticated do not count towards the limit.
+
 ## [1.4.0] - 2026-09-25
 
 ### Added
