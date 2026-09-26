@@ -201,8 +201,6 @@ no known exploit path. Nothing is rated High right now.
 
 - [ ] Pin the base image by digest and add OCI labels
 - [ ] Image trim candidates: `pip` in the base image, `watchfiles`, the venv `activate` scripts
-- [ ] Local (git-ignored) `.claude/` guideline documents (`CLAUDE.md`, `llm-patterns.md`, `react.md`)
-      still carry Jidou/TMDB rules
 - [ ] Single source of truth for the uv pin (0.12.17 is in `ci.yml`, `release.yml` and the `Dockerfile`),
       for example an `ARG UV_VERSION` shared through a build-arg
 - [ ] Use a separate image tag for the smoke project (`bunsho:smoke`) so it never retags a developer's
@@ -280,6 +278,8 @@ Baseline from the spec:
 - [x] Jidou content stripped from `.claude/skills/{db-migration,release-notes,check-pr}` and
       `.claude/settings.local.json` (no Jidou/TMDB text left there); the committed `.gitignore`
       (commit `ff3621b`) ignores `.claude/` and `.agents/`
+- [x] Local (git-ignored) `.claude/` guideline documents (`CLAUDE.md`, `llm-patterns.md`, `react.md`):
+      TMDB-specific rules made generic (external-API caching and rate-limit guidance kept, no TMDB text left)
 
 Carry-forward from Plan 1A's final review:
 - [x] Rebuild endpoint: `_replace_with_retry` retries `PermissionError` (`services/content_repository.py`);
