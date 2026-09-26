@@ -2,6 +2,3 @@ node_modules
 dist
 coverage
 *.tsbuildinfo
-
-# The repo-root .gitignore ignores build/; the Build screen lives in src/features/build/.
-!src/features/build/

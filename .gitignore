@@ -19,27 +19,30 @@ coverage.xml
 .venv/
 .env
 .env.local
-env/
+/env/
 venv/
-ENV/
+/ENV/
 set-env.ps1
 
 # -----------------------------------------------------------
 # Distribution / packaging
 # -----------------------------------------------------------
+# env/ (and ENV/, which matches it on case-insensitive systems), build/, downloads/, lib/,
+# parts/ and var/ are anchored to the repo root: unanchored they would also ignore, for example,
+# frontend/src/lib or frontend/src/features/build.
 .Python
-build/
+/build/
 develop-eggs/
 dist/
 node_modules/
-downloads/
+/downloads/
 eggs/
 .eggs/
-lib/
+/lib/
 lib64/
-parts/
+/parts/
 sdist/
-var/
+/var/
 wheels/
 *.egg-info/
 *.egg

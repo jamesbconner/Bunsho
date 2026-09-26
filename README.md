@@ -401,8 +401,9 @@ vocabulary entries, 3,088 kanji, 208 kana), health `ok`, Docker's own health che
 that keeps the data and accepts the old refresh token, and that forged `X-Forwarded-For` headers do
 not give an attacker new throttle buckets. It always removes its containers, network, volume and temp
 folder (set `BUNSHO_SMOKE_KEEP=1` to keep them for debugging, `BUNSHO_SMOKE_PORT` to change the port).
-It only shares the image tag `bunsho:local` with your own compose stack: it reuses and retags it. CI
-runs the same script in its `smoke` job.
+It tags its image `bunsho:smoke` (compose's `BUNSHO_IMAGE`), so it never retags your own `bunsho:local`
+build; the image stays after a run so the next one reuses its layers. CI runs the same script in its
+`smoke` job.
 
 ## Development
 
@@ -438,6 +439,18 @@ CI also checks that the generated API types are current (`npm run gen:api`, then
 
 Git hooks are optional and installed per clone: `uv run pre-commit install` runs YAML and TOML checks,
 ruff (lint and format), mypy and bandit on each commit.
+
+## Releasing
+
+1. Bump the version in `pyproject.toml`, `src/bunsho/__init__.py`, `frontend/package.json` and
+   `frontend/package-lock.json` (two places), then run `uv lock` to update `uv.lock`.
+2. Re-run `uv run python scripts/export_openapi.py`: the OpenAPI snapshot embeds `info.version`, so
+   `test_the_committed_snapshot_matches_the_app` fails until it is refreshed. Then run `npm run gen:api`
+   in `frontend/` (the generated types do not embed the version, so this normally changes nothing,
+   but CI checks it).
+3. Move the `[Unreleased]` entries in `CHANGELOG.md` under the new version.
+4. Merge, then push a `vX.Y.Z` tag: `release.yml` builds the wheel and sdist and attaches them to a
+   GitHub Release.
 
 ## License
 

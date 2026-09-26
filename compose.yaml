@@ -7,11 +7,14 @@
 # stop_grace_period is longer than the app's own 35 s shutdown budget: a running content build
 # is a thread that cannot be cancelled, so the process exits only once the build finishes
 # (about 40 s). A shorter grace period would SIGKILL it (exit 137).
+#
+# BUNSHO_IMAGE overrides the image tag (default bunsho:local); the smoke test sets it so it never
+# retags your own build.
 name: bunsho
 services:
   bunsho:
     build: .
-    image: bunsho:local
+    image: ${BUNSHO_IMAGE:-bunsho:local}
     ports:
       - "${BUNSHO_HOST_PORT:-8192}:8192"
     env_file:

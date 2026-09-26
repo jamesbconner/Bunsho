@@ -4,7 +4,9 @@ ARG PYTHON_VERSION=3.13
 ARG NODE_VERSION=24
 
 # ---- frontend: build the static UI (no Python needed: the API types are committed) ----
-FROM node:${NODE_VERSION}-bookworm-slim AS frontend
+# Pinned to the build host's platform: dist/ is plain static files, so a multi-arch build runs the
+# JS build natively once instead of under emulation for every target architecture.
+FROM --platform=$BUILDPLATFORM node:${NODE_VERSION}-bookworm-slim AS frontend
 WORKDIR /frontend
 # Dependencies first so this layer is cached until package.json or the lockfile change.
 COPY frontend/package.json frontend/package-lock.json ./
