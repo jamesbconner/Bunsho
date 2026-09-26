@@ -22,6 +22,7 @@ from bunsho.api.error_middleware import (
 )
 from bunsho.api.routers import admin, auth, content, health, reviews, settings, stats, ws
 from bunsho.api.schemas import WsAuthMessage, WsEvent, WsReady, WsSnapshot
+from bunsho.api.security_headers import SecurityHeadersMiddleware
 from bunsho.api.services import ServiceOverrides, build_services
 from bunsho.api.static import SPAStaticFiles
 from bunsho.config.service import ServiceConfig
@@ -147,6 +148,9 @@ def create_app(config: ServiceConfig, *, overrides: ServiceOverrides | None = No
             allow_headers=["Authorization", "Content-Type"],
             expose_headers=["Retry-After"],  # lets browser code read the login throttle's wait
         )
+    # Added last so it is the outermost user middleware and covers every response, CORS
+    # preflights and the JSON 500 included.
+    app.add_middleware(SecurityHeadersMiddleware, report_only=config.server.csp_report_only)
     app.add_exception_handler(RequestValidationError, _validation_error_handler)
     app.add_exception_handler(ReviewError, _review_error_handler)
     app.add_exception_handler(Exception, _unhandled_error_handler)
