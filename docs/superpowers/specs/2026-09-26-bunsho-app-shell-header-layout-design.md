@@ -30,8 +30,9 @@ header (breadcrumbs, per-page titles, a user name).
 | Mechanism | Pathless layout routes in `App.tsx`, each wrapping its pages in one `PageWidth` layout component. Pages no longer set their own width. |
 | Navigation | The sidebar is removed. Header links (Home, Study, Statistics, Settings) inline on desktop; no dropdown menus for them. |
 | Account | One Account menu on the right of the header holds Log out and its "ends this session on the server" note. |
-| Theme toggle, connection badge | Stay in the header as they are today. |
-| Phones (below `sm`) | Inline links and the Account menu are hidden; a Burger opens a `Drawer` with the four links, Log out and the note. The badge and theme toggle stay in the header bar. |
+| Connection badge | Stays in the header at every width. |
+| Theme toggle | In the header from `sm` up; inside the phone drawer below `sm` (see "Amended after the preview"). |
+| Phones (below `sm`) | Inline links, the theme toggle and the Account menu are hidden; a Burger opens a `Drawer` with the four links, the theme toggle, Log out and the note. The header bar keeps the burger, the title on one line and the badge. |
 | Header width | The header's inner content uses the wide width, so it lines up with the dashboard pages. |
 
 ### Why layout routes, not route `handle`
@@ -54,8 +55,10 @@ would jump to its width when the lazy chunk arrives. They move into `PageWidth`,
 
 ### Widths in one place
 
-`PageWidth.tsx` exports `PAGE_WIDTHS = { narrow: 720, wide: 1100 } as const`, and the header imports
-it too, so the numbers exist nowhere else. `PageWidth` passes the number to `Container` (Mantine has no
+`pageWidths.ts` exports `PAGE_WIDTHS = { narrow: 720, wide: 1100 } as const` and the `PageWidthName`
+type. It is its own file because the project's lint rule (`react-refresh/only-export-components`)
+forbids a component file from exporting constants. `PageWidth.tsx` and the header both import it, so
+the numbers exist nowhere else. `PageWidth` passes the number to `Container` (Mantine has no
 theme key for custom container names: an unknown `size="narrow"` would resolve to an undefined CSS
 variable, checked in `@mantine/core` 9.6.1 source). It also sets `data-width="narrow" | "wide"` on
 the container, which is what tests assert. The 720 px value is Study's current width, so Study's card
@@ -66,6 +69,7 @@ does not change size.
 ```
 components/
   AppLayout.tsx     AppShell (header only) + header content; renders <Outlet /> in AppShell.Main
+  pageWidths.ts     new. PAGE_WIDTHS and the PageWidthName type (constants, no components)
   PageWidth.tsx     new. props: size 'narrow' | 'wide'. <Container size=…> wrapping
                     <ErrorBoundary key={pathname}><Suspense><Outlet/></Suspense></ErrorBoundary>
   AccountMenu.tsx   new. Mantine Menu: target button, Log out item, the note. Desktop only.
@@ -102,11 +106,20 @@ components/
   then the four links in a `Group` with `visibleFrom="sm"`. Each link is a router `Link`;
   the current page gets `aria-current="page"` and a visible active style. The active test stays
   `pathname === to`, exactly as today.
-- Right: `ConnectionBadge`, `ColorSchemeToggle`, and `AccountMenu` (`visibleFrom="sm"`).
+- Right: `ConnectionBadge`, then `ColorSchemeToggle` and `AccountMenu`, both `visibleFrom="sm"`.
+- The title does not wrap (`white-space: nowrap`).
 
 `AppShell` `padding="md"` still gives the main area its gutters, so `PageWidth`'s `Container` uses
-`px={0}` to avoid doubling them; the header container keeps its own padding because the header is
-outside the main area.
+`px={0}` to avoid doubling them. The header lines up with the columns the same way: an outer box with
+`px="md"` around a `px={0}` wide container, so the header's content edges and the page column's edges
+are the same at every viewport width (measured in the preview: both 730 to 1830 px at 2560 px wide).
+
+### Amended after the preview
+
+Built as a throwaway preview page, the first header design kept the theme toggle in the phone header
+bar. At 390 px the title wrapped mid-word and the badge truncated to "Li…"; at 360 px the toggle was
+clipped to "Aut". So below `sm` the toggle moves into the drawer, and the title gets `nowrap`. With
+that the bar shows the burger, the full title and the full "Live" badge at 360 px.
 
 ### Account menu
 
@@ -119,8 +132,8 @@ a later "Signed in as…" line, and a bare button would lose the note on touch d
 
 ### Phone drawer
 
-The Burger toggles a `Drawer` (`hiddenFrom="sm"`) with the four links, a Log out button and the note
-(same `aria-describedby` wiring). Choosing a link closes it. The burger keeps its
+The Burger toggles a `Drawer` (`hiddenFrom="sm"`) with the four links, the theme toggle, a Log out
+button and the note (same `aria-describedby` wiring). Choosing a link closes it. The burger keeps its
 `aria-label="Toggle navigation"` and gains `aria-expanded`. The drawer is unmounted when closed, so it
 is not a keyboard tab stop while hidden (an item in `TODO.md` under the mobile shell).
 
@@ -175,7 +188,7 @@ this spec. No tag is created (that step is James's).
 
 - Mantine `Menu` and `Drawer` render in portals with inline positioning styles; the CSP work already
   covers Mantine's nonce path, but the browser check above must confirm it for these two components.
-- Header fit at 360 px is an existing `TODO.md` item; the burger layout must keep the title, badge
-  and theme toggle on one line at that width (check in the preview page).
+- Header fit at 360 px is an existing `TODO.md` item; the phone bar must keep the burger, the title
+  and the badge on one line at that width (checked in the preview page after the amendment above).
 - The 1100 px wide width is a judgement about the Home grid and the Stats chart; if either looks
   cramped or too loose in the preview page, the number changes in `PAGE_WIDTHS` only.
