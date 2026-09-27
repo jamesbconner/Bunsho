@@ -196,7 +196,7 @@ export function ReviewPage() {
   }
 
   return (
-    <Stack gap="md" maw={720} mx="auto">
+    <Stack gap="md">
       <Group justify="space-between" align="center">
         <Title order={2}>Study</Title>
         <Switch

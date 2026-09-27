@@ -9,7 +9,7 @@ export function SettingsPage() {
   const settings = useSettings();
 
   return (
-    <Stack gap="lg" maw={720}>
+    <Stack gap="lg">
       <Title order={2}>Settings</Title>
       {settings.isPending && <Skeleton height={320} />}
       {settings.isError && settings.data === undefined && (

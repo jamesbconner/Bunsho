@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -152,6 +152,21 @@ describe('App', () => {
     ).toBeInTheDocument();
   });
 
+  it.each([
+    ['/', 'Your content', 'wide'],
+    ['/stats', 'Statistics', 'wide'],
+    ['/review', 'Study', 'narrow'],
+    ['/settings', 'Settings', 'narrow'],
+    ['/build', 'Build', 'narrow'],
+    ['/nothing/here', 'Page not found', 'narrow'],
+  ])('puts %s (%s) in a %s column', async (path, heading, width) => {
+    rememberLogin();
+    goTo(path);
+    render(<App />);
+    const title = await screen.findByRole('heading', { name: heading });
+    expect(title.closest('[data-width]')).toHaveAttribute('data-width', width);
+  });
+
   it('answers an unknown address with a not-found page', async () => {
     rememberLogin();
     goTo('/nothing/here');
@@ -162,7 +177,12 @@ describe('App', () => {
   it('logs out and forgets the remembered login', async () => {
     rememberLogin();
     render(<App />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Log out' }));
+    // Log out through the phone drawer. The desktop Account menu is positioned by floating-ui, whose
+    // "target hidden" check gives a random answer in jsdom (every rect is zero) unless Mantine runs
+    // with env="test", which <App /> does not; AppLayout.test.tsx covers the menu under env="test".
+    await userEvent.click(await screen.findByRole('button', { name: 'Toggle navigation' }));
+    const drawer = within(await screen.findByRole('dialog', { name: 'Menu' }));
+    await userEvent.click(drawer.getByRole('button', { name: 'Log out' }));
     expect(await screen.findByLabelText('Username')).toBeInTheDocument();
     expect(window.localStorage.getItem(REFRESH_TOKEN_KEY)).toBeNull();
     await waitFor(() => {
